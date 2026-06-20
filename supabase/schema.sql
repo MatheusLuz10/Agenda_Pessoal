@@ -41,13 +41,17 @@ create index if not exists tasks_calendar_id_idx on public.tasks (calendar_id);
 alter table public.calendars enable row level security;
 alter table public.tasks enable row level security;
 
--- Este projeto é um calendário PESSOAL de um único usuário, sem tela de
--- login. Por isso as políticas abaixo liberam acesso total via anon key.
--- Se este app ganhar múltiplos usuários no futuro, troque estas políticas
--- por regras que filtrem por auth.uid() (ex: adicionar uma coluna
--- user_id e exigir user_id = auth.uid() em cada política).
-create policy "anon full access calendars" on public.calendars
-  for all using (true) with check (true);
+-- Este é um calendário PESSOAL: qualquer usuário autenticado (logado via
+-- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
+-- A chave pública (anon/publishable) sozinha NÃO basta mais para
+-- ler/escrever — é preciso um login válido, por isso auth.uid() (id do
+-- usuário logado) precisa existir. Se quiser reaplicar este schema do
+-- zero, rode "drop policy" das políticas antigas antes (se existirem).
+drop policy if exists "anon full access calendars" on public.calendars;
+drop policy if exists "anon full access tasks" on public.tasks;
 
-create policy "anon full access tasks" on public.tasks
-  for all using (true) with check (true);
+create policy "authenticated full access calendars" on public.calendars
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access tasks" on public.tasks
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { CalendarHeart, Moon, Plus, Sun } from "lucide-react";
+import { CalendarHeart, LogOut, Moon, Plus, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddCalendarDialog } from "@/components/calendar/AddCalendarDialog";
+import { useAuth } from "@/contexts/AuthContext";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 // Cabeçalho fixo no topo, presente em todas as páginas (renderizado pelo
 // AppLayout). Contém a logo, o alternador de tema claro/escuro e o botão
@@ -9,6 +11,7 @@ import { AddCalendarDialog } from "@/components/calendar/AddCalendarDialog";
 // de calendário).
 export function Header() {
   const [darkMode, setDarkMode] = useState(false);
+  const { signOut } = useAuth();
 
   // Ao montar o componente, decide o tema inicial: usa o que foi salvo
   // antes no localStorage ou, na primeira visita, segue a preferência do
@@ -57,6 +60,18 @@ export function Header() {
             </Button>
           }
         />
+
+        {/* Só faz sentido sair de uma sessão que existe de fato. */}
+        {isSupabaseConfigured && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => signOut()}
+            aria-label="Sair"
+          >
+            <LogOut className="size-4" />
+          </Button>
+        )}
       </div>
     </header>
   );
