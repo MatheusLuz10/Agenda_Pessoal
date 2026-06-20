@@ -1,0 +1,138 @@
+import type { CalendarGroup, Task } from "@/types";
+
+// Dados de demonstração usados pelo AgendaContext como estado inicial.
+// Servem só para o app ter conteúdo visível antes de qualquer integração
+// com um backend real. Quando o Supabase estiver configurado
+// (ver src/lib/supabaseClient.ts), estes arrays deixam de ser usados.
+
+export const mockCalendars: CalendarGroup[] = [
+  {
+    id: "cal-faculdade",
+    name: "Faculdade",
+    icon: "📚",
+    color: "blue",
+    startDate: "2026-02-01",
+    endDate: "2026-12-15",
+    observation: "Semestre 2026/1",
+    createdAt: "2026-01-15",
+  },
+  {
+    id: "cal-pets",
+    name: "Pets",
+    icon: "🐶",
+    color: "amber",
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
+    observation: "Cuidados do Bidu e da Mel",
+    createdAt: "2026-01-10",
+  },
+  {
+    id: "cal-trabalho",
+    name: "Trabalho",
+    icon: "💼",
+    color: "violet",
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
+    createdAt: "2026-01-05",
+  },
+  {
+    id: "cal-contas",
+    name: "Contas",
+    icon: "💡",
+    color: "rose",
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
+    observation: "Contas fixas mensais",
+    createdAt: "2026-01-02",
+  },
+  {
+    id: "cal-pessoal",
+    name: "Pessoal",
+    icon: "🌿",
+    color: "emerald",
+    startDate: "2026-01-01",
+    endDate: "2026-12-31",
+    createdAt: "2026-01-02",
+  },
+];
+
+export const mockTasks: Task[] = [
+  {
+    id: "t1",
+    calendarId: "cal-faculdade",
+    title: "Entrega Trabalho ADS",
+    description: "Projeto final da disciplina de Engenharia de Software",
+    date: "2026-06-20",
+    time: "23:59",
+    priority: "alta",
+    status: "pendente",
+  },
+  {
+    id: "t2",
+    calendarId: "cal-faculdade",
+    title: "Estudar prova de lógica",
+    date: "2026-06-20",
+    time: "19:00",
+    priority: "media",
+    status: "pendente",
+  },
+  {
+    id: "t3",
+    calendarId: "cal-pets",
+    title: "Veterinário",
+    description: "Levar o Bidu para vacina anual",
+    date: "2026-06-22",
+    time: "10:00",
+    priority: "alta",
+    status: "pendente",
+  },
+  {
+    id: "t4",
+    calendarId: "cal-contas",
+    title: "Conta de Luz",
+    date: "2026-06-25",
+    priority: "media",
+    status: "pendente",
+  },
+  {
+    id: "t5",
+    calendarId: "cal-trabalho",
+    title: "Reunião de sprint",
+    date: "2026-06-19",
+    time: "14:00",
+    priority: "media",
+    status: "pendente",
+  },
+  {
+    id: "t6",
+    calendarId: "cal-contas",
+    title: "Conta de Internet",
+    date: "2026-06-15",
+    priority: "alta",
+    status: "pendente",
+  },
+  {
+    id: "t7",
+    calendarId: "cal-pessoal",
+    title: "Aniversário da Ana",
+    date: "2026-06-28",
+    priority: "baixa",
+    status: "pendente",
+  },
+  {
+    id: "t8",
+    calendarId: "cal-pets",
+    title: "Comprar ração",
+    date: "2026-06-19",
+    priority: "baixa",
+    status: "concluida",
+  },
+  {
+    id: "t9",
+    calendarId: "cal-faculdade",
+    title: "Apresentação de TCC",
+    date: "2026-07-03",
+    priority: "alta",
+    status: "pendente",
+  },
+];
