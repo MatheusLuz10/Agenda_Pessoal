@@ -17,11 +17,16 @@ export function HomePage() {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
+  const generalTasks = useMemo(
+    () => tasks.filter((task) => task.calendarId !== "work-private"),
+    [tasks]
+  );
+
   // Agrupa as tarefas pendentes por data, para o MonthGrid saber em quais
   // dias desenhar a bolinha indicadora (e se algum dia tem atraso).
   const markedDates = useMemo(() => {
     const map: Record<string, { count: number; hasOverdue?: boolean }> = {};
-    for (const task of tasks) {
+    for (const task of generalTasks) {
       if (task.status === "concluida") continue;
       const existing = map[task.date] ?? { count: 0 };
       existing.count += 1;
@@ -29,7 +34,7 @@ export function HomePage() {
       map[task.date] = existing;
     }
     return map;
-  }, [tasks]);
+  }, [generalTasks]);
 
   // Calcula as tarefas pendentes dentro da semana atual (segunda a
   // domingo), ordenadas por data/horário, limitando a 3 para não poluir
@@ -47,7 +52,7 @@ export function HomePage() {
     end.setDate(end.getDate() + 6); // domingo da mesma semana
     end.setHours(23, 59, 59, 999);
 
-    return tasks
+    return generalTasks
       .filter((t) => t.status !== "concluida")
       .filter((t) => {
         const taskDate = new Date(`${t.date}T00:00:00`);
@@ -58,7 +63,7 @@ export function HomePage() {
         return (a.time ?? "").localeCompare(b.time ?? "");
       })
       .slice(0, 3);
-  }, [tasks]);
+  }, [generalTasks]);
 
   return (
     <div className="flex flex-col gap-6">

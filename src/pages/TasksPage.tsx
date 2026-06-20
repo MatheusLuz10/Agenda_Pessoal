@@ -13,11 +13,18 @@ export function TasksPage() {
   const { tasks, calendars } = useAgenda();
   const [calendarFilter, setCalendarFilter] = useState<string>("todos");
 
+  const visibleTasks = useMemo(
+    () => tasks.filter((task) => task.calendarId !== "work-private"),
+    [tasks]
+  );
+
   // Filtra pelo calendário escolhido na aba e ordena por urgência:
   // vencidas primeiro, depois hoje, depois futuras, concluídas no final.
   const filteredTasks = useMemo(() => {
     const filtered =
-      calendarFilter === "todos" ? tasks : tasks.filter((t) => t.calendarId === calendarFilter);
+      calendarFilter === "todos"
+        ? visibleTasks
+        : visibleTasks.filter((t) => t.calendarId === calendarFilter);
 
     return [...filtered].sort((a, b) => {
       const statusA = getTaskTimeStatus(a);
@@ -26,7 +33,7 @@ export function TasksPage() {
       if (order[statusA] !== order[statusB]) return order[statusA] - order[statusB];
       return a.date.localeCompare(b.date);
     });
-  }, [tasks, calendarFilter]);
+  }, [visibleTasks, calendarFilter]);
 
   return (
     <div className="flex flex-col gap-6">

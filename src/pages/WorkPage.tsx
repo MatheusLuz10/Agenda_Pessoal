@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   BriefcaseBusiness,
@@ -6,24 +6,36 @@ import {
   CheckCircle2,
   ClipboardList,
   ListTodo,
+  Plus,
   Wrench,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TaskListItem } from "@/components/tasks/TaskListItem";
+import { AddTaskDialog } from "@/components/tasks/AddTaskDialog";
+import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { useAgenda } from "@/contexts/AgendaContext";
-import { getTaskTimeStatus, todayISO } from "@/lib/date";
+import { formatDateBR, getTaskTimeStatus, todayISO } from "@/lib/date";
 
-// Tela "/meu-trabalho" — painel de rotina profissional: cartões de
-// estatísticas (pendências, vencidas, hoje, prioridade alta), um
-// checklist fixo e uma lista de "ferramentas" estáticas (não vêm do
-// AgendaContext, são apenas conteúdo de exemplo da página).
+const WORK_CALENDAR_ID = "work-private";
+
+// Tela "/meu-trabalho" — painel independente para o calendário pessoal
+// de trabalho, com estatísticas próprias e um calendário exclusivo desta aba.
 export function WorkPage() {
   const { tasks } = useAgenda();
   const today = todayISO();
+  const [year, setYear] = useState(Number(today.slice(0, 4)));
+  const [month, setMonth] = useState(Number(today.slice(5, 7)) - 1);
+  const [selectedDate, setSelectedDate] = useState<string | null>(today);
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
 
-  // Contagens usadas nos 4 cartões de estatística no topo da página.
+  const workTasks = useMemo(
+    () => tasks.filter((task) => task.calendarId === WORK_CALENDAR_ID),
+    [tasks]
+  );
+
   const stats = useMemo(() => {
-    const pending = tasks.filter((task) => task.status !== "concluida");
+    const pending = workTasks.filter((task) => task.status !== "concluida");
     const overdue = pending.filter((task) => getTaskTimeStatus(task) === "vencida");
     const todayTasks = pending.filter((task) => task.date === today);
     const highPriority = pending.filter((task) => task.priority === "alta");
@@ -34,26 +46,26 @@ export function WorkPage() {
       today: todayTasks.length,
       priority: highPriority.length,
     };
-  }, [tasks, today]);
+  }, [workTasks, today]);
 
-  // As 5 tarefas pendentes mais próximas, para a lista "Atividades técnicas".
-  const routineTasks = useMemo(() => {
-    return [...tasks]
-      .filter((task) => task.status !== "concluida")
-      .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return (a.time ?? "").localeCompare(b.time ?? "");
-      })
-      .slice(0, 5);
-  }, [tasks]);
+  const markedDates = useMemo(() => {
+    const map: Record<string, { count: number; hasOverdue?: boolean }> = {};
+    for (const task of workTasks) {
+      if (task.status === "concluida") continue;
+      const existing = map[task.date] ?? { count: 0 };
+      existing.count += 1;
+      if (getTaskTimeStatus(task) === "vencida") existing.hasOverdue = true;
+      map[task.date] = existing;
+    }
+    return map;
+  }, [workTasks]);
 
-  const checklist = [
-    "Checar ferramentas e acessórios",
-    "Confirmar materiais e peças",
-    "Revisar ordem de serviço",
-    "Atualizar registros técnicos",
-    "Anotar observações da visita",
-  ];
+  const tasksForSelectedDate = useMemo(() => {
+    if (!selectedDate) return [];
+    return [...workTasks]
+      .filter((task) => task.date === selectedDate)
+      .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
+  }, [selectedDate, workTasks]);
 
   const kitItems = [
     "Multímetro",
@@ -68,7 +80,7 @@ export function WorkPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Meu trabalho</h1>
         <p className="text-sm text-muted-foreground">
-          Organize sua rotina técnica, prioridades e ferramentas.
+          Calendário privado do trabalho, com atividades exclusivas desta área.
         </p>
       </div>
 
@@ -126,22 +138,65 @@ export function WorkPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ClipboardList className="size-4" />
-              Checklist técnico
+              <BriefcaseBusiness className="size-4" />
+              Calendário do trabalho
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="flex flex-col gap-2">
-              {checklist.map((item) => (
-                <li key={item} className="flex items-center gap-2 text-sm">
-                  <span className="mt-0.5 size-2 rounded-full bg-primary" />
-                  {item}
-                </li>
-              ))}
-            </ul>
+            <MonthGrid
+              year={year}
+              month={month}
+              onMonthChange={(nextYear, nextMonth) => {
+                setYear(nextYear);
+                setMonth(nextMonth);
+              }}
+              markedDates={markedDates}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+            />
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardList className="size-4" />
+              Atividades do dia
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Selecionado</p>
+                <p className="font-semibold">
+                  {selectedDate ? formatDateBR(selectedDate) : "Selecione um dia"}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                disabled={!selectedDate}
+                onClick={() => setAddTaskOpen(true)}
+              >
+                <Plus className="size-4" />
+                Adicionar
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {tasksForSelectedDate.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Nenhuma atividade marcada para este dia.
+                </p>
+              ) : (
+                tasksForSelectedDate.map((task) => <TaskListItem key={task.id} task={task} />)
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_1fr]">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -159,26 +214,6 @@ export function WorkPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BriefcaseBusiness className="size-4" />
-              Atividades técnicas
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {routineTasks.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Nenhuma atividade registrada.
-              </p>
-            ) : (
-              routineTasks.map((task) => <TaskListItem key={task.id} task={task} />)
-            )}
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>
@@ -189,12 +224,21 @@ export function WorkPage() {
           </CardHeader>
           <CardContent>
             <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-              Registrar falhas, peças trocadas, próximos passos e detalhes importantes da
+              Registre falhas, peças trocadas, próximos passos e detalhes importantes da
               rotina.
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {selectedDate && (
+        <AddTaskDialog
+          calendarId={WORK_CALENDAR_ID}
+          date={selectedDate}
+          open={addTaskOpen}
+          onOpenChange={setAddTaskOpen}
+        />
+      )}
     </div>
   );
 }
