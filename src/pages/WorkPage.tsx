@@ -1,244 +1,427 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   AlertTriangle,
   BriefcaseBusiness,
-  CalendarClock,
-  CheckCircle2,
+  CarFront,
   ClipboardList,
-  ListTodo,
+  FileText,
   Plus,
+  ShieldCheck,
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TaskListItem } from "@/components/tasks/TaskListItem";
-import { AddTaskDialog } from "@/components/tasks/AddTaskDialog";
-import { MonthGrid } from "@/components/calendar/MonthGrid";
-import { useAgenda } from "@/contexts/AgendaContext";
-import { formatDateBR, getTaskTimeStatus, todayISO } from "@/lib/date";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
-const WORK_CALENDAR_ID = "work-private";
+type EquipmentSection = "manutencao" | "epis" | "conectores" | "os" | "controle";
+type EquipmentCondition = "Bom" | "Médio" | "Defeituoso";
 
-// Tela "/meu-trabalho" — painel independente para o calendário pessoal
-// de trabalho, com estatísticas próprias e um calendário exclusivo desta aba.
+interface EquipmentItem {
+  id: string;
+  name: string;
+  category: Exclude<EquipmentSection, "os" | "controle">;
+  condition: EquipmentCondition;
+  observation: string;
+}
+
+const sectionConfig: Record<
+  Exclude<EquipmentSection, "controle">,
+  { label: string; icon: typeof CarFront; helper: string }
+> = {
+  manutencao: {
+    label: "Manutenção do carro",
+    icon: CarFront,
+    helper: "Itens usados na manutenção preventiva e corretiva do veículo.",
+  },
+  epis: {
+    label: "Ferramentas (EPIs)",
+    icon: ShieldCheck,
+    helper: "Equipamentos de proteção e itens essenciais para segurança.",
+  },
+  conectores: {
+    label: "Conectores e fusão",
+    icon: Wrench,
+    helper: "Ferramentas específicas para conexões, solda e fusão.",
+  },
+  os: {
+    label: "OSs da semana",
+    icon: ClipboardList,
+    helper: "Resumo rápido da quantidade de ordens de serviço realizadas.",
+  },
+};
+
+const initialEquipment: EquipmentItem[] = [
+  {
+    id: "eq-1",
+    name: "Multímetro digital",
+    category: "epis",
+    condition: "Bom",
+    observation: "Calibrado na semana passada.",
+  },
+  {
+    id: "eq-2",
+    name: "Estação de fusão",
+    category: "conectores",
+    condition: "Médio",
+    observation: "Precisa revisão no cabo de alimentação.",
+  },
+  {
+    id: "eq-3",
+    name: "Óleo do motor",
+    category: "manutencao",
+    condition: "Bom",
+    observation: "Reposição feita no último atendimento.",
+  },
+  {
+    id: "eq-4",
+    name: "Luva de isolamento",
+    category: "epis",
+    condition: "Defeituoso",
+    observation: "Par de luvas com rasgo na palma.",
+  },
+];
+
 export function WorkPage() {
-  const { tasks } = useAgenda();
-  const today = todayISO();
-  const [year, setYear] = useState(Number(today.slice(0, 4)));
-  const [month, setMonth] = useState(Number(today.slice(5, 7)) - 1);
-  const [selectedDate, setSelectedDate] = useState<string | null>(today);
-  const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<EquipmentSection>("manutencao");
+  const [items, setItems] = useState<EquipmentItem[]>(initialEquipment);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formCategory, setFormCategory] = useState<EquipmentItem["category"]>("manutencao");
+  const [formCondition, setFormCondition] = useState<EquipmentCondition>("Bom");
+  const [formObservation, setFormObservation] = useState("");
+  const [reportText, setReportText] = useState("");
 
-  const workTasks = useMemo(
-    () => tasks.filter((task) => task.calendarId === WORK_CALENDAR_ID),
-    [tasks]
-  );
+  const defectiveItems = items.filter((item) => item.condition === "Defeituoso");
+  const osThisWeek = 12;
 
-  const stats = useMemo(() => {
-    const pending = workTasks.filter((task) => task.status !== "concluida");
-    const overdue = pending.filter((task) => getTaskTimeStatus(task) === "vencida");
-    const todayTasks = pending.filter((task) => task.date === today);
-    const highPriority = pending.filter((task) => task.priority === "alta");
+  function resetForm() {
+    setFormName("");
+    setFormCategory("manutencao");
+    setFormCondition("Bom");
+    setFormObservation("");
+    setEditingId(null);
+  }
 
-    return {
-      pending: pending.length,
-      overdue: overdue.length,
-      today: todayTasks.length,
-      priority: highPriority.length,
+  function openCreateDialog() {
+    resetForm();
+    setIsDialogOpen(true);
+  }
+
+  function openEditDialog(item: EquipmentItem) {
+    setEditingId(item.id);
+    setFormName(item.name);
+    setFormCategory(item.category);
+    setFormCondition(item.condition);
+    setFormObservation(item.observation);
+    setIsDialogOpen(true);
+  }
+
+  function handleSave() {
+    if (!formName.trim()) return;
+
+    const payload: EquipmentItem = {
+      id: editingId ?? `eq-${Date.now()}`,
+      name: formName.trim(),
+      category: formCategory,
+      condition: formCondition,
+      observation: formObservation.trim(),
     };
-  }, [workTasks, today]);
 
-  const markedDates = useMemo(() => {
-    const map: Record<string, { count: number; hasOverdue?: boolean }> = {};
-    for (const task of workTasks) {
-      if (task.status === "concluida") continue;
-      const existing = map[task.date] ?? { count: 0 };
-      existing.count += 1;
-      if (getTaskTimeStatus(task) === "vencida") existing.hasOverdue = true;
-      map[task.date] = existing;
+    setItems((current) => {
+      if (editingId) {
+        return current.map((item) => (item.id === editingId ? payload : item));
+      }
+      return [payload, ...current];
+    });
+
+    setIsDialogOpen(false);
+    resetForm();
+  }
+
+  function handleGenerateReport() {
+    if (defectiveItems.length === 0) {
+      setReportText("Nenhuma ferramenta com defeito registrada no momento.");
+      return;
     }
-    return map;
-  }, [workTasks]);
 
-  const tasksForSelectedDate = useMemo(() => {
-    if (!selectedDate) return [];
-    return [...workTasks]
-      .filter((task) => task.date === selectedDate)
-      .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
-  }, [selectedDate, workTasks]);
+    const lines = defectiveItems.map(
+      (item) => `- ${item.name} (${item.category === "conectores" ? "Conectores e fusão" : item.category === "epis" ? "EPIs" : "Manutenção do carro"}): ${item.observation || "Sem observação adicional."}`
+    );
 
-  const kitItems = [
-    "Multímetro",
-    "Chave de fenda",
-    "Lanterna",
-    "Peças de reposição",
-    "Manual técnico",
-  ];
+    setReportText(
+      [
+        "Relatório de ferramentas com defeito",
+        `Total: ${defectiveItems.length}`,
+        "",
+        ...lines,
+      ].join("\n")
+    );
+  }
+
+  const sectionTitle =
+    activeSection === "controle"
+      ? "Controle"
+      : activeSection === "os"
+        ? "OSs da semana"
+        : sectionConfig[activeSection].label;
+
+  const visibleItems =
+    activeSection === "controle"
+      ? defectiveItems
+      : activeSection === "os"
+        ? []
+        : items.filter((item) => item.category === activeSection);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Meu trabalho</h1>
         <p className="text-sm text-muted-foreground">
-          Calendário privado do trabalho, com atividades exclusivas desta área.
+          Centralize manutenção, ferramentas, materiais e acompanhamento das OSs.
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-5">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <ListTodo className="size-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Rotina</p>
-              <p className="text-2xl font-semibold">{stats.pending}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-5">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-              <AlertTriangle className="size-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Pendências</p>
-              <p className="text-2xl font-semibold">{stats.overdue}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-5">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-warning/15 text-warning">
-              <CalendarClock className="size-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Hoje</p>
-              <p className="text-2xl font-semibold">{stats.today}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-5">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-success/10 text-success">
-              <CheckCircle2 className="size-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Prioridade</p>
-              <p className="text-2xl font-semibold">{stats.priority}</p>
-            </div>
-          </CardContent>
-        </Card>
+        {[
+          { key: "manutencao", label: "Manutenção do carro", count: items.filter((item) => item.category === "manutencao").length },
+          { key: "epis", label: "Ferramentas (EPIs)", count: items.filter((item) => item.category === "epis").length },
+          { key: "conectores", label: "Conectores e fusão", count: items.filter((item) => item.category === "conectores").length },
+          { key: "os", label: "OSs na semana", count: osThisWeek },
+        ].map((option) => {
+          const Icon = option.key === "manutencao" ? CarFront : option.key === "epis" ? ShieldCheck : option.key === "conectores" ? Wrench : ClipboardList;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setActiveSection(option.key as EquipmentSection)}
+              className={`rounded-xl border p-4 text-left transition-colors ${
+                activeSection === option.key
+                  ? "border-primary bg-primary/5"
+                  : "border-border bg-card hover:bg-muted/40"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
+                  <Icon className="size-4" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{option.label}</p>
+                  <p className="text-2xl font-semibold">{option.count}</p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_1fr]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {activeSection === "controle" ? (
+                <AlertTriangle className="size-4" />
+              ) : activeSection === "os" ? (
+                <ClipboardList className="size-4" />
+              ) : activeSection === "manutencao" ? (
+                <CarFront className="size-4" />
+              ) : activeSection === "epis" ? (
+                <ShieldCheck className="size-4" />
+              ) : (
+                <Wrench className="size-4" />
+              )}
+              {sectionTitle}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {activeSection === "os" ? (
+              <div className="rounded-xl bg-muted/40 p-4">
+                <p className="text-sm text-muted-foreground">Total de OSs realizadas nesta semana</p>
+                <p className="mt-2 text-4xl font-semibold">{osThisWeek}</p>
+              </div>
+            ) : activeSection === "controle" ? (
+              <div className="flex flex-col gap-3">
+                {defectiveItems.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    Nenhum item com defeito foi registrado.
+                  </p>
+                ) : (
+                  defectiveItems.map((item) => (
+                    <div key={item.id} className="rounded-xl border border-border p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium">{item.name}</p>
+                        <span className="rounded-full bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                          {item.condition}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">{item.observation}</p>
+                    </div>
+                  ))
+                )}
+                <Button className="gap-2" onClick={handleGenerateReport}>
+                  <FileText className="size-4" />
+                  Gerar relatório
+                </Button>
+                {reportText && (
+                  <div className="rounded-xl bg-muted/40 p-3 text-sm whitespace-pre-wrap">
+                    {reportText}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
+                  {sectionConfig[activeSection].helper}
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={openCreateDialog} className="gap-2">
+                    <Plus className="size-4" />
+                    Adicionar equipamento
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {visibleItems.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                      Nenhum item cadastrado nesta categoria.
+                    </p>
+                  ) : (
+                    visibleItems.map((item) => (
+                      <div key={item.id} className="rounded-xl border border-border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            <p className="text-sm text-muted-foreground">{item.observation || "Sem observação."}</p>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
+                            Editar
+                          </Button>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="rounded-full bg-muted px-2 py-1 text-xs">{item.condition}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BriefcaseBusiness className="size-4" />
-              Calendário do trabalho
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MonthGrid
-              year={year}
-              month={month}
-              onMonthChange={(nextYear, nextMonth) => {
-                setYear(nextYear);
-                setMonth(nextMonth);
-              }}
-              markedDates={markedDates}
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ClipboardList className="size-4" />
-              Atividades do dia
+              Ações rápidas
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Selecionado</p>
-                <p className="font-semibold">
-                  {selectedDate ? formatDateBR(selectedDate) : "Selecione um dia"}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                className="gap-1.5"
-                disabled={!selectedDate}
-                onClick={() => setAddTaskOpen(true)}
-              >
-                <Plus className="size-4" />
-                Adicionar
-              </Button>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {tasksForSelectedDate.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  Nenhuma atividade marcada para este dia.
-                </p>
-              ) : (
-                tasksForSelectedDate.map((task) => <TaskListItem key={task.id} task={task} />)
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wrench className="size-4" />
-              Ferramentas e materiais
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2">
-              {kitItems.map((item) => (
-                <div key={item} className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => setActiveSection("controle")}
+            >
               <AlertTriangle className="size-4" />
-              Observações rápidas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-              Registre falhas, peças trocadas, próximos passos e detalhes importantes da
-              rotina.
-            </div>
+              Ver controle de defeitos
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => setActiveSection("os")}
+            >
+              <ClipboardList className="size-4" />
+              Ver OSs da semana
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" onClick={openCreateDialog}>
+              <Plus className="size-4" />
+              Novo equipamento/material
+            </Button>
           </CardContent>
         </Card>
       </div>
 
-      {selectedDate && (
-        <AddTaskDialog
-          calendarId={WORK_CALENDAR_ID}
-          date={selectedDate}
-          open={addTaskOpen}
-          onOpenChange={setAddTaskOpen}
-        />
-      )}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar equipamento" : "Adicionar equipamento"}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="equipment-name">Nome</Label>
+              <Input
+                id="equipment-name"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="Ex: Alicate de pressão"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="equipment-category">Categoria</Label>
+                <Select value={formCategory} onValueChange={(value) => setFormCategory(value as EquipmentItem["category"])}>
+                  <SelectTrigger id="equipment-category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manutencao">Manutenção do carro</SelectItem>
+                    <SelectItem value="epis">Ferramentas (EPIs)</SelectItem>
+                    <SelectItem value="conectores">Conectores e fusão</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="equipment-condition">Condição</Label>
+                <Select value={formCondition} onValueChange={(value) => setFormCondition(value as EquipmentCondition)}>
+                  <SelectTrigger id="equipment-condition">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Bom">Bom</SelectItem>
+                    <SelectItem value="Médio">Médio</SelectItem>
+                    <SelectItem value="Defeituoso">Defeituoso</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="equipment-observation">Observação</Label>
+              <Textarea
+                id="equipment-observation"
+                value={formObservation}
+                onChange={(e) => setFormObservation(e.target.value)}
+                placeholder="Detalhes da condição, manutenção ou uso."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={!formName.trim()}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
