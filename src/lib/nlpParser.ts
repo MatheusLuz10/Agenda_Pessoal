@@ -23,6 +23,51 @@ function stripAccents(text: string): string {
   return text.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
+// Palavras-chave comuns associadas a temas de calendário (independente
+// dos calendários reais do usuário, que têm nomes livres). Usado por
+// guessCalendarId para inferir o calendário certo mesmo quando a frase
+// não menciona o nome do calendário literalmente — ex: "veterinário"
+// aponta para um calendário chamado "Pets", "prova"/"aula" para um
+// chamado "Faculdade", etc.
+const CALENDAR_KEYWORDS: Record<string, string[]> = {
+  pet: ["veterinario", "cachorro", "gato", "racao", "vacina", "pet"],
+  faculdade: ["prova", "aula", "faculdade", "tcc", "professor", "trabalho academico", "universidade"],
+  trabalho: ["reuniao", "sprint", "cliente", "projeto", "chefe", "trabalho", "deadline"],
+  conta: ["conta", "luz", "agua", "internet", "boleto", "fatura", "aluguel"],
+  saude: ["medico", "dentista", "consulta", "exame", "remedio", "saude"],
+  pessoal: ["aniversario", "festa", "presente", "familia", "amigo"],
+};
+
+// Tenta descobrir, pelo conteúdo da frase, a qual calendário do usuário
+// um compromisso pertence — assim o chat (AssistantPage) não precisa de
+// um seletor manual. Estratégia, da mais para a menos específica:
+//   1) o nome de algum calendário aparece literalmente na frase;
+//   2) uma palavra-chave de CALENDAR_KEYWORDS aparece na frase, e existe
+//      um calendário cujo nome contém aquele tema (ex: tema "pet" casa
+//      com um calendário chamado "Pets");
+//   3) nenhum dos dois: devolve null, e quem chamar decide o calendário
+//      padrão (ver AssistantPage, que usa o primeiro da lista).
+export function guessCalendarId(
+  text: string,
+  calendars: { id: string; name: string }[]
+): string | null {
+  if (calendars.length === 0) return null;
+  const lower = stripAccents(text.toLowerCase());
+
+  for (const calendar of calendars) {
+    const name = stripAccents(calendar.name.toLowerCase());
+    if (name.length >= 3 && lower.includes(name)) return calendar.id;
+  }
+
+  for (const [theme, keywords] of Object.entries(CALENDAR_KEYWORDS)) {
+    if (!keywords.some((keyword) => lower.includes(keyword))) continue;
+    const match = calendars.find((c) => stripAccents(c.name.toLowerCase()).includes(theme));
+    if (match) return match.id;
+  }
+
+  return null;
+}
+
 interface Range {
   start: number;
   end: number;

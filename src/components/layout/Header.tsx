@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarHeart, LogOut, Moon, Plus, Sun } from "lucide-react";
+import { Lightbulb, LogOut, Moon, Plus, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddCalendarDialog } from "@/components/calendar/AddCalendarDialog";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,9 +37,9 @@ export function Header() {
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur-md sm:px-6">
       <div className="flex items-center gap-2">
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <CalendarHeart className="size-4.5" />
+          <Lightbulb className="size-4.5" />
         </div>
-        <span className="text-base font-semibold tracking-tight">Meu caos &lt;3</span>
+        <span className="text-base font-semibold tracking-tight">meu caos</span>
       </div>
 
       <div className="flex items-center gap-2">

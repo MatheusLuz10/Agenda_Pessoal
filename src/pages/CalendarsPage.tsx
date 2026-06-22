@@ -45,7 +45,7 @@ export function CalendarsPage() {
               onClick={() => navigate(`/calendarios/${calendar.id}`)}
             >
               <CardContent className="flex items-center gap-3 pt-5">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-accent text-2xl">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-2xl text-foreground">
                   {calendar.icon}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -57,7 +57,9 @@ export function CalendarsPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{pending} pend.</Badge>
+                  <Badge variant="secondary" className="text-foreground">
+                    {pending} pend.
+                  </Badge>
                   {/* stopPropagation: sem isso, excluir também acionaria o
                       onClick do Card (navegar para o calendário). */}
                   <Button

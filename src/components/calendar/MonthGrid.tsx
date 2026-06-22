@@ -61,7 +61,7 @@ export function MonthGrid({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between rounded-xl bg-gradient-to-r from-primary/8 to-sky-100/70 px-3 py-2">
+      <div className="mb-3 flex items-center justify-between rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-muted px-3 py-2">
         <span className="text-sm font-semibold text-foreground">
           {MONTH_NAMES_PT[month]} {year}
         </span>
@@ -69,7 +69,7 @@ export function MonthGrid({
           <Button
             variant="ghost"
             size="icon"
-            className="size-7 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+            className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
             onClick={goPrev}
           >
             <ChevronLeft className="size-4" />
@@ -77,7 +77,7 @@ export function MonthGrid({
           <Button
             variant="ghost"
             size="icon"
-            className="size-7 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+            className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
             onClick={goNext}
           >
             <ChevronRight className="size-4" />
@@ -87,7 +87,7 @@ export function MonthGrid({
 
       <div className="grid grid-cols-7 gap-1 text-center">
         {WEEKDAY_NAMES_PT.map((d) => (
-          <div key={d} className="pb-1 text-[11px] font-semibold text-sky-600">
+          <div key={d} className="pb-1 text-[11px] font-semibold text-muted-foreground">
             {d}
           </div>
         ))}
@@ -112,8 +112,8 @@ export function MonthGrid({
                 isSelected
                   ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20"
                   : isToday
-                  ? "border-sky-200 bg-sky-50 font-semibold text-sky-700"
-                  : "border-transparent bg-white hover:border-sky-200 hover:bg-sky-50/80"
+                  ? "border-primary/40 bg-primary/10 font-semibold text-primary"
+                  : "border-border/50 bg-card text-foreground hover:border-primary/40 hover:bg-accent"
               )}
             >
               {day}
