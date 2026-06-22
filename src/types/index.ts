@@ -31,3 +31,49 @@ export interface CalendarGroup {
   observation?: string;
   createdAt: string;
 }
+
+// --- Controle financeiro ("Conta") ---
+
+export type TransactionType = "entrada" | "saida";
+
+export type RecurrenceFrequency = "mensal" | "semanal" | "anual";
+
+export const TRANSACTION_CATEGORIES = [
+  "Salário",
+  "Hora Extra",
+  "Alimentação",
+  "Moradia",
+  "Educação",
+  "Saúde",
+  "Transporte",
+  "Lazer",
+  "Investimentos",
+  "Outros",
+] as const;
+
+export type TransactionCategory = (typeof TRANSACTION_CATEGORIES)[number];
+
+// Um lançamento financeiro (entrada ou saída). Independente dos
+// calendários de tarefas, mas aparece junto na visão geral da agenda
+// (ver markedDates em HomePage) porque também tem uma data associada.
+export interface Transaction {
+  id: string;
+  type: TransactionType;
+  description: string;
+  amount: number; // sempre positivo; o sinal é dado por `type`
+  category: TransactionCategory;
+  date: string; // ISO date string (yyyy-MM-dd)
+  observation?: string;
+  recurrent: boolean;
+  recurrenceFrequency?: RecurrenceFrequency; // presente só quando recurrent === true
+  createdAt: string;
+}
+
+// Uma meta de economia (ex: "Notebook novo", R$ 2.000 guardados de R$ 5.000).
+export interface Goal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  createdAt: string;
+}

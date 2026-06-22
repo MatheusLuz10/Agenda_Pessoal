@@ -67,3 +67,23 @@ export function pad2(n: number): string {
 export function makeISODate(year: number, month: number, day: number): string {
   return `${year}-${pad2(month + 1)}-${pad2(day)}`;
 }
+
+// Soma (ou subtrai, com n negativo) dias a uma data ISO, devolvendo outra
+// data ISO. Usado pelo parser de linguagem natural do chat para resolver
+// "amanhã", "depois de amanhã", etc.
+export function addDays(iso: string, n: number): string {
+  const date = new Date(`${iso}T00:00:00`);
+  date.setDate(date.getDate() + n);
+  return makeISODate(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+// Próxima ocorrência de um dia da semana (0 = domingo ... 6 = sábado) a
+// partir de hoje. Se hoje já é esse dia, considera o de hoje (não pula
+// para a semana seguinte) — é o comportamento mais intuitivo quando
+// alguém digita só o nome do dia no chat.
+export function nextWeekdayISO(targetDow: number): string {
+  const today = new Date(`${todayISO()}T00:00:00`);
+  const diff = (targetDow - today.getDay() + 7) % 7;
+  today.setDate(today.getDate() + diff);
+  return makeISODate(today.getFullYear(), today.getMonth(), today.getDate());
+}

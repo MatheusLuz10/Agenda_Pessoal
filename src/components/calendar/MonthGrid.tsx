@@ -14,6 +14,9 @@ interface MonthGridProps {
   month: number; // 0-indexed
   onMonthChange: (year: number, month: number) => void;
   markedDates?: Record<string, { count: number; hasOverdue?: boolean }>;
+  // Marcadores financeiros (independentes dos de tarefa): "entrada" pinta
+  // verde, "saida" pinta vermelho, "ambos" quando o dia tem os dois tipos.
+  financeMarkedDates?: Record<string, "entrada" | "saida" | "ambos">;
   selectedDate?: string | null;
   onSelectDate?: (iso: string) => void;
   compact?: boolean;
@@ -28,6 +31,7 @@ export function MonthGrid({
   month,
   onMonthChange,
   markedDates = {},
+  financeMarkedDates = {},
   selectedDate,
   onSelectDate,
   compact = false,
@@ -94,6 +98,7 @@ export function MonthGrid({
 
           const iso = makeISODate(year, month, day);
           const marker = markedDates[iso]; // há tarefas pendentes neste dia?
+          const financeMarker = financeMarkedDates[iso]; // há lançamento financeiro neste dia?
           const isToday = iso === today;
           const isSelected = iso === selectedDate;
 
@@ -120,6 +125,18 @@ export function MonthGrid({
                     "absolute bottom-0.5 size-1.5 rounded-full",
                     marker.hasOverdue ? "bg-destructive" : "bg-primary",
                     isSelected && "bg-primary-foreground"
+                  )}
+                />
+              )}
+              {financeMarker && (
+                // Bolinha no canto superior: verde (entrada), vermelha
+                // (saída) ou metade de cada quando o dia tem os dois.
+                <span
+                  className={cn(
+                    "absolute top-0.5 right-0.5 size-1.5 rounded-full",
+                    financeMarker === "entrada" && "bg-success",
+                    financeMarker === "saida" && "bg-destructive",
+                    financeMarker === "ambos" && "bg-warning"
                   )}
                 />
               )}
