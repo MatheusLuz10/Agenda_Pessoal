@@ -13,7 +13,7 @@ import { MonthlyFlowChart } from "@/components/finance/MonthlyFlowChart";
 import { ComparisonChart } from "@/components/finance/ComparisonChart";
 import { useFinance } from "@/contexts/FinanceContext";
 import type { Transaction } from "@/types";
-import { addDays, todayISO } from "@/lib/date";
+import { addDays, nowInBrasilia, todayISO } from "@/lib/date";
 import {
   calcBalance,
   filterByMonth,
@@ -31,7 +31,7 @@ type ReportFilter = "hoje" | "semana" | "mes" | "ano" | "personalizado";
 // economia, organizados em abas dentro de uma única página.
 export function FinancesPage() {
   const { transactions, goals } = useFinance();
-  const today = new Date();
+  const today = nowInBrasilia();
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth();
 

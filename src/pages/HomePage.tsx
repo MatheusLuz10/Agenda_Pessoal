@@ -6,7 +6,7 @@ import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { TaskListItem } from "@/components/tasks/TaskListItem";
 import { useAgenda } from "@/contexts/AgendaContext";
 import { useFinance } from "@/contexts/FinanceContext";
-import { getTaskTimeStatus, todayISO } from "@/lib/date";
+import { getTaskTimeStatus, nowInBrasilia, todayISO } from "@/lib/date";
 import { calcBalance, filterByMonth, formatBRL, sumEntradas, sumSaidas } from "@/lib/finance";
 
 // Tela "/" — visão geral: mini calendário do mês com marcadores de
@@ -18,7 +18,7 @@ export function HomePage() {
   const { tasks } = useAgenda();
   const { transactions } = useFinance();
   const navigate = useNavigate();
-  const today = new Date();
+  const today = nowInBrasilia();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
@@ -58,7 +58,10 @@ export function HomePage() {
   // domingo), ordenadas por data/horário, limitando a 3 para não poluir
   // a tela inicial.
   const upcomingTasks = useMemo(() => {
-    const start = new Date(todayISO());
+    // "T00:00:00" (sem "Z") faz o JS interpretar a data como horário
+    // local em vez de UTC — sem isso, dispositivos em fusos atrás de UTC
+    // (como o de Brasília) calculam a "segunda-feira" um dia adiantada.
+    const start = new Date(`${todayISO()}T00:00:00`);
     const day = start.getDay();
     // Ajusta para a segunda-feira da semana atual (getDay() retorna 0
     // para domingo, por isso o caso especial).

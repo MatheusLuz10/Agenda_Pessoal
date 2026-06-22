@@ -1,11 +1,34 @@
 import type { Task } from "@/types";
 
-// Retorna a data de hoje no formato ISO "yyyy-MM-dd", que é o mesmo
-// formato usado para armazenar `task.date`. Datas em formato ISO podem
-// ser comparadas com os operadores < > == diretamente, como strings,
-// sem precisar converter para objetos Date.
+// Fuso horário de Brasília (UTC-3, sem horário de verão desde 2019).
+// Fixamos o app inteiro nesse fuso, em vez de usar o fuso do
+// navegador/dispositivo, para que "hoje" seja sempre o dia certo no
+// Brasil, mesmo que o aparelho esteja com o relógio/fuso mal configurado.
+const BRASILIA_TIMEZONE = "America/Sao_Paulo";
+
+// Devolve o instante atual "redesenhado" como se fosse horário de
+// Brasília: ao chamar .getFullYear()/.getMonth()/.getDate()/.getDay()
+// no resultado, os valores já saem corretos para Brasília, mesmo que o
+// dispositivo esteja em outro fuso. Funciona convertendo a hora atual
+// para uma string no fuso de Brasília e reanalisando essa string como
+// se fosse hora local — um truque comum em JavaScript puro (sem
+// biblioteca de datas) para "fixar" um fuso horário específico.
+export function nowInBrasilia(): Date {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: BRASILIA_TIMEZONE }));
+}
+
+// Retorna a data de hoje (em Brasília) no formato ISO "yyyy-MM-dd", que é
+// o mesmo formato usado para armazenar `task.date`. Datas em formato ISO
+// podem ser comparadas com os operadores < > == diretamente, como
+// strings, sem precisar converter para objetos Date.
+//
+// Importante: NÃO use `new Date().toISOString().slice(0, 10)` para isso
+// — toISOString() converte para UTC, e Brasília está atrás de UTC, então
+// nas últimas horas de cada dia (a partir das ~21h) o resultado seria a
+// data de AMANHÃ. Usar nowInBrasilia() evita esse problema.
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  const today = nowInBrasilia();
+  return makeISODate(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
 // Converte uma data ISO ("2026-06-20") para o formato brasileiro

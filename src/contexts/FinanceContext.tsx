@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Goal, Transaction } from "@/types";
 import { mockGoals, mockTransactions } from "@/data/mockData";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { todayISO } from "@/lib/date";
 import {
   createGoal,
   createTransaction,
@@ -63,7 +64,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const optimistic: Transaction = {
       ...transaction,
       id: `tx-${Date.now()}`,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: todayISO(),
     };
     setTransactions((prev) => [...prev, optimistic]);
 
@@ -90,7 +91,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const optimistic: Goal = {
       ...goal,
       id: `goal-${Date.now()}`,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: todayISO(),
     };
     setGoals((prev) => [...prev, optimistic]);
 

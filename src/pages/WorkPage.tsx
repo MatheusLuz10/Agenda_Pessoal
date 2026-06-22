@@ -7,6 +7,7 @@ import {
   FileText,
   Plus,
   ShieldCheck,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,9 +29,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { nowInBrasilia } from "@/lib/date";
 
 type EquipmentSection = "manutencao" | "epis" | "conectores" | "os" | "controle";
 type EquipmentCondition = "Bom" | "Médio" | "Defeituoso";
+type ServiceOrderStatus = "pendente" | "em_andamento" | "concluida";
 
 interface EquipmentItem {
   id: string;
@@ -38,6 +41,40 @@ interface EquipmentItem {
   category: Exclude<EquipmentSection, "os" | "controle">;
   condition: EquipmentCondition;
   observation: string;
+}
+
+// Uma OS (Ordem de Serviço): o atendimento feito num cliente/local em
+// uma data específica. Diferente dos equipamentos, cada OS tem uma data
+// própria — é o que permite calcular "OSs da semana" de verdade, em vez
+// de um número fixo.
+interface ServiceOrder {
+  id: string;
+  client: string;
+  description: string;
+  date: string; // ISO date string (yyyy-MM-dd)
+  status: ServiceOrderStatus;
+  observation: string;
+}
+
+const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
+  pendente: "Pendente",
+  em_andamento: "Em andamento",
+  concluida: "Concluída",
+};
+
+// Início (segunda) e fim (domingo) da semana atual, mesma lógica usada
+// em HomePage para "Próximos Avisos".
+function getCurrentWeekRange(): { start: string; end: string } {
+  const today = nowInBrasilia();
+  const day = today.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const start = new Date(today);
+  start.setDate(start.getDate() + diff);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const toISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { start: toISO(start), end: toISO(end) };
 }
 
 const sectionConfig: Record<
@@ -97,6 +134,58 @@ const initialEquipment: EquipmentItem[] = [
   },
 ];
 
+// Datas relativas a hoje, para os dados de exemplo sempre caírem numa
+// mistura de "esta semana" e "fora da semana" independente de quando o
+// app for aberto.
+function relativeISO(offsetDays: number): string {
+  const date = nowInBrasilia();
+  date.setDate(date.getDate() + offsetDays);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+const initialServiceOrders: ServiceOrder[] = [
+  {
+    id: "os-1",
+    client: "Condomínio Vista Verde",
+    description: "Instalação de fibra óptica",
+    date: relativeISO(0),
+    status: "concluida",
+    observation: "",
+  },
+  {
+    id: "os-2",
+    client: "Maria Fernandes",
+    description: "Troca de roteador",
+    date: relativeISO(-1),
+    status: "concluida",
+    observation: "Cliente relatou queda de sinal intermitente.",
+  },
+  {
+    id: "os-3",
+    client: "Padaria Pão Quente",
+    description: "Reparo de conector rompido",
+    date: relativeISO(-2),
+    status: "em_andamento",
+    observation: "Aguardando peça de reposição.",
+  },
+  {
+    id: "os-4",
+    client: "João Pedro",
+    description: "Manutenção preventiva de rede interna",
+    date: relativeISO(1),
+    status: "pendente",
+    observation: "",
+  },
+  {
+    id: "os-5",
+    client: "Auto Peças Veloz",
+    description: "Instalação de ponto de rede adicional",
+    date: relativeISO(-10),
+    status: "concluida",
+    observation: "OS de referência, fora da semana atual.",
+  },
+];
+
 export function WorkPage() {
   const [activeSection, setActiveSection] = useState<EquipmentSection>("manutencao");
   const [items, setItems] = useState<EquipmentItem[]>(initialEquipment);
@@ -108,8 +197,73 @@ export function WorkPage() {
   const [formObservation, setFormObservation] = useState("");
   const [reportText, setReportText] = useState("");
 
+  const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(initialServiceOrders);
+  const [isOsDialogOpen, setIsOsDialogOpen] = useState(false);
+  const [editingOsId, setEditingOsId] = useState<string | null>(null);
+  const [osClient, setOsClient] = useState("");
+  const [osDescription, setOsDescription] = useState("");
+  const [osDate, setOsDate] = useState(relativeISO(0));
+  const [osStatus, setOsStatus] = useState<ServiceOrderStatus>("pendente");
+  const [osObservation, setOsObservation] = useState("");
+
   const defectiveItems = items.filter((item) => item.condition === "Defeituoso");
-  const osThisWeek = 12;
+  const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
+  const serviceOrdersThisWeek = serviceOrders
+    .filter((os) => os.date >= weekStart && os.date <= weekEnd)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const osThisWeek = serviceOrdersThisWeek.length;
+
+  function resetOsForm() {
+    setOsClient("");
+    setOsDescription("");
+    setOsDate(relativeISO(0));
+    setOsStatus("pendente");
+    setOsObservation("");
+    setEditingOsId(null);
+  }
+
+  function openCreateOsDialog() {
+    resetOsForm();
+    setIsOsDialogOpen(true);
+  }
+
+  function openEditOsDialog(os: ServiceOrder) {
+    setEditingOsId(os.id);
+    setOsClient(os.client);
+    setOsDescription(os.description);
+    setOsDate(os.date);
+    setOsStatus(os.status);
+    setOsObservation(os.observation);
+    setIsOsDialogOpen(true);
+  }
+
+  function handleSaveOs() {
+    if (!osClient.trim() || !osDescription.trim()) return;
+
+    const payload: ServiceOrder = {
+      id: editingOsId ?? `os-${Date.now()}`,
+      client: osClient.trim(),
+      description: osDescription.trim(),
+      date: osDate,
+      status: osStatus,
+      observation: osObservation.trim(),
+    };
+
+    setServiceOrders((current) => {
+      if (editingOsId) {
+        return current.map((os) => (os.id === editingOsId ? payload : os));
+      }
+      return [payload, ...current];
+    });
+
+    setIsOsDialogOpen(false);
+    resetOsForm();
+  }
+
+  function handleDeleteOs(osId: string) {
+    if (!window.confirm("Excluir esta ordem de serviço?")) return;
+    setServiceOrders((current) => current.filter((os) => os.id !== osId));
+  }
 
   function resetForm() {
     setFormName("");
@@ -251,9 +405,68 @@ export function WorkPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {activeSection === "os" ? (
-              <div className="rounded-xl bg-muted/40 p-4">
-                <p className="text-sm text-muted-foreground">Total de OSs realizadas nesta semana</p>
-                <p className="mt-2 text-4xl font-semibold">{osThisWeek}</p>
+              <div className="flex flex-col gap-3">
+                <div className="rounded-xl bg-muted/40 p-4">
+                  <p className="text-sm text-muted-foreground">Total de OSs nesta semana</p>
+                  <p className="mt-2 text-4xl font-semibold">{osThisWeek}</p>
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={openCreateOsDialog} className="gap-2">
+                    <Plus className="size-4" />
+                    Nova OS
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {serviceOrdersThisWeek.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                      Nenhuma OS registrada nesta semana.
+                    </p>
+                  ) : (
+                    serviceOrdersThisWeek.map((os) => (
+                      <div key={os.id} className="rounded-xl border border-border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium">{os.client}</p>
+                            <p className="text-sm text-muted-foreground">{os.description}</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => openEditOsDialog(os)}>
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteOs(os.id)}
+                              aria-label="Excluir OS"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-muted px-2 py-1 text-xs">
+                            {new Date(`${os.date}T00:00:00`).toLocaleDateString("pt-BR")}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs ${
+                              os.status === "concluida"
+                                ? "bg-success/10 text-success"
+                                : os.status === "em_andamento"
+                                  ? "bg-warning/15 text-warning"
+                                  : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {SERVICE_ORDER_STATUS_LABEL[os.status]}
+                          </span>
+                        </div>
+                        {os.observation && (
+                          <p className="mt-2 text-sm text-muted-foreground">{os.observation}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             ) : activeSection === "controle" ? (
               <div className="flex flex-col gap-3">
@@ -352,6 +565,17 @@ export function WorkPage() {
               <Plus className="size-4" />
               Novo equipamento/material
             </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => {
+                setActiveSection("os");
+                openCreateOsDialog();
+              }}
+            >
+              <Plus className="size-4" />
+              Nova OS
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -417,6 +641,85 @@ export function WorkPage() {
               Cancelar
             </Button>
             <Button onClick={handleSave} disabled={!formName.trim()}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isOsDialogOpen}
+        onOpenChange={(open) => {
+          setIsOsDialogOpen(open);
+          if (!open) resetOsForm();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingOsId ? "Editar OS" : "Nova OS"}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="os-client">Cliente/local</Label>
+              <Input
+                id="os-client"
+                value={osClient}
+                onChange={(e) => setOsClient(e.target.value)}
+                placeholder="Ex: Maria Fernandes"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="os-description">Descrição do serviço</Label>
+              <Input
+                id="os-description"
+                value={osDescription}
+                onChange={(e) => setOsDescription(e.target.value)}
+                placeholder="Ex: Instalação de fibra óptica"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="os-date">Data</Label>
+                <Input
+                  id="os-date"
+                  type="date"
+                  value={osDate}
+                  onChange={(e) => setOsDate(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="os-status">Status</Label>
+                <Select value={osStatus} onValueChange={(value) => setOsStatus(value as ServiceOrderStatus)}>
+                  <SelectTrigger id="os-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="em_andamento">Em andamento</SelectItem>
+                    <SelectItem value="concluida">Concluída</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="os-observation">Observação</Label>
+              <Textarea
+                id="os-observation"
+                value={osObservation}
+                onChange={(e) => setOsObservation(e.target.value)}
+                placeholder="Detalhes do atendimento, peças usadas, pendências..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsOsDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveOs} disabled={!osClient.trim() || !osDescription.trim()}>
               Salvar
             </Button>
           </DialogFooter>

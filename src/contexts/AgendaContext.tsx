@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { CalendarGroup, Task } from "@/types";
 import { mockCalendars, mockTasks } from "@/data/mockData";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { todayISO } from "@/lib/date";
 import {
   fetchCalendars,
   fetchTasks,
@@ -90,7 +91,7 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
     const optimisticCalendar: CalendarGroup = {
       ...calendar,
       id: `cal-${Date.now()}`,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: todayISO(),
     };
     setCalendars((prev) => [...prev, optimisticCalendar]);
 

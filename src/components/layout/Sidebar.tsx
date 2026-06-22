@@ -1,16 +1,20 @@
-import { NavLink } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "@/config/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-function SidebarNav({ mobile = false }: { mobile?: boolean }) {
+// Menu lateral fixo (desktop), visível apenas em telas >= sm. Mostra
+// todos os itens — no desktop há espaço vertical de sobra.
+export function Sidebar() {
   return (
-    <nav
-      className={cn(
-        mobile
-          ? "fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card/95 backdrop-blur-md sm:hidden"
-          : "hidden w-56 shrink-0 flex-col gap-1 border-r border-border bg-card/50 p-3 sm:flex"
-      )}
-    >
+    <nav className="hidden w-56 shrink-0 flex-col gap-1 border-r border-border bg-card/50 p-3 sm:flex">
       {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}
@@ -18,20 +22,14 @@ function SidebarNav({ mobile = false }: { mobile?: boolean }) {
           end={end}
           className={({ isActive }) =>
             cn(
-              mobile
-                ? "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors"
-                : "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
               isActive
-                ? mobile
-                  ? "text-primary"
-                  : "bg-primary text-primary-foreground shadow-sm"
-                : mobile
-                  ? "text-muted-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             )
           }
         >
-          <Icon className={mobile ? "size-5" : "size-4.5"} />
+          <Icon className="size-4.5" />
           {label}
         </NavLink>
       ))}
@@ -39,10 +37,85 @@ function SidebarNav({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
-export function Sidebar() {
-  return <SidebarNav />;
-}
+// Quantos itens cabem confortavelmente na barra inferior do celular,
+// lado a lado com rótulo, antes de ficar apertado. O resto vai para o
+// botão "Mais", que abre um modal com a lista completa restante.
+const MOBILE_PRIMARY_COUNT = 4;
 
+// Menu inferior (mobile), visível apenas em telas < sm. Com mais de
+// MOBILE_PRIMARY_COUNT itens no app, mostrar todos lado a lado espreme
+// demais cada botão — por isso só os primeiros ficam fixos, e os demais
+// (incluindo Configurações) entram num botão "Mais" que abre um modal.
 export function BottomNav() {
-  return <SidebarNav mobile />;
+  const location = useLocation();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const primaryItems = NAV_ITEMS.slice(0, MOBILE_PRIMARY_COUNT);
+  const overflowItems = NAV_ITEMS.slice(MOBILE_PRIMARY_COUNT);
+  const isOverflowActive = overflowItems.some((item) => location.pathname === item.to);
+
+  return (
+    <>
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card/95 backdrop-blur-md sm:hidden">
+        {primaryItems.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) =>
+              cn(
+                "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
+                isActive ? "text-primary" : "text-muted-foreground"
+              )
+            }
+          >
+            <Icon className="size-5" />
+            {label}
+          </NavLink>
+        ))}
+
+        {overflowItems.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            className={cn(
+              "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
+              isOverflowActive ? "text-primary" : "text-muted-foreground"
+            )}
+          >
+            <MoreHorizontal className="size-5" />
+            Mais
+          </button>
+        )}
+      </nav>
+
+      <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mais opções</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-1">
+            {overflowItems.map(({ to, label, icon: Icon, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                onClick={() => setMoreOpen(false)}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  )
+                }
+              >
+                <Icon className="size-4.5" />
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
