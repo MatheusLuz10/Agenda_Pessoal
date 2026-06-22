@@ -1,22 +1,18 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Wallet, TrendingUp, TrendingDown, CalendarClock, Inbox } from "lucide-react";
+import { Inbox } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
+import { AssistantChat } from "@/components/assistant/AssistantChat";
 import { TaskListItem } from "@/components/tasks/TaskListItem";
 import { useAgenda } from "@/contexts/AgendaContext";
-import { useFinance } from "@/contexts/FinanceContext";
 import { getTaskTimeStatus, nowInBrasilia, todayISO } from "@/lib/date";
-import { calcBalance, filterByMonth, formatBRL, sumEntradas, sumSaidas } from "@/lib/finance";
 
 // Tela "/" — visão geral: mini calendário do mês com marcadores de
 // tarefas pendentes + lista de "Próximos Avisos" da semana atual,
-// reunindo tarefas de TODOS os calendários (a única tela que faz isso),
-// além de um resumo financeiro rápido (saldo, entradas/saídas do mês e
-// a próxima conta a vencer).
+// reunindo tarefas de TODOS os calendários (a única tela que faz isso).
 export function HomePage() {
   const { tasks } = useAgenda();
-  const { transactions } = useFinance();
   const navigate = useNavigate();
   const today = nowInBrasilia();
   const [year, setYear] = useState(today.getFullYear());
@@ -40,19 +36,6 @@ export function HomePage() {
     }
     return map;
   }, [generalTasks]);
-
-  // Marca também os dias com movimentação financeira (verde = entrada,
-  // vermelho = saída, amarelo = os dois no mesmo dia), só no mês em
-  // exibição no MonthGrid.
-  const financeMarkedDates = useMemo(() => {
-    const map: Record<string, "entrada" | "saida" | "ambos"> = {};
-    for (const t of filterByMonth(transactions, year, month)) {
-      const existing = map[t.date];
-      const kind = t.type === "entrada" ? "entrada" : "saida";
-      map[t.date] = !existing || existing === kind ? kind : "ambos";
-    }
-    return map;
-  }, [transactions, year, month]);
 
   // Calcula as tarefas pendentes dentro da semana atual (segunda a
   // domingo), ordenadas por data/horário, limitando a 3 para não poluir
@@ -86,21 +69,6 @@ export function HomePage() {
       .slice(0, 3);
   }, [generalTasks]);
 
-  // Resumo financeiro do widget: saldo acumulado, entradas/saídas do mês
-  // atual e a próxima saída com data igual ou posterior a hoje.
-  const financeSummary = useMemo(() => {
-    const thisMonth = filterByMonth(transactions, today.getFullYear(), today.getMonth());
-    const nextBill = transactions
-      .filter((t) => t.type === "saida" && t.date >= todayISO())
-      .sort((a, b) => a.date.localeCompare(b.date))[0];
-    return {
-      balance: calcBalance(transactions),
-      entradas: sumEntradas(thisMonth),
-      saidas: sumSaidas(thisMonth),
-      nextBill,
-    };
-  }, [transactions]);
-
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -114,37 +82,6 @@ export function HomePage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <FinanceSummaryCard
-          icon={<Wallet className="size-5" />}
-          iconClassName="bg-primary/10 text-primary"
-          label="Saldo Atual"
-          value={formatBRL(financeSummary.balance)}
-        />
-        <FinanceSummaryCard
-          icon={<TrendingUp className="size-5" />}
-          iconClassName="bg-success/10 text-success"
-          label="Entradas do Mês"
-          value={formatBRL(financeSummary.entradas)}
-        />
-        <FinanceSummaryCard
-          icon={<TrendingDown className="size-5" />}
-          iconClassName="bg-destructive/10 text-destructive"
-          label="Saídas do Mês"
-          value={formatBRL(financeSummary.saidas)}
-        />
-        <FinanceSummaryCard
-          icon={<CalendarClock className="size-5" />}
-          iconClassName="bg-warning/15 text-warning"
-          label="Próxima Conta a Vencer"
-          value={
-            financeSummary.nextBill
-              ? `${financeSummary.nextBill.description} · ${formatBRL(financeSummary.nextBill.amount)}`
-              : "Nenhuma"
-          }
-        />
-      </div>
-
       <Card>
         <CardContent className="pt-5">
           <MonthGrid
@@ -155,8 +92,16 @@ export function HomePage() {
               setMonth(m);
             }}
             markedDates={markedDates}
-            financeMarkedDates={financeMarkedDates}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Chat</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AssistantChat compact />
         </CardContent>
       </Card>
 
@@ -186,31 +131,5 @@ export function HomePage() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function FinanceSummaryCard({
-  icon,
-  iconClassName,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  iconClassName: string;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 pt-5">
-        <div className={`flex size-11 items-center justify-center rounded-xl ${iconClassName}`}>
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="truncate text-sm font-semibold sm:text-base">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
