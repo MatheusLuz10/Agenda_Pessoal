@@ -43,6 +43,8 @@ interface EquipmentItem {
   observation: string;
 }
 
+type EquipmentCategory = EquipmentItem["category"];
+
 // Uma OS (Ordem de Serviço): o atendimento feito num cliente/local em
 // uma data específica. Diferente dos equipamentos, cada OS tem uma data
 // própria — é o que permite calcular "OSs da semana" de verdade, em vez
@@ -265,16 +267,21 @@ export function WorkPage() {
     setServiceOrders((current) => current.filter((os) => os.id !== osId));
   }
 
-  function resetForm() {
+  function resetForm(category: EquipmentCategory = "manutencao") {
     setFormName("");
-    setFormCategory("manutencao");
+    setFormCategory(category);
     setFormCondition("Bom");
     setFormObservation("");
     setEditingId(null);
   }
 
-  function openCreateDialog() {
-    resetForm();
+  function openCreateDialog(category?: EquipmentCategory) {
+    const nextCategory =
+      category ??
+      (activeSection === "manutencao" || activeSection === "epis" || activeSection === "conectores"
+        ? activeSection
+        : "epis");
+    resetForm(nextCategory);
     setIsDialogOpen(true);
   }
 
@@ -342,6 +349,12 @@ export function WorkPage() {
       : activeSection === "os"
         ? []
         : items.filter((item) => item.category === activeSection);
+
+  const createActionLabel =
+    activeSection === "manutencao" ? "Adicionar informações" : "Adicionar equipamento";
+
+  const formActionLabel =
+    formCategory === "manutencao" ? "Adicionar informações" : "Adicionar equipamento";
 
   return (
     <div className="flex flex-col gap-6">
@@ -503,9 +516,9 @@ export function WorkPage() {
                   {sectionConfig[activeSection].helper}
                 </div>
                 <div className="flex justify-end">
-                  <Button onClick={openCreateDialog} className="gap-2">
+                  <Button onClick={() => openCreateDialog()} className="gap-2">
                     <Plus className="size-4" />
-                    Adicionar equipamento
+                    {createActionLabel}
                   </Button>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -561,9 +574,9 @@ export function WorkPage() {
               <ClipboardList className="size-4" />
               Ver OSs da semana
             </Button>
-            <Button variant="outline" className="justify-start gap-2" onClick={openCreateDialog}>
+            <Button variant="outline" className="justify-start gap-2" onClick={() => openCreateDialog("epis")}>
               <Plus className="size-4" />
-              Novo equipamento/material
+              Adicionar equipamento
             </Button>
             <Button
               variant="outline"
@@ -583,7 +596,7 @@ export function WorkPage() {
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingId ? "Editar equipamento" : "Adicionar equipamento"}</DialogTitle>
+            <DialogTitle>{editingId ? "Editar equipamento" : formActionLabel}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
