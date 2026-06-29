@@ -351,7 +351,7 @@ export function WorkPage() {
       ...lines,
     ].join("\n");
 
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob(["﻿" + content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -603,29 +603,31 @@ export function WorkPage() {
                 <div className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
                   {sectionConfig[activeSection].helper}
                 </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Select
-                    value={reportConditionFilter}
-                    onValueChange={(value) => setReportConditionFilter(value as ReportConditionFilter)}
-                  >
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="Bom">Bom</SelectItem>
-                      <SelectItem value="Defeituoso">Defeituoso</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleDownloadCategoryReport(activeSection)}
-                    className="gap-2"
-                  >
-                    <Download className="size-4" />
-                    Baixar relatório
-                  </Button>
-                  <Button onClick={() => openCreateDialog()} className="gap-2">
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Select
+                      value={reportConditionFilter}
+                      onValueChange={(value) => setReportConditionFilter(value as ReportConditionFilter)}
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos</SelectItem>
+                        <SelectItem value="Bom">Bom</SelectItem>
+                        <SelectItem value="Defeituoso">Defeituoso</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownloadCategoryReport(activeSection)}
+                      className="gap-2"
+                    >
+                      <Download className="size-4" />
+                      Baixar relatório
+                    </Button>
+                  </div>
+                  <Button onClick={() => openCreateDialog()} className="gap-2 self-end">
                     <Plus className="size-4" />
                     {createActionLabel}
                   </Button>
@@ -658,9 +660,11 @@ export function WorkPage() {
                             </Button>
                           </div>
                         </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="rounded-full bg-muted px-2 py-1 text-xs">{item.condition}</span>
-                        </div>
+                        {activeSection !== "manutencao" && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="rounded-full bg-muted px-2 py-1 text-xs">{item.condition}</span>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -729,34 +733,44 @@ export function WorkPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className={formCategory === "manutencao" ? "flex flex-col gap-1.5" : "grid grid-cols-2 gap-3"}>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="equipment-category">Categoria</Label>
-                <Select value={formCategory} onValueChange={(value) => setFormCategory(value as EquipmentItem["category"])}>
-                  <SelectTrigger id="equipment-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="manutencao">Manutenção do carro</SelectItem>
-                    <SelectItem value="epis">Ferramentas (EPIs)</SelectItem>
-                    <SelectItem value="conectores">Conectores e fusão</SelectItem>
-                  </SelectContent>
-                </Select>
+                {formCategory === "manutencao" ? (
+                  <div
+                    id="equipment-category"
+                    className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground"
+                  >
+                    Manutenção do carro
+                  </div>
+                ) : (
+                  <Select value={formCategory} onValueChange={(value) => setFormCategory(value as EquipmentItem["category"])}>
+                    <SelectTrigger id="equipment-category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="epis">Ferramentas (EPIs)</SelectItem>
+                      <SelectItem value="conectores">Conectores e fusão</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="equipment-condition">Condição</Label>
-                <Select value={formCondition} onValueChange={(value) => setFormCondition(value as EquipmentCondition)}>
-                  <SelectTrigger id="equipment-condition">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Bom">Bom</SelectItem>
-                    <SelectItem value="Médio">Médio</SelectItem>
-                    <SelectItem value="Defeituoso">Defeituoso</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {formCategory !== "manutencao" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="equipment-condition">Condição</Label>
+                  <Select value={formCondition} onValueChange={(value) => setFormCondition(value as EquipmentCondition)}>
+                    <SelectTrigger id="equipment-condition">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Bom">Bom</SelectItem>
+                      <SelectItem value="Médio">Médio</SelectItem>
+                      <SelectItem value="Defeituoso">Defeituoso</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5">

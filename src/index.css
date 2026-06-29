@@ -40,13 +40,13 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.09 0.02 230);
+  --background: oklch(0 0 0);
   --foreground: oklch(0.98 0.003 230);
 
-  --card: oklch(0.14 0.02 230);
+  --card: oklch(0.22 0.015 230);
   --card-foreground: oklch(0.98 0.003 230);
 
-  --popover: oklch(0.14 0.02 230);
+  --popover: oklch(0.22 0.015 230);
   --popover-foreground: oklch(0.98 0.003 230);
 
   --primary: oklch(0.66 0.16 225);
@@ -115,9 +115,7 @@
   }
 
   .dark body {
-    background:
-      radial-gradient(circle at top, rgba(37, 99, 235, 0.14), transparent 18%),
-      var(--background);
+    background: var(--background);
   }
 
   :root body {
