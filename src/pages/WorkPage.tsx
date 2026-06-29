@@ -4,6 +4,7 @@ import {
   BriefcaseBusiness,
   CarFront,
   ClipboardList,
+  Download,
   FileText,
   Plus,
   ShieldCheck,
@@ -321,6 +322,30 @@ export function WorkPage() {
     setItems((current) => current.filter((item) => item.id !== itemId));
   }
 
+  function handleDownloadMaintenanceReport() {
+    const maintenanceItems = items.filter((item) => item.category === "manutencao");
+    const lines =
+      maintenanceItems.length === 0
+        ? ["Nenhum item de manutenção cadastrado."]
+        : maintenanceItems.map((item) => `- ${item.name} (${item.condition}): ${item.observation || "Sem observação."}`);
+
+    const content = [
+      "Relatório de manutenção do carro",
+      `Gerado em: ${nowInBrasilia().toLocaleString("pt-BR")}`,
+      `Total de itens: ${maintenanceItems.length}`,
+      "",
+      ...lines,
+    ].join("\n");
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `relatorio-manutencao-${relativeISO(0)}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   function handleGenerateReport() {
     if (defectiveItems.length === 0) {
       setReportText("Nenhuma ferramenta com defeito registrada no momento.");
@@ -520,7 +545,13 @@ export function WorkPage() {
                 <div className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
                   {sectionConfig[activeSection].helper}
                 </div>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  {activeSection === "manutencao" && (
+                    <Button variant="outline" onClick={handleDownloadMaintenanceReport} className="gap-2">
+                      <Download className="size-4" />
+                      Baixar relatório
+                    </Button>
+                  )}
                   <Button onClick={() => openCreateDialog()} className="gap-2">
                     <Plus className="size-4" />
                     {createActionLabel}
