@@ -4,7 +4,9 @@
       "Bash(node check-blank.mjs)",
       "Bash(node check-prod.mjs)",
       "PowerShell(npm run build 2>&1)",
-      "PowerShell(git add -A)"
+      "PowerShell(git add -A)",
+      "PowerShell(git push)",
+      "PowerShell(git add .claude/settings.json)"
     ]
   }
 }
