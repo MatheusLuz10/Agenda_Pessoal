@@ -10,6 +10,7 @@ import {
   createCalendar,
   createTask,
   updateTaskStatus,
+  updateTask as updateTaskApi,
   removeTask,
   removeCalendar,
 } from "@/data/supabaseApi";
@@ -25,6 +26,10 @@ interface AgendaContextValue {
   loading: boolean;
   addCalendar: (calendar: Omit<CalendarGroup, "id" | "createdAt">) => void;
   addTask: (task: Omit<Task, "id" | "status"> & { status?: Task["status"] }) => void;
+  updateTask: (
+    taskId: string,
+    fields: Partial<Pick<Task, "title" | "description" | "date" | "time" | "priority" | "observation">>
+  ) => void;
   toggleTaskStatus: (taskId: string) => void;
   deleteTask: (taskId: string) => void;
   deleteCalendar: (calendarId: string) => void;
@@ -125,6 +130,18 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Atualiza os campos editáveis de uma tarefa já existente. Mesma
+  // estratégia otimista das demais funções de escrita.
+  const updateTask: AgendaContextValue["updateTask"] = (taskId, fields) => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...fields } : t)));
+
+    if (isSupabaseConfigured) {
+      updateTaskApi(taskId, fields).catch((error) =>
+        console.error("Falha ao atualizar tarefa:", error)
+      );
+    }
+  };
+
   // Alterna pendente <-> concluída. Atualiza o estado local primeiro
   // (resposta instantânea ao clique na checkbox) e só então sincroniza
   // com o Supabase, se configurado.
@@ -180,6 +197,7 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
       loading,
       addCalendar,
       addTask,
+      updateTask,
       toggleTaskStatus,
       deleteTask,
       deleteCalendar,

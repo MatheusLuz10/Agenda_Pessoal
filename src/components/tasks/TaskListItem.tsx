@@ -1,10 +1,12 @@
-import { Clock, AlertCircle, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Clock, AlertCircle, Pencil, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDateBR, getTaskTimeStatus } from "@/lib/date";
 import { useAgenda } from "@/contexts/AgendaContext";
+import { AddTaskDialog } from "@/components/tasks/AddTaskDialog";
 import type { Task } from "@/types";
 
 // Texto exibido para cada nível de prioridade.
@@ -26,6 +28,7 @@ interface TaskListItemProps {
 // hoje = amarelo, concluída = verde), atendendo à regra de destaque visual.
 export function TaskListItem({ task, showCalendarName = false, onClick }: TaskListItemProps) {
   const { toggleTaskStatus, deleteTask, getCalendarById } = useAgenda();
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const timeStatus = getTaskTimeStatus(task);
   const calendar = getCalendarById(task.calendarId);
 
@@ -37,6 +40,7 @@ export function TaskListItem({ task, showCalendarName = false, onClick }: TaskLi
   };
 
   return (
+    <>
     <div
       onClick={onClick}
       className={cn(
@@ -61,22 +65,37 @@ export function TaskListItem({ task, showCalendarName = false, onClick }: TaskLi
             </span>
           )}
           {/* Mesmo motivo do Checkbox: stopPropagation para não disparar
-              a navegação do card ao excluir a tarefa. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (window.confirm("Excluir esta atividade?")) {
-                deleteTask(task.id);
-              }
-            }}
-            aria-label="Excluir atividade"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
+              a navegação do card ao editar/excluir a tarefa. */}
+          <div className="flex items-center gap-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditOpen(true);
+              }}
+              aria-label="Editar atividade"
+            >
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm("Excluir esta atividade?")) {
+                  deleteTask(task.id);
+                }
+              }}
+              aria-label="Excluir atividade"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
         </div>
         <p
           className={cn(
@@ -117,5 +136,13 @@ export function TaskListItem({ task, showCalendarName = false, onClick }: TaskLi
         </div>
       </div>
     </div>
+    <AddTaskDialog
+      calendarId={task.calendarId}
+      date={task.date}
+      task={task}
+      open={isEditOpen}
+      onOpenChange={setIsEditOpen}
+    />
+    </>
   );
 }

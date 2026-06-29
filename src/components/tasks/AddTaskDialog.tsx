@@ -15,51 +15,76 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAgenda } from "@/contexts/AgendaContext";
 import { formatDateBR } from "@/lib/date";
-import type { Priority } from "@/types";
+import type { Priority, Task } from "@/types";
 
 interface AddTaskDialogProps {
   calendarId: string;
   date: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Quando informada, o modal entra em modo de edição: os campos vêm
+  // preenchidos com os dados desta tarefa e o envio atualiza em vez de
+  // criar uma nova.
+  task?: Task;
 }
 
 // Modal "controlado" (sempre recebe `open`/`onOpenChange` do componente
-// pai — ver CalendarViewPage) para criar uma tarefa numa data e calendário
-// específicos. Diferente do AddCalendarDialog, este não tem modo
-// "não controlado" porque sempre precisa saber qual dia foi clicado.
-export function AddTaskDialog({ calendarId, date, open, onOpenChange }: AddTaskDialogProps) {
-  const { addTask } = useAgenda();
+// pai — ver CalendarViewPage) para criar ou editar uma tarefa. Diferente
+// do AddCalendarDialog, este não tem modo "não controlado" porque sempre
+// precisa saber qual dia/calendário (ou tarefa) está em jogo.
+export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: AddTaskDialogProps) {
+  const { addTask, updateTask } = useAgenda();
+  const isEditing = Boolean(task);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [taskDate, setTaskDate] = useState(date);
   const [time, setTime] = useState("");
   const [priority, setPriority] = useState<Priority>("media");
   const [observation, setObservation] = useState("");
 
-  // Limpa o formulário para a próxima vez que o modal for aberto.
+  // Limpa o formulário para a próxima vez que o modal for aberto, ou
+  // preenche com os dados da tarefa sendo editada.
   function resetForm() {
-    setTitle("");
-    setDescription("");
-    setTime("");
-    setPriority("media");
-    setObservation("");
+    setTitle(task?.title ?? "");
+    setDescription(task?.description ?? "");
+    setTaskDate(task?.date ?? date);
+    setTime(task?.time ?? "");
+    setPriority(task?.priority ?? "media");
+    setObservation(task?.observation ?? "");
   }
 
-  // Cria a tarefa via contexto com a data/calendário recebidos por props
-  // e os valores digitados no formulário, depois fecha o modal.
+  // Toda vez que o modal abrir (criação ou edição), garante que o
+  // formulário reflita a tarefa atual em vez de manter valores antigos.
+  React.useEffect(() => {
+    if (open) resetForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, task]);
+
+  // Cria ou atualiza a tarefa via contexto, dependendo do modo do modal.
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    addTask({
-      calendarId,
-      title: title.trim(),
-      description: description || undefined,
-      date,
-      time: time || undefined,
-      priority,
-      observation: observation || undefined,
-    });
-    resetForm();
+
+    if (isEditing && task) {
+      updateTask(task.id, {
+        title: title.trim(),
+        description: description || undefined,
+        date: taskDate,
+        time: time || undefined,
+        priority,
+        observation: observation || undefined,
+      });
+    } else {
+      addTask({
+        calendarId,
+        title: title.trim(),
+        description: description || undefined,
+        date: taskDate,
+        time: time || undefined,
+        priority,
+        observation: observation || undefined,
+      });
+    }
     onOpenChange(false);
   }
 
@@ -73,8 +98,8 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange }: AddTaskD
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Adicionar Atividade</DialogTitle>
-          <DialogDescription>{formatDateBR(date)}</DialogDescription>
+          <DialogTitle>{isEditing ? "Editar Atividade" : "Adicionar Atividade"}</DialogTitle>
+          {!isEditing && <DialogDescription>{formatDateBR(date)}</DialogDescription>}
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
@@ -99,6 +124,17 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange }: AddTaskD
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            {isEditing && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="task-date">Data</Label>
+                <Input
+                  id="task-date"
+                  type="date"
+                  value={taskDate}
+                  onChange={(e) => setTaskDate(e.target.value)}
+                />
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="task-time">Horário</Label>
               <Input

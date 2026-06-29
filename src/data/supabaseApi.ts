@@ -131,6 +131,24 @@ export async function updateTaskStatus(taskId: string, status: Task["status"]) {
   if (error) throw error;
 }
 
+// Atualiza os campos editáveis de uma tarefa existente (tudo, exceto
+// calendário e status, que têm seus próprios fluxos).
+export async function updateTask(
+  taskId: string,
+  fields: Partial<Pick<Task, "title" | "description" | "date" | "time" | "priority" | "observation">>
+) {
+  const payload: Record<string, unknown> = {};
+  if (fields.title !== undefined) payload.title = fields.title;
+  if (fields.description !== undefined) payload.description = fields.description ?? null;
+  if (fields.date !== undefined) payload.date = fields.date;
+  if (fields.time !== undefined) payload.time = fields.time ?? null;
+  if (fields.priority !== undefined) payload.priority = fields.priority;
+  if (fields.observation !== undefined) payload.observation = fields.observation ?? null;
+
+  const { error } = await supabase!.from("tasks").update(payload).eq("id", taskId);
+  if (error) throw error;
+}
+
 // Remove uma tarefa pelo id.
 export async function removeTask(taskId: string) {
   const { error } = await supabase!.from("tasks").delete().eq("id", taskId);
