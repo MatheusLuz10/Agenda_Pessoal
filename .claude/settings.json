@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node check-blank.mjs)",
+      "Bash(node check-prod.mjs)",
+      "PowerShell(npm run build 2>&1)",
+      "PowerShell(git add -A)"
+    ]
+  }
+}

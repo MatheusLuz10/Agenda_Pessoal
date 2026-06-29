@@ -316,6 +316,11 @@ export function WorkPage() {
     resetForm();
   }
 
+  function handleDeleteItem(itemId: string) {
+    if (!window.confirm("Excluir este item?")) return;
+    setItems((current) => current.filter((item) => item.id !== itemId));
+  }
+
   function handleGenerateReport() {
     if (defectiveItems.length === 0) {
       setReportText("Nenhuma ferramenta com defeito registrada no momento.");
@@ -534,9 +539,20 @@ export function WorkPage() {
                             <p className="font-medium">{item.name}</p>
                             <p className="text-sm text-muted-foreground">{item.observation || "Sem observação."}</p>
                           </div>
-                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
-                            Editar
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteItem(item.id)}
+                              aria-label="Excluir item"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
                         </div>
                         <div className="mt-2 flex items-center gap-2">
                           <span className="rounded-full bg-muted px-2 py-1 text-xs">{item.condition}</span>
