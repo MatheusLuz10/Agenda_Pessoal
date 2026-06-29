@@ -360,6 +360,54 @@ export function WorkPage() {
     URL.revokeObjectURL(url);
   }
 
+  function handleDownloadCategoryReportPdf(category: EquipmentCategory) {
+    const categoryItems = items
+      .filter((item) => item.category === category)
+      .filter((item) => reportConditionFilter === "todos" || item.condition === reportConditionFilter);
+
+    const filterLabel =
+      reportConditionFilter === "todos" ? "Todos" : reportConditionFilter === "Bom" ? "Bom" : "Defeituoso";
+
+    const doc = new jsPDF();
+    const marginX = 14;
+    let cursorY = 18;
+
+    doc.setFontSize(16);
+    doc.text(`Relatório de ${categoryLabel(category).toLowerCase()}`, marginX, cursorY);
+    cursorY += 8;
+
+    doc.setFontSize(10);
+    if (category !== "manutencao") {
+      doc.text(`Filtro de condição: ${filterLabel}`, marginX, cursorY);
+      cursorY += 6;
+    }
+    doc.text(`Gerado em: ${nowInBrasilia().toLocaleString("pt-BR")}`, marginX, cursorY);
+    cursorY += 6;
+    doc.text(`Total de itens: ${categoryItems.length}`, marginX, cursorY);
+    cursorY += 10;
+
+    doc.setFontSize(11);
+    if (categoryItems.length === 0) {
+      doc.text("Nenhum item encontrado para este filtro.", marginX, cursorY);
+    } else {
+      categoryItems.forEach((item) => {
+        if (cursorY > 280) {
+          doc.addPage();
+          cursorY = 18;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.text(category === "manutencao" ? item.name : `${item.name} (${item.condition})`, marginX, cursorY);
+        cursorY += 6;
+        doc.setFont("helvetica", "normal");
+        const observationLines = doc.splitTextToSize(item.observation || "Sem observação.", 180);
+        doc.text(observationLines, marginX, cursorY);
+        cursorY += observationLines.length * 6 + 4;
+      });
+    }
+
+    doc.save(`relatorio-${category}-${relativeISO(0)}.pdf`);
+  }
+
   function handleGenerateReport() {
     if (defectiveItems.length === 0) {
       setReportText("Nenhuma ferramenta com defeito registrada no momento.");
@@ -625,6 +673,14 @@ export function WorkPage() {
                     >
                       <Download className="size-4" />
                       Baixar relatório
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownloadCategoryReportPdf(activeSection)}
+                      className="gap-2"
+                    >
+                      <FileText className="size-4" />
+                      Baixar PDF
                     </Button>
                   </div>
                   <Button onClick={() => openCreateDialog()} className="gap-2 self-end">
