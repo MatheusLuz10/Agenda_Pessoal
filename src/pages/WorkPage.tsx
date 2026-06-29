@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { nowInBrasilia } from "@/lib/date";
+import { jsPDF } from "jspdf";
 
 type EquipmentSection = "manutencao" | "epis" | "conectores" | "os" | "controle";
 type EquipmentCondition = "Bom" | "Médio" | "Defeituoso";
@@ -45,6 +46,11 @@ interface EquipmentItem {
 }
 
 type EquipmentCategory = EquipmentItem["category"];
+type ReportConditionFilter = "todos" | "Bom" | "Defeituoso";
+
+function categoryLabel(category: EquipmentCategory): string {
+  return category === "conectores" ? "Conectores e fusão" : category === "epis" ? "EPIs" : "Manutenção do carro";
+}
 
 // Uma OS (Ordem de Serviço): o atendimento feito num cliente/local em
 // uma data específica. Diferente dos equipamentos, cada OS tem uma data
@@ -199,6 +205,7 @@ export function WorkPage() {
   const [formCondition, setFormCondition] = useState<EquipmentCondition>("Bom");
   const [formObservation, setFormObservation] = useState("");
   const [reportText, setReportText] = useState("");
+  const [reportConditionFilter, setReportConditionFilter] = useState<ReportConditionFilter>("todos");
 
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(initialServiceOrders);
   const [isOsDialogOpen, setIsOsDialogOpen] = useState(false);
@@ -322,17 +329,24 @@ export function WorkPage() {
     setItems((current) => current.filter((item) => item.id !== itemId));
   }
 
-  function handleDownloadMaintenanceReport() {
-    const maintenanceItems = items.filter((item) => item.category === "manutencao");
+  function handleDownloadCategoryReport(category: EquipmentCategory) {
+    const categoryItems = items
+      .filter((item) => item.category === category)
+      .filter((item) => reportConditionFilter === "todos" || item.condition === reportConditionFilter);
+
+    const filterLabel =
+      reportConditionFilter === "todos" ? "Todos" : reportConditionFilter === "Bom" ? "Bom" : "Defeituoso";
+
     const lines =
-      maintenanceItems.length === 0
-        ? ["Nenhum item de manutenção cadastrado."]
-        : maintenanceItems.map((item) => `- ${item.name} (${item.condition}): ${item.observation || "Sem observação."}`);
+      categoryItems.length === 0
+        ? ["Nenhum item encontrado para este filtro."]
+        : categoryItems.map((item) => `- ${item.name} (${item.condition}): ${item.observation || "Sem observação."}`);
 
     const content = [
-      "Relatório de manutenção do carro",
+      `Relatório de ${categoryLabel(category).toLowerCase()}`,
+      `Filtro de condição: ${filterLabel}`,
       `Gerado em: ${nowInBrasilia().toLocaleString("pt-BR")}`,
-      `Total de itens: ${maintenanceItems.length}`,
+      `Total de itens: ${categoryItems.length}`,
       "",
       ...lines,
     ].join("\n");
@@ -341,7 +355,7 @@ export function WorkPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `relatorio-manutencao-${relativeISO(0)}.txt`;
+    link.download = `relatorio-${category}-${relativeISO(0)}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -364,6 +378,44 @@ export function WorkPage() {
         ...lines,
       ].join("\n")
     );
+  }
+
+  function handleDownloadDefectsPdf() {
+    const doc = new jsPDF();
+    const marginX = 14;
+    let cursorY = 18;
+
+    doc.setFontSize(16);
+    doc.text("Relatório de ferramentas com defeito", marginX, cursorY);
+    cursorY += 8;
+
+    doc.setFontSize(10);
+    doc.text(`Gerado em: ${nowInBrasilia().toLocaleString("pt-BR")}`, marginX, cursorY);
+    cursorY += 6;
+    doc.text(`Total de itens: ${defectiveItems.length}`, marginX, cursorY);
+    cursorY += 10;
+
+    if (defectiveItems.length === 0) {
+      doc.setFontSize(11);
+      doc.text("Nenhuma ferramenta com defeito registrada no momento.", marginX, cursorY);
+    } else {
+      doc.setFontSize(11);
+      defectiveItems.forEach((item) => {
+        if (cursorY > 280) {
+          doc.addPage();
+          cursorY = 18;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.text(`${item.name} (${categoryLabel(item.category)})`, marginX, cursorY);
+        cursorY += 6;
+        doc.setFont("helvetica", "normal");
+        const observationLines = doc.splitTextToSize(item.observation || "Sem observação adicional.", 180);
+        doc.text(observationLines, marginX, cursorY);
+        cursorY += observationLines.length * 6 + 4;
+      });
+    }
+
+    doc.save(`relatorio-defeitos-${relativeISO(0)}.pdf`);
   }
 
   const sectionTitle =
@@ -530,10 +582,16 @@ export function WorkPage() {
                     </div>
                   ))
                 )}
-                <Button className="gap-2" onClick={handleGenerateReport}>
-                  <FileText className="size-4" />
-                  Gerar relatório
-                </Button>
+                <div className="flex gap-2">
+                  <Button className="gap-2" onClick={handleGenerateReport}>
+                    <FileText className="size-4" />
+                    Gerar relatório
+                  </Button>
+                  <Button variant="outline" className="gap-2" onClick={handleDownloadDefectsPdf}>
+                    <Download className="size-4" />
+                    Baixar PDF
+                  </Button>
+                </div>
                 {reportText && (
                   <div className="rounded-xl bg-muted/40 p-3 text-sm whitespace-pre-wrap">
                     {reportText}
@@ -545,13 +603,28 @@ export function WorkPage() {
                 <div className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
                   {sectionConfig[activeSection].helper}
                 </div>
-                <div className="flex justify-end gap-2">
-                  {activeSection === "manutencao" && (
-                    <Button variant="outline" onClick={handleDownloadMaintenanceReport} className="gap-2">
-                      <Download className="size-4" />
-                      Baixar relatório
-                    </Button>
-                  )}
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Select
+                    value={reportConditionFilter}
+                    onValueChange={(value) => setReportConditionFilter(value as ReportConditionFilter)}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="Bom">Bom</SelectItem>
+                      <SelectItem value="Defeituoso">Defeituoso</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDownloadCategoryReport(activeSection)}
+                    className="gap-2"
+                  >
+                    <Download className="size-4" />
+                    Baixar relatório
+                  </Button>
                   <Button onClick={() => openCreateDialog()} className="gap-2">
                     <Plus className="size-4" />
                     {createActionLabel}
