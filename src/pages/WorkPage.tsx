@@ -729,7 +729,7 @@ export function WorkPage() {
                 id="equipment-name"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="Ex: Alicate de pressão"
+                placeholder={formCategory === "manutencao" ? "Ex: Troca de óleo" : "Ex: Alicate de pressão"}
               />
             </div>
 
