@@ -600,17 +600,22 @@ export function WorkPage() {
                     {createActionLabel}
                   </Button>
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                   {visibleItems.length === 0 ? (
                     <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
                       Nenhum item cadastrado nesta categoria.
                     </p>
                   ) : (
                     visibleItems.map((item) => (
-                      <div key={item.id} className="rounded-xl border border-border p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{item.name}</p>
+                      <div key={item.id} className="rounded-xl border border-border p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium">{item.name}</p>
+                              {activeSection !== "manutencao" && (
+                                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{item.condition}</span>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground">{item.observation || "Sem observação."}</p>
                           </div>
                           <div className="flex items-center gap-1">
@@ -628,11 +633,6 @@ export function WorkPage() {
                             </Button>
                           </div>
                         </div>
-                        {activeSection !== "manutencao" && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <span className="rounded-full bg-muted px-2 py-1 text-xs">{item.condition}</span>
-                          </div>
-                        )}
                       </div>
                     ))
                   )}
