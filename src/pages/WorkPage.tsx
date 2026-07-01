@@ -31,38 +31,21 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { nowInBrasilia } from "@/lib/date";
+import { useWork } from "@/contexts/WorkContext";
+import type {
+  EquipmentCategory,
+  EquipmentCondition,
+  EquipmentItem,
+  ServiceOrder,
+  ServiceOrderStatus,
+} from "@/types";
 import { jsPDF } from "jspdf";
 
-type EquipmentSection = "manutencao" | "epis" | "conectores" | "os" | "controle";
-type EquipmentCondition = "Bom" | "Médio" | "Defeituoso";
-type ServiceOrderStatus = "pendente" | "em_andamento" | "concluida";
-
-interface EquipmentItem {
-  id: string;
-  name: string;
-  category: Exclude<EquipmentSection, "os" | "controle">;
-  condition: EquipmentCondition;
-  observation: string;
-}
-
-type EquipmentCategory = EquipmentItem["category"];
+type EquipmentSection = EquipmentCategory | "os" | "controle";
 type ReportConditionFilter = "todos" | "Bom" | "Defeituoso";
 
 function categoryLabel(category: EquipmentCategory): string {
   return category === "conectores" ? "Conectores e fusão" : category === "epis" ? "EPIs" : "Manutenção do carro";
-}
-
-// Uma OS (Ordem de Serviço): o atendimento feito num cliente/local em
-// uma data específica. Diferente dos equipamentos, cada OS tem uma data
-// própria — é o que permite calcular "OSs da semana" de verdade, em vez
-// de um número fixo.
-interface ServiceOrder {
-  id: string;
-  client: string;
-  description: string;
-  date: string; // ISO date string (yyyy-MM-dd)
-  status: ServiceOrderStatus;
-  observation: string;
 }
 
 const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
@@ -112,92 +95,26 @@ const sectionConfig: Record<
   },
 };
 
-const initialEquipment: EquipmentItem[] = [
-  {
-    id: "eq-1",
-    name: "Multímetro digital",
-    category: "epis",
-    condition: "Bom",
-    observation: "Calibrado na semana passada.",
-  },
-  {
-    id: "eq-2",
-    name: "Estação de fusão",
-    category: "conectores",
-    condition: "Médio",
-    observation: "Precisa revisão no cabo de alimentação.",
-  },
-  {
-    id: "eq-3",
-    name: "Óleo do motor",
-    category: "manutencao",
-    condition: "Bom",
-    observation: "Reposição feita no último atendimento.",
-  },
-  {
-    id: "eq-4",
-    name: "Luva de isolamento",
-    category: "epis",
-    condition: "Defeituoso",
-    observation: "Par de luvas com rasgo na palma.",
-  },
-];
-
-// Datas relativas a hoje, para os dados de exemplo sempre caírem numa
-// mistura de "esta semana" e "fora da semana" independente de quando o
-// app for aberto.
+// Datas relativas a hoje, usadas como padrão para o campo de data de
+// uma nova OS e para os nomes dos arquivos de relatório baixados.
 function relativeISO(offsetDays: number): string {
   const date = nowInBrasilia();
   date.setDate(date.getDate() + offsetDays);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-const initialServiceOrders: ServiceOrder[] = [
-  {
-    id: "os-1",
-    client: "Condomínio Vista Verde",
-    description: "Instalação de fibra óptica",
-    date: relativeISO(0),
-    status: "concluida",
-    observation: "",
-  },
-  {
-    id: "os-2",
-    client: "Maria Fernandes",
-    description: "Troca de roteador",
-    date: relativeISO(-1),
-    status: "concluida",
-    observation: "Cliente relatou queda de sinal intermitente.",
-  },
-  {
-    id: "os-3",
-    client: "Padaria Pão Quente",
-    description: "Reparo de conector rompido",
-    date: relativeISO(-2),
-    status: "em_andamento",
-    observation: "Aguardando peça de reposição.",
-  },
-  {
-    id: "os-4",
-    client: "João Pedro",
-    description: "Manutenção preventiva de rede interna",
-    date: relativeISO(1),
-    status: "pendente",
-    observation: "",
-  },
-  {
-    id: "os-5",
-    client: "Auto Peças Veloz",
-    description: "Instalação de ponto de rede adicional",
-    date: relativeISO(-10),
-    status: "concluida",
-    observation: "OS de referência, fora da semana atual.",
-  },
-];
-
 export function WorkPage() {
+  const {
+    equipmentItems: items,
+    serviceOrders,
+    addEquipmentItem,
+    updateEquipmentItem,
+    deleteEquipmentItem,
+    addServiceOrder,
+    updateServiceOrder,
+    deleteServiceOrder,
+  } = useWork();
   const [activeSection, setActiveSection] = useState<EquipmentSection>("manutencao");
-  const [items, setItems] = useState<EquipmentItem[]>(initialEquipment);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
@@ -207,7 +124,6 @@ export function WorkPage() {
   const [reportText, setReportText] = useState("");
   const [reportConditionFilter, setReportConditionFilter] = useState<ReportConditionFilter>("todos");
 
-  const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(initialServiceOrders);
   const [isOsDialogOpen, setIsOsDialogOpen] = useState(false);
   const [editingOsId, setEditingOsId] = useState<string | null>(null);
   const [osClient, setOsClient] = useState("");
@@ -250,8 +166,7 @@ export function WorkPage() {
   function handleSaveOs() {
     if (!osClient.trim() || !osDescription.trim()) return;
 
-    const payload: ServiceOrder = {
-      id: editingOsId ?? `os-${Date.now()}`,
+    const payload: Omit<ServiceOrder, "id" | "createdAt"> = {
       client: osClient.trim(),
       description: osDescription.trim(),
       date: osDate,
@@ -259,12 +174,11 @@ export function WorkPage() {
       observation: osObservation.trim(),
     };
 
-    setServiceOrders((current) => {
-      if (editingOsId) {
-        return current.map((os) => (os.id === editingOsId ? payload : os));
-      }
-      return [payload, ...current];
-    });
+    if (editingOsId) {
+      updateServiceOrder(editingOsId, payload);
+    } else {
+      addServiceOrder(payload);
+    }
 
     setIsOsDialogOpen(false);
     resetOsForm();
@@ -272,7 +186,7 @@ export function WorkPage() {
 
   function handleDeleteOs(osId: string) {
     if (!window.confirm("Excluir esta ordem de serviço?")) return;
-    setServiceOrders((current) => current.filter((os) => os.id !== osId));
+    deleteServiceOrder(osId);
   }
 
   function resetForm(category: EquipmentCategory = "manutencao") {
@@ -305,20 +219,18 @@ export function WorkPage() {
   function handleSave() {
     if (!formName.trim()) return;
 
-    const payload: EquipmentItem = {
-      id: editingId ?? `eq-${Date.now()}`,
+    const payload: Omit<EquipmentItem, "id" | "createdAt"> = {
       name: formName.trim(),
       category: formCategory,
       condition: formCondition,
       observation: formObservation.trim(),
     };
 
-    setItems((current) => {
-      if (editingId) {
-        return current.map((item) => (item.id === editingId ? payload : item));
-      }
-      return [payload, ...current];
-    });
+    if (editingId) {
+      updateEquipmentItem(editingId, payload);
+    } else {
+      addEquipmentItem(payload);
+    }
 
     setIsDialogOpen(false);
     resetForm();
@@ -326,7 +238,7 @@ export function WorkPage() {
 
   function handleDeleteItem(itemId: string) {
     if (!window.confirm("Excluir este item?")) return;
-    setItems((current) => current.filter((item) => item.id !== itemId));
+    deleteEquipmentItem(itemId);
   }
 
   function handleDownloadCategoryReport(category: EquipmentCategory) {

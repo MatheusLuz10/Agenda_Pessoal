@@ -4,6 +4,7 @@ import { RequireAuth } from "@/components/layout/RequireAuth";
 import { AgendaProvider } from "@/contexts/AgendaContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FinanceProvider } from "@/contexts/FinanceContext";
+import { WorkProvider } from "@/contexts/WorkContext";
 import { AssistantPage } from "@/pages/AssistantPage";
 import { CalendarViewPage } from "@/pages/CalendarViewPage";
 import { CalendarsPage } from "@/pages/CalendarsPage";
@@ -26,7 +27,9 @@ function App() {
               element={
                 <AgendaProvider>
                   <FinanceProvider>
-                    <AppLayout />
+                    <WorkProvider>
+                      <AppLayout />
+                    </WorkProvider>
                   </FinanceProvider>
                 </AgendaProvider>
               }

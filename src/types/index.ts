@@ -77,3 +77,33 @@ export interface Goal {
   savedAmount: number;
   createdAt: string;
 }
+
+// --- Meu trabalho (equipamentos, manutenção e OSs) ---
+
+export type EquipmentCategory = "manutencao" | "epis" | "conectores";
+
+export type EquipmentCondition = "Bom" | "Médio" | "Defeituoso";
+
+// Um item de manutenção do carro, EPI ou conector/ferramenta de fusão.
+export interface EquipmentItem {
+  id: string;
+  name: string;
+  category: EquipmentCategory;
+  condition: EquipmentCondition;
+  observation: string;
+  createdAt: string;
+}
+
+export type ServiceOrderStatus = "pendente" | "em_andamento" | "concluida";
+
+// Uma OS (Ordem de Serviço): o atendimento feito num cliente/local em
+// uma data específica.
+export interface ServiceOrder {
+  id: string;
+  client: string;
+  description: string;
+  date: string; // ISO date string (yyyy-MM-dd)
+  status: ServiceOrderStatus;
+  observation: string;
+  createdAt: string;
+}

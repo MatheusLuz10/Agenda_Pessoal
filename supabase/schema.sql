@@ -62,6 +62,31 @@ create table if not exists public.goals (
   created_at timestamptz not null default now()
 );
 
+-- Equipamentos da aba "Meu trabalho": itens de manutenção do carro,
+-- EPIs e conectores/ferramentas de fusão.
+create table if not exists public.equipment_items (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  category text not null check (category in ('manutencao', 'epis', 'conectores')),
+  condition text not null check (condition in ('Bom', 'Médio', 'Defeituoso')),
+  observation text,
+  created_at timestamptz not null default now()
+);
+
+-- Ordens de serviço (OS) da aba "Meu trabalho", cada uma com sua própria
+-- data para permitir calcular "OSs da semana".
+create table if not exists public.service_orders (
+  id uuid primary key default gen_random_uuid(),
+  client text not null,
+  description text not null,
+  date date not null,
+  status text not null default 'pendente' check (status in ('pendente', 'em_andamento', 'concluida')),
+  observation text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists service_orders_date_idx on public.service_orders (date);
+
 -- Row Level Security (RLS): obrigatório no Supabase para que a anon key
 -- (pública, exposta no front-end) só acesse o que as políticas abaixo
 -- permitirem.
@@ -69,6 +94,8 @@ alter table public.calendars enable row level security;
 alter table public.tasks enable row level security;
 alter table public.transactions enable row level security;
 alter table public.goals enable row level security;
+alter table public.equipment_items enable row level security;
+alter table public.service_orders enable row level security;
 
 -- Este é um calendário PESSOAL: qualquer usuário autenticado (logado via
 -- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
@@ -89,4 +116,10 @@ create policy "authenticated full access transactions" on public.transactions
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access goals" on public.goals
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access equipment_items" on public.equipment_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access service_orders" on public.service_orders
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
