@@ -101,10 +101,17 @@ alter table public.service_orders enable row level security;
 -- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
 -- A chave pública (anon/publishable) sozinha NÃO basta mais para
 -- ler/escrever — é preciso um login válido, por isso auth.uid() (id do
--- usuário logado) precisa existir. Se quiser reaplicar este schema do
--- zero, rode "drop policy" das políticas antigas antes (se existirem).
+-- usuário logado) precisa existir. O "drop policy if exists" de cada
+-- política abaixo torna este script seguro para rodar mais de uma vez
+-- (ex: ao adicionar uma tabela nova) sem dar erro de política duplicada.
 drop policy if exists "anon full access calendars" on public.calendars;
 drop policy if exists "anon full access tasks" on public.tasks;
+drop policy if exists "authenticated full access calendars" on public.calendars;
+drop policy if exists "authenticated full access tasks" on public.tasks;
+drop policy if exists "authenticated full access transactions" on public.transactions;
+drop policy if exists "authenticated full access goals" on public.goals;
+drop policy if exists "authenticated full access equipment_items" on public.equipment_items;
+drop policy if exists "authenticated full access service_orders" on public.service_orders;
 
 create policy "authenticated full access calendars" on public.calendars
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
