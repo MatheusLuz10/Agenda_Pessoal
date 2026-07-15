@@ -87,6 +87,60 @@ create table if not exists public.service_orders (
 
 create index if not exists service_orders_date_idx on public.service_orders (date);
 
+-- Atividades (BA/BD) da aba "Operação", uma por dia+tipo (ou várias, se
+-- lançadas em momentos diferentes) — usadas para calcular produção,
+-- categoria e prêmio do ciclo.
+create table if not exists public.operation_activities (
+  id uuid primary key default gen_random_uuid(),
+  type text not null check (type in ('BA', 'BD')),
+  date date not null,
+  quantity integer not null default 1 check (quantity > 0),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists operation_activities_date_idx on public.operation_activities (date);
+
+-- Registros de ponto (entrada, almoço, saída) da aba "Operação", usados
+-- para calcular horas extras e DSR. Um registro por dia.
+create table if not exists public.operation_punches (
+  id uuid primary key default gen_random_uuid(),
+  date date not null unique,
+  clock_in time not null,
+  lunch_start time not null,
+  lunch_end time not null,
+  clock_out time not null,
+  created_at timestamptz not null default now()
+);
+
+-- Configurações usadas nos cálculos da aba "Operação" (ciclo, salário,
+-- periculosidade, jornada, efetividade). Linha única: o app sempre lê/
+-- grava o primeiro registro desta tabela (ver src/data/operationApi.ts).
+create table if not exists public.operation_settings (
+  id uuid primary key default gen_random_uuid(),
+  cycle_start_day integer not null default 1 check (cycle_start_day between 1 and 31),
+  cycle_end_day integer not null default 1 check (cycle_end_day between 1 and 31),
+  base_salary numeric(12, 2) not null default 0 check (base_salary >= 0),
+  hazard_pay_percent numeric(5, 2) not null default 0 check (hazard_pay_percent >= 0),
+  weekly_hours numeric(5, 2) not null default 44 check (weekly_hours > 0),
+  effectiveness_percent numeric(5, 2) not null default 0 check (effectiveness_percent >= 0),
+  updated_at timestamptz not null default now()
+);
+
+-- Ajustes manuais do Card "Resumo financeiro" da aba "Operação", um
+-- registro por ciclo (cycle_start = data de início do ciclo). Colunas
+-- nulas significam "usar o valor calculado automaticamente".
+create table if not exists public.operation_financial_overrides (
+  id uuid primary key default gen_random_uuid(),
+  cycle_start date not null unique,
+  base_salary numeric(12, 2),
+  hazard_pay numeric(12, 2),
+  overtime50_amount numeric(12, 2),
+  overtime100_amount numeric(12, 2),
+  dsr_amount numeric(12, 2),
+  prize_amount numeric(12, 2),
+  updated_at timestamptz not null default now()
+);
+
 -- Row Level Security (RLS): obrigatório no Supabase para que a anon key
 -- (pública, exposta no front-end) só acesse o que as políticas abaixo
 -- permitirem.
@@ -96,6 +150,10 @@ alter table public.transactions enable row level security;
 alter table public.goals enable row level security;
 alter table public.equipment_items enable row level security;
 alter table public.service_orders enable row level security;
+alter table public.operation_activities enable row level security;
+alter table public.operation_punches enable row level security;
+alter table public.operation_settings enable row level security;
+alter table public.operation_financial_overrides enable row level security;
 
 -- Este é um calendário PESSOAL: qualquer usuário autenticado (logado via
 -- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
@@ -112,6 +170,10 @@ drop policy if exists "authenticated full access transactions" on public.transac
 drop policy if exists "authenticated full access goals" on public.goals;
 drop policy if exists "authenticated full access equipment_items" on public.equipment_items;
 drop policy if exists "authenticated full access service_orders" on public.service_orders;
+drop policy if exists "authenticated full access operation_activities" on public.operation_activities;
+drop policy if exists "authenticated full access operation_punches" on public.operation_punches;
+drop policy if exists "authenticated full access operation_settings" on public.operation_settings;
+drop policy if exists "authenticated full access operation_financial_overrides" on public.operation_financial_overrides;
 
 create policy "authenticated full access calendars" on public.calendars
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -129,4 +191,16 @@ create policy "authenticated full access equipment_items" on public.equipment_it
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access service_orders" on public.service_orders
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access operation_activities" on public.operation_activities
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access operation_punches" on public.operation_punches
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access operation_settings" on public.operation_settings
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access operation_financial_overrides" on public.operation_financial_overrides
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

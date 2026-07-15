@@ -22,7 +22,7 @@ export function Sidebar() {
           end={end}
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium uppercase transition-colors",
               isActive
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -63,7 +63,7 @@ export function BottomNav() {
             end={end}
             className={({ isActive }) =>
               cn(
-                "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
+                "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium uppercase transition-colors",
                 isActive ? "text-primary" : "text-muted-foreground"
               )
             }
@@ -78,7 +78,7 @@ export function BottomNav() {
             type="button"
             onClick={() => setMoreOpen(true)}
             className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
+              "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium uppercase transition-colors",
               isOverflowActive ? "text-primary" : "text-muted-foreground"
             )}
           >
@@ -102,7 +102,7 @@ export function BottomNav() {
                 onClick={() => setMoreOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium uppercase transition-colors",
                     isActive
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"

@@ -1,9 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Bell, Moon, Database } from "lucide-react";
+import { Bell, Moon, Database, Gauge } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { useOperation } from "@/contexts/OperationContext";
+import type { OperationSettings } from "@/types";
 
 // Tela "/configuracoes" — preferências do app. Os toggles aqui ainda são
 // "decorativos": guardam estado local mas não plugam em nenhuma lógica
@@ -12,6 +15,11 @@ export function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [overdueAlerts, setOverdueAlerts] = useState(true);
   const [todayAlerts, setTodayAlerts] = useState(true);
+  const { settings: operationSettings, updateSettings: updateOperationSettings } = useOperation();
+
+  function patchOperationSettings(patch: Partial<OperationSettings>) {
+    updateOperationSettings({ ...operationSettings, ...patch });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,6 +78,59 @@ export function SettingsPage() {
               ? "Conectado ao Supabase: calendários e tarefas são salvos na nuvem."
               : "Nenhum projeto Supabase configurado: os dados exibidos são mockados localmente e se perdem ao recarregar a página. Preencha VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em um arquivo .env.local (veja .env.example) para persistir os dados de verdade."}
           </CardDescription>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2">
+          <Gauge className="size-4.5 text-muted-foreground" />
+          <CardTitle>Operação</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <CardDescription>
+            Valores financeiros usados nos cálculos da aba Operação (horas extras e resumo financeiro). Ajustes de
+            ciclo e categoria ficam no botão "Ajustes" dentro da própria aba Operação.
+          </CardDescription>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="op-base-salary">Salário base (R$)</Label>
+              <Input
+                id="op-base-salary"
+                type="number"
+                min={0}
+                step="0.01"
+                value={operationSettings.baseSalary}
+                onChange={(e) => patchOperationSettings({ baseSalary: Number(e.target.value) || 0 })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="op-hazard-pay">Periculosidade (%)</Label>
+              <Input
+                id="op-hazard-pay"
+                type="number"
+                min={0}
+                max={100}
+                step="0.1"
+                value={operationSettings.hazardPayPercent}
+                onChange={(e) => patchOperationSettings({ hazardPayPercent: Number(e.target.value) || 0 })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="op-weekly-hours">Jornada semanal (horas)</Label>
+              <Input
+                id="op-weekly-hours"
+                type="number"
+                min={1}
+                step="0.5"
+                value={operationSettings.weeklyHours}
+                onChange={(e) => patchOperationSettings({ weeklyHours: Number(e.target.value) || 1 })}
+              />
+              <p className="text-xs text-muted-foreground">Usada para calcular o valor da hora (salário ÷ jornada × 5).</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

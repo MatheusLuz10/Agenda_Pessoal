@@ -4,6 +4,7 @@ import { RequireAuth } from "@/components/layout/RequireAuth";
 import { AgendaProvider } from "@/contexts/AgendaContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FinanceProvider } from "@/contexts/FinanceContext";
+import { OperationProvider } from "@/contexts/OperationContext";
 import { WorkProvider } from "@/contexts/WorkContext";
 import { AssistantPage } from "@/pages/AssistantPage";
 import { CalendarViewPage } from "@/pages/CalendarViewPage";
@@ -11,8 +12,8 @@ import { CalendarsPage } from "@/pages/CalendarsPage";
 import { FinancesPage } from "@/pages/FinancesPage";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/LoginPage";
+import { OperationsPage } from "@/pages/OperationsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
-import { TasksPage } from "@/pages/TasksPage";
 import { WorkPage } from "@/pages/WorkPage";
 
 function App() {
@@ -28,7 +29,9 @@ function App() {
                 <AgendaProvider>
                   <FinanceProvider>
                     <WorkProvider>
-                      <AppLayout />
+                      <OperationProvider>
+                        <AppLayout />
+                      </OperationProvider>
                     </WorkProvider>
                   </FinanceProvider>
                 </AgendaProvider>
@@ -37,8 +40,8 @@ function App() {
               <Route index element={<HomePage />} />
               <Route path="/calendarios" element={<CalendarsPage />} />
               <Route path="/calendarios/:calendarId" element={<CalendarViewPage />} />
-              <Route path="/tarefas" element={<TasksPage />} />
               <Route path="/meu-trabalho" element={<WorkPage />} />
+              <Route path="/operacao" element={<OperationsPage />} />
               <Route path="/assistente" element={<AssistantPage />} />
               <Route path="/financas" element={<FinancesPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />

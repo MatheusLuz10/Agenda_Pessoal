@@ -1,4 +1,14 @@
-import type { CalendarGroup, EquipmentItem, Goal, ServiceOrder, Task, Transaction } from "@/types";
+import type {
+  CalendarGroup,
+  EquipmentItem,
+  Goal,
+  OperationActivity,
+  OperationSettings,
+  PunchRecord,
+  ServiceOrder,
+  Task,
+  Transaction,
+} from "@/types";
 import { nowInBrasilia } from "@/lib/date";
 
 // Dados de demonstração usados pelo AgendaContext como estado inicial.
@@ -365,3 +375,33 @@ export const mockGoals: Goal[] = [
     createdAt: "2026-05-01",
   },
 ];
+
+export const mockOperationActivities: OperationActivity[] = [
+  { id: "act-1", type: "BA", date: relativeISO(0), quantity: 3, createdAt: relativeISO(0) },
+  { id: "act-2", type: "BD", date: relativeISO(0), quantity: 1, createdAt: relativeISO(0) },
+  { id: "act-3", type: "BA", date: relativeISO(-1), quantity: 4, createdAt: relativeISO(-1) },
+  { id: "act-4", type: "BA", date: relativeISO(-2), quantity: 2, createdAt: relativeISO(-2) },
+  { id: "act-5", type: "BD", date: relativeISO(-2), quantity: 2, createdAt: relativeISO(-2) },
+  { id: "act-6", type: "BA", date: relativeISO(-3), quantity: 5, createdAt: relativeISO(-3) },
+];
+
+export const mockOperationPunches: PunchRecord[] = [
+  {
+    id: "punch-1",
+    date: relativeISO(-1),
+    clockIn: "08:00",
+    lunchStart: "12:00",
+    lunchEnd: "13:00",
+    clockOut: "18:30",
+    createdAt: relativeISO(-1),
+  },
+];
+
+export const mockOperationSettings: OperationSettings = {
+  cycleStartDay: 11,
+  cycleEndDay: 20,
+  baseSalary: 2200,
+  hazardPayPercent: 30,
+  weeklyHours: 44,
+  effectivenessPercent: 0,
+};

@@ -2,14 +2,16 @@ import { useState } from "react";
 import {
   AlertTriangle,
   BriefcaseBusiness,
+  Building2,
   CarFront,
-  ClipboardList,
   Download,
   FileText,
+  Info,
+  Inbox,
   Plus,
+  Search,
   ShieldCheck,
   Trash2,
-  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,41 +34,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { nowInBrasilia } from "@/lib/date";
 import { useWork } from "@/contexts/WorkContext";
-import type {
-  EquipmentCategory,
-  EquipmentCondition,
-  EquipmentItem,
-  ServiceOrder,
-  ServiceOrderStatus,
-} from "@/types";
+import type { EquipmentCondition, EquipmentItem } from "@/types";
 import { jsPDF } from "jspdf";
 
-type EquipmentSection = EquipmentCategory | "os" | "controle";
+type EquipmentSection = "manutencao" | "epis" | "controle";
 type ReportConditionFilter = "todos" | "Bom" | "Defeituoso";
 
-function categoryLabel(category: EquipmentCategory): string {
-  return category === "conectores" ? "Conectores e fusão" : category === "epis" ? "EPIs" : "Manutenção do carro";
-}
-
-const SERVICE_ORDER_STATUS_LABEL: Record<ServiceOrderStatus, string> = {
-  pendente: "Pendente",
-  em_andamento: "Em andamento",
-  concluida: "Concluída",
-};
-
-// Início (segunda) e fim (domingo) da semana atual, mesma lógica usada
-// em HomePage para "Próximos Avisos".
-function getCurrentWeekRange(): { start: string; end: string } {
-  const today = nowInBrasilia();
-  const day = today.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const start = new Date(today);
-  start.setDate(start.getDate() + diff);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  const toISO = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return { start: toISO(start), end: toISO(end) };
+function categoryLabel(category: "manutencao" | "epis"): string {
+  return category === "epis" ? "EPIs" : "Manutenção do carro";
 }
 
 const sectionConfig: Record<
@@ -83,20 +58,10 @@ const sectionConfig: Record<
     icon: ShieldCheck,
     helper: "Equipamentos de proteção e itens essenciais para segurança.",
   },
-  conectores: {
-    label: "Conectores e fusão",
-    icon: Wrench,
-    helper: "Ferramentas específicas para conexões, solda e fusão.",
-  },
-  os: {
-    label: "OSs da semana",
-    icon: ClipboardList,
-    helper: "Resumo rápido da quantidade de ordens de serviço realizadas.",
-  },
 };
 
-// Datas relativas a hoje, usadas como padrão para o campo de data de
-// uma nova OS e para os nomes dos arquivos de relatório baixados.
+// Datas relativas a hoje, usadas como padrão para os nomes dos arquivos de
+// relatório baixados.
 function relativeISO(offsetDays: number): string {
   const date = nowInBrasilia();
   date.setDate(date.getDate() + offsetDays);
@@ -106,90 +71,23 @@ function relativeISO(offsetDays: number): string {
 export function WorkPage() {
   const {
     equipmentItems: items,
-    serviceOrders,
     addEquipmentItem,
     updateEquipmentItem,
     deleteEquipmentItem,
-    addServiceOrder,
-    updateServiceOrder,
-    deleteServiceOrder,
   } = useWork();
   const [activeSection, setActiveSection] = useState<EquipmentSection>("manutencao");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
-  const [formCategory, setFormCategory] = useState<EquipmentItem["category"]>("manutencao");
+  const [formCategory, setFormCategory] = useState<"manutencao" | "epis">("manutencao");
   const [formCondition, setFormCondition] = useState<EquipmentCondition>("Bom");
   const [formObservation, setFormObservation] = useState("");
-  const [reportText, setReportText] = useState("");
   const [reportConditionFilter, setReportConditionFilter] = useState<ReportConditionFilter>("todos");
-
-  const [isOsDialogOpen, setIsOsDialogOpen] = useState(false);
-  const [editingOsId, setEditingOsId] = useState<string | null>(null);
-  const [osClient, setOsClient] = useState("");
-  const [osDescription, setOsDescription] = useState("");
-  const [osDate, setOsDate] = useState(relativeISO(0));
-  const [osStatus, setOsStatus] = useState<ServiceOrderStatus>("pendente");
-  const [osObservation, setOsObservation] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const defectiveItems = items.filter((item) => item.condition === "Defeituoso");
-  const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
-  const serviceOrdersThisWeek = serviceOrders
-    .filter((os) => os.date >= weekStart && os.date <= weekEnd)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const osThisWeek = serviceOrdersThisWeek.length;
 
-  function resetOsForm() {
-    setOsClient("");
-    setOsDescription("");
-    setOsDate(relativeISO(0));
-    setOsStatus("pendente");
-    setOsObservation("");
-    setEditingOsId(null);
-  }
-
-  function openCreateOsDialog() {
-    resetOsForm();
-    setIsOsDialogOpen(true);
-  }
-
-  function openEditOsDialog(os: ServiceOrder) {
-    setEditingOsId(os.id);
-    setOsClient(os.client);
-    setOsDescription(os.description);
-    setOsDate(os.date);
-    setOsStatus(os.status);
-    setOsObservation(os.observation);
-    setIsOsDialogOpen(true);
-  }
-
-  function handleSaveOs() {
-    if (!osClient.trim() || !osDescription.trim()) return;
-
-    const payload: Omit<ServiceOrder, "id" | "createdAt"> = {
-      client: osClient.trim(),
-      description: osDescription.trim(),
-      date: osDate,
-      status: osStatus,
-      observation: osObservation.trim(),
-    };
-
-    if (editingOsId) {
-      updateServiceOrder(editingOsId, payload);
-    } else {
-      addServiceOrder(payload);
-    }
-
-    setIsOsDialogOpen(false);
-    resetOsForm();
-  }
-
-  function handleDeleteOs(osId: string) {
-    if (!window.confirm("Excluir esta ordem de serviço?")) return;
-    deleteServiceOrder(osId);
-  }
-
-  function resetForm(category: EquipmentCategory = "manutencao") {
+  function resetForm(category: "manutencao" | "epis" = "manutencao") {
     setFormName("");
     setFormCategory(category);
     setFormCondition("Bom");
@@ -197,12 +95,8 @@ export function WorkPage() {
     setEditingId(null);
   }
 
-  function openCreateDialog(category?: EquipmentCategory) {
-    const nextCategory =
-      category ??
-      (activeSection === "manutencao" || activeSection === "epis" || activeSection === "conectores"
-        ? activeSection
-        : "epis");
+  function openCreateDialog(category?: "manutencao" | "epis") {
+    const nextCategory = category ?? (activeSection === "controle" ? "epis" : activeSection);
     resetForm(nextCategory);
     setIsDialogOpen(true);
   }
@@ -210,7 +104,7 @@ export function WorkPage() {
   function openEditDialog(item: EquipmentItem) {
     setEditingId(item.id);
     setFormName(item.name);
-    setFormCategory(item.category);
+    setFormCategory(item.category === "epis" ? "epis" : "manutencao");
     setFormCondition(item.condition);
     setFormObservation(item.observation);
     setIsDialogOpen(true);
@@ -236,43 +130,17 @@ export function WorkPage() {
     resetForm();
   }
 
+  function selectSection(section: EquipmentSection) {
+    setActiveSection(section);
+    setSearchQuery("");
+  }
+
   function handleDeleteItem(itemId: string) {
     if (!window.confirm("Excluir este item?")) return;
     deleteEquipmentItem(itemId);
   }
 
-  function handleDownloadCategoryReport(category: EquipmentCategory) {
-    const categoryItems = items
-      .filter((item) => item.category === category)
-      .filter((item) => reportConditionFilter === "todos" || item.condition === reportConditionFilter);
-
-    const filterLabel =
-      reportConditionFilter === "todos" ? "Todos" : reportConditionFilter === "Bom" ? "Bom" : "Defeituoso";
-
-    const lines =
-      categoryItems.length === 0
-        ? ["Nenhum item encontrado para este filtro."]
-        : categoryItems.map((item) => `- ${item.name} (${item.condition}): ${item.observation || "Sem observação."}`);
-
-    const content = [
-      `Relatório de ${categoryLabel(category).toLowerCase()}`,
-      `Filtro de condição: ${filterLabel}`,
-      `Gerado em: ${nowInBrasilia().toLocaleString("pt-BR")}`,
-      `Total de itens: ${categoryItems.length}`,
-      "",
-      ...lines,
-    ].join("\n");
-
-    const blob = new Blob(["﻿" + content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `relatorio-${category}-${relativeISO(0)}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function handleDownloadCategoryReportPdf(category: EquipmentCategory) {
+  function handleDownloadCategoryReportPdf(category: "manutencao" | "epis") {
     const categoryItems = items
       .filter((item) => item.category === category)
       .filter((item) => reportConditionFilter === "todos" || item.condition === reportConditionFilter);
@@ -320,26 +188,6 @@ export function WorkPage() {
     doc.save(`relatorio-${category}-${relativeISO(0)}.pdf`);
   }
 
-  function handleGenerateReport() {
-    if (defectiveItems.length === 0) {
-      setReportText("Nenhuma ferramenta com defeito registrada no momento.");
-      return;
-    }
-
-    const lines = defectiveItems.map(
-      (item) => `- ${item.name} (${item.category === "conectores" ? "Conectores e fusão" : item.category === "epis" ? "EPIs" : "Manutenção do carro"}): ${item.observation || "Sem observação adicional."}`
-    );
-
-    setReportText(
-      [
-        "Relatório de ferramentas com defeito",
-        `Total: ${defectiveItems.length}`,
-        "",
-        ...lines,
-      ].join("\n")
-    );
-  }
-
   function handleDownloadDefectsPdf() {
     const doc = new jsPDF();
     const marginX = 14;
@@ -366,7 +214,7 @@ export function WorkPage() {
           cursorY = 18;
         }
         doc.setFont("helvetica", "bold");
-        doc.text(`${item.name} (${categoryLabel(item.category)})`, marginX, cursorY);
+        doc.text(`${item.name} (${categoryLabel(item.category === "epis" ? "epis" : "manutencao")})`, marginX, cursorY);
         cursorY += 6;
         doc.setFont("helvetica", "normal");
         const observationLines = doc.splitTextToSize(item.observation || "Sem observação adicional.", 180);
@@ -378,19 +226,19 @@ export function WorkPage() {
     doc.save(`relatorio-defeitos-${relativeISO(0)}.pdf`);
   }
 
-  const sectionTitle =
-    activeSection === "controle"
-      ? "Controle"
-      : activeSection === "os"
-        ? "OSs da semana"
-        : sectionConfig[activeSection].label;
+  const sectionTitle = activeSection === "controle" ? "Controle" : sectionConfig[activeSection].label;
 
   const visibleItems =
-    activeSection === "controle"
-      ? defectiveItems
-      : activeSection === "os"
-        ? []
-        : items.filter((item) => item.category === activeSection);
+    activeSection === "controle" ? defectiveItems : items.filter((item) => item.category === activeSection);
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredItems = normalizedQuery
+    ? visibleItems.filter(
+        (item) =>
+          item.name.toLowerCase().includes(normalizedQuery) ||
+          item.observation.toLowerCase().includes(normalizedQuery)
+      )
+    : visibleItems;
 
   const createActionLabel =
     activeSection === "manutencao" ? "Adicionar informações" : "Adicionar equipamento";
@@ -403,23 +251,21 @@ export function WorkPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Meu trabalho</h1>
         <p className="text-sm text-muted-foreground">
-          Centralize manutenção, ferramentas, materiais e acompanhamento das OSs.
+          Centralize manutenção e ferramentas (EPIs).
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {[
           { key: "manutencao", label: "Manutenção do carro", count: items.filter((item) => item.category === "manutencao").length },
           { key: "epis", label: "Ferramentas (EPIs)", count: items.filter((item) => item.category === "epis").length },
-          { key: "conectores", label: "Conectores e fusão", count: items.filter((item) => item.category === "conectores").length },
-          { key: "os", label: "OSs na semana", count: osThisWeek },
         ].map((option) => {
-          const Icon = option.key === "manutencao" ? CarFront : option.key === "epis" ? ShieldCheck : option.key === "conectores" ? Wrench : ClipboardList;
+          const Icon = option.key === "manutencao" ? CarFront : ShieldCheck;
           return (
             <button
               key={option.key}
               type="button"
-              onClick={() => setActiveSection(option.key as EquipmentSection)}
+              onClick={() => selectSection(option.key as EquipmentSection)}
               className={`rounded-xl border p-4 text-left transition-colors ${
                 activeSection === option.key
                   ? "border-primary bg-primary/5"
@@ -442,95 +288,58 @@ export function WorkPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_0.9fr]">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2">
               {activeSection === "controle" ? (
                 <AlertTriangle className="size-4" />
-              ) : activeSection === "os" ? (
-                <ClipboardList className="size-4" />
               ) : activeSection === "manutencao" ? (
                 <CarFront className="size-4" />
-              ) : activeSection === "epis" ? (
-                <ShieldCheck className="size-4" />
               ) : (
-                <Wrench className="size-4" />
+                <ShieldCheck className="size-4" />
               )}
               {sectionTitle}
             </CardTitle>
+            {activeSection !== "controle" && (
+              <Button size="sm" onClick={() => openCreateDialog()} className="gap-1.5">
+                <Plus className="size-4" />
+                {createActionLabel}
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {activeSection === "os" ? (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-xl bg-muted/40 p-4">
-                  <p className="text-sm text-muted-foreground">Total de OSs nesta semana</p>
-                  <p className="mt-2 text-4xl font-semibold">{osThisWeek}</p>
-                </div>
-                <div className="flex justify-end">
-                  <Button onClick={openCreateOsDialog} className="gap-2">
-                    <Plus className="size-4" />
-                    Nova OS
-                  </Button>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {serviceOrdersThisWeek.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                      Nenhuma OS registrada nesta semana.
-                    </p>
-                  ) : (
-                    serviceOrdersThisWeek.map((os) => (
-                      <div key={os.id} className="rounded-xl border border-border p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{os.client}</p>
-                            <p className="text-sm text-muted-foreground">{os.description}</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => openEditOsDialog(os)}>
-                              Editar
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDeleteOs(os.id)}
-                              aria-label="Excluir OS"
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-muted px-2 py-1 text-xs">
-                            {new Date(`${os.date}T00:00:00`).toLocaleDateString("pt-BR")}
-                          </span>
-                          <span
-                            className={`rounded-full px-2 py-1 text-xs ${
-                              os.status === "concluida"
-                                ? "bg-success/10 text-success"
-                                : os.status === "em_andamento"
-                                  ? "bg-warning/15 text-warning"
-                                  : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {SERVICE_ORDER_STATUS_LABEL[os.status]}
-                          </span>
-                        </div>
-                        {os.observation && (
-                          <p className="mt-2 text-sm text-muted-foreground">{os.observation}</p>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : activeSection === "controle" ? (
+            {/* Bloco informativo: explica o que esta seção mostra (somente leitura). */}
+            <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <Info className="mt-0.5 size-4 shrink-0" />
+              <span>
+                {activeSection === "controle"
+                  ? "Itens marcados como \"Defeituoso\" aparecem aqui automaticamente — não é preciso adicionar nada nesta tela."
+                  : sectionConfig[activeSection].helper}
+              </span>
+            </div>
+
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar por nome ou observação..."
+                className="pl-9"
+              />
+            </div>
+
+            {activeSection === "controle" ? (
               <div className="flex flex-col gap-3">
                 {defectiveItems.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground">
+                    <Inbox className="size-6" />
+                    <p className="text-sm">Nenhum item com defeito foi registrado.</p>
+                  </div>
+                ) : filteredItems.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                    Nenhum item com defeito foi registrado.
+                    Nenhum item encontrado para "{searchQuery}".
                   </p>
                 ) : (
-                  defectiveItems.map((item) => (
+                  filteredItems.map((item) => (
                     <div key={item.id} className="rounded-xl border border-border p-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-medium">{item.name}</p>
@@ -542,71 +351,33 @@ export function WorkPage() {
                     </div>
                   ))
                 )}
-                <div className="flex gap-2">
-                  <Button className="gap-2" onClick={handleGenerateReport}>
-                    <FileText className="size-4" />
-                    Gerar relatório
-                  </Button>
-                  <Button variant="outline" className="gap-2" onClick={handleDownloadDefectsPdf}>
+
+                <div className="flex items-center gap-2 border-t border-border pt-3">
+                  <span className="text-xs font-medium text-muted-foreground">Relatório:</span>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadDefectsPdf}>
                     <Download className="size-4" />
                     Baixar PDF
                   </Button>
                 </div>
-                {reportText && (
-                  <div className="rounded-xl bg-muted/40 p-3 text-sm whitespace-pre-wrap">
-                    {reportText}
-                  </div>
-                )}
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
-                  {sectionConfig[activeSection].helper}
-                </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Select
-                      value={reportConditionFilter}
-                      onValueChange={(value) => setReportConditionFilter(value as ReportConditionFilter)}
-                    >
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos</SelectItem>
-                        <SelectItem value="Bom">Bom</SelectItem>
-                        <SelectItem value="Defeituoso">Defeituoso</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleDownloadCategoryReport(activeSection)}
-                      className="gap-2"
-                    >
-                      <Download className="size-4" />
-                      Baixar relatório
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleDownloadCategoryReportPdf(activeSection)}
-                      className="gap-2"
-                    >
-                      <FileText className="size-4" />
-                      Baixar PDF
-                    </Button>
-                  </div>
-                  <Button onClick={() => openCreateDialog()} className="gap-2 self-end">
-                    <Plus className="size-4" />
-                    {createActionLabel}
-                  </Button>
-                </div>
+              <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-3">
                   {visibleItems.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground">
+                      <Inbox className="size-6" />
+                      <p className="text-sm">Nenhum item cadastrado nesta categoria ainda.</p>
+                      <Button size="sm" variant="outline" onClick={() => openCreateDialog()} className="gap-1.5">
+                        <Plus className="size-4" />
+                        {createActionLabel}
+                      </Button>
+                    </div>
+                  ) : filteredItems.length === 0 ? (
                     <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                      Nenhum item cadastrado nesta categoria.
+                      Nenhum item encontrado para "{searchQuery}".
                     </p>
                   ) : (
-                    visibleItems.map((item) => (
+                    filteredItems.map((item) => (
                       <div key={item.id} className="rounded-xl border border-border p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex flex-col gap-1.5">
@@ -637,6 +408,32 @@ export function WorkPage() {
                     ))
                   )}
                 </div>
+
+                <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                  <span className="text-xs font-medium text-muted-foreground">Relatório:</span>
+                  <Select
+                    value={reportConditionFilter}
+                    onValueChange={(value) => setReportConditionFilter(value as ReportConditionFilter)}
+                  >
+                    <SelectTrigger className="h-8 w-[120px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="Bom">Bom</SelectItem>
+                      <SelectItem value="Defeituoso">Defeituoso</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownloadCategoryReportPdf(activeSection)}
+                    className="gap-1.5"
+                  >
+                    <FileText className="size-4" />
+                    Baixar PDF
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
@@ -653,7 +450,7 @@ export function WorkPage() {
             <Button
               variant="outline"
               className="justify-start gap-2"
-              onClick={() => setActiveSection("controle")}
+              onClick={() => selectSection("controle")}
             >
               <AlertTriangle className="size-4" />
               Ver controle de defeitos
@@ -661,25 +458,10 @@ export function WorkPage() {
             <Button
               variant="outline"
               className="justify-start gap-2"
-              onClick={() => setActiveSection("os")}
+              onClick={() => window.open("https://otimizza.vercel.app/", "_blank", "noopener,noreferrer")}
             >
-              <ClipboardList className="size-4" />
-              Ver OSs da semana
-            </Button>
-            <Button variant="outline" className="justify-start gap-2" onClick={() => openCreateDialog("epis")}>
-              <Plus className="size-4" />
-              Adicionar equipamento
-            </Button>
-            <Button
-              variant="outline"
-              className="justify-start gap-2"
-              onClick={() => {
-                setActiveSection("os");
-                openCreateOsDialog();
-              }}
-            >
-              <Plus className="size-4" />
-              Nova OS
+              <Building2 className="size-4" />
+              Gestão de prédio e CTO
             </Button>
           </CardContent>
         </Card>
@@ -704,24 +486,12 @@ export function WorkPage() {
             <div className={formCategory === "manutencao" ? "flex flex-col gap-1.5" : "grid grid-cols-2 gap-3"}>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="equipment-category">Categoria</Label>
-                {formCategory === "manutencao" ? (
-                  <div
-                    id="equipment-category"
-                    className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground"
-                  >
-                    Manutenção do carro
-                  </div>
-                ) : (
-                  <Select value={formCategory} onValueChange={(value) => setFormCategory(value as EquipmentItem["category"])}>
-                    <SelectTrigger id="equipment-category">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="epis">Ferramentas (EPIs)</SelectItem>
-                      <SelectItem value="conectores">Conectores e fusão</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                <div
+                  id="equipment-category"
+                  className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground"
+                >
+                  {categoryLabel(formCategory)}
+                </div>
               </div>
 
               {formCategory !== "manutencao" && (
@@ -756,85 +526,6 @@ export function WorkPage() {
               Cancelar
             </Button>
             <Button onClick={handleSave} disabled={!formName.trim()}>
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={isOsDialogOpen}
-        onOpenChange={(open) => {
-          setIsOsDialogOpen(open);
-          if (!open) resetOsForm();
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingOsId ? "Editar OS" : "Nova OS"}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="os-client">Cliente/local</Label>
-              <Input
-                id="os-client"
-                value={osClient}
-                onChange={(e) => setOsClient(e.target.value)}
-                placeholder="Ex: Maria Fernandes"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="os-description">Descrição do serviço</Label>
-              <Input
-                id="os-description"
-                value={osDescription}
-                onChange={(e) => setOsDescription(e.target.value)}
-                placeholder="Ex: Instalação de fibra óptica"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="os-date">Data</Label>
-                <Input
-                  id="os-date"
-                  type="date"
-                  value={osDate}
-                  onChange={(e) => setOsDate(e.target.value)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="os-status">Status</Label>
-                <Select value={osStatus} onValueChange={(value) => setOsStatus(value as ServiceOrderStatus)}>
-                  <SelectTrigger id="os-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pendente">Pendente</SelectItem>
-                    <SelectItem value="em_andamento">Em andamento</SelectItem>
-                    <SelectItem value="concluida">Concluída</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="os-observation">Observação</Label>
-              <Textarea
-                id="os-observation"
-                value={osObservation}
-                onChange={(e) => setOsObservation(e.target.value)}
-                placeholder="Detalhes do atendimento, peças usadas, pendências..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOsDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveOs} disabled={!osClient.trim() || !osDescription.trim()}>
               Salvar
             </Button>
           </DialogFooter>

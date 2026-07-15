@@ -107,3 +107,56 @@ export interface ServiceOrder {
   observation: string;
   createdAt: string;
 }
+
+// --- Operação (produtividade, ciclo, prêmio e ponto) ---
+
+export type ActivityType = "BA" | "BD";
+
+// Um registro de atividade (instalação ou reparo) feito num dia específico.
+// A quantidade permite lançar várias atividades do mesmo tipo/dia de uma vez.
+export interface OperationActivity {
+  id: string;
+  type: ActivityType;
+  date: string; // ISO date string (yyyy-MM-dd)
+  quantity: number;
+  createdAt: string;
+}
+
+// Um registro de ponto (entrada, almoço, saída) de um dia específico,
+// digitado manualmente ou extraído por OCR de um print do app de ponto.
+export interface PunchRecord {
+  id: string;
+  date: string; // ISO date string (yyyy-MM-dd)
+  clockIn: string; // HH:mm
+  lunchStart: string; // HH:mm
+  lunchEnd: string; // HH:mm
+  clockOut: string; // HH:mm
+  createdAt: string;
+}
+
+// Ajustes manuais do Card "Resumo financeiro", um registro por ciclo
+// (identificado pela data de início do ciclo). Cada campo `null` significa
+// "usar o valor calculado automaticamente"; um número substitui o cálculo
+// até o ajuste ser removido.
+export interface FinancialOverrides {
+  baseSalary: number | null;
+  hazardPay: number | null;
+  overtime50Amount: number | null;
+  overtime100Amount: number | null;
+  dsrAmount: number | null;
+  prizeAmount: number | null;
+}
+
+// Configurações usadas nos cálculos da aba Operação. Linha única
+// (não há multiusuário nesta base — ver demais tabelas do app).
+export interface OperationSettings {
+  // Não usados mais pra calcular o ciclo (ver getCurrentCycleRange em
+  // lib/operation.ts: agora são 3 janelas fixas por mês — 1-10, 11-20,
+  // 21-fim). Mantidos só pra não quebrar linhas já salvas no Supabase.
+  cycleStartDay: number;
+  cycleEndDay: number;
+  baseSalary: number; // salário base (R$)
+  hazardPayPercent: number; // periculosidade (%)
+  weeklyHours: number; // jornada semanal contratada, usada p/ valor da hora
+  effectivenessPercent: number; // efetividade (%), informada manualmente
+}

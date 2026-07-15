@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
-import { Lightbulb, LogOut, Moon, Plus, Sun } from "lucide-react";
+import { Lightbulb, LogOut, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AddCalendarDialog } from "@/components/calendar/AddCalendarDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 // Cabeçalho fixo no topo, presente em todas as páginas (renderizado pelo
-// AppLayout). Contém a logo, o alternador de tema claro/escuro e o botão
-// global de "Adicionar Atividade" (que na prática abre o modal de criação
-// de calendário).
+// AppLayout). Contém a logo e o alternador de tema claro/escuro.
 export function Header() {
   const [darkMode, setDarkMode] = useState(false);
   const { signOut } = useAuth();
@@ -39,7 +36,7 @@ export function Header() {
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Lightbulb className="size-4.5" />
         </div>
-        <span className="text-base font-semibold tracking-tight">meu caos</span>
+        <span className="text-base font-semibold tracking-tight">Otimizza camp</span>
       </div>
 
       <div className="flex items-center gap-2">
@@ -51,15 +48,6 @@ export function Header() {
         >
           {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>
-
-        <AddCalendarDialog
-          trigger={
-            <Button size="sm" className="gap-1.5">
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">Adicionar Atividade</span>
-            </Button>
-          }
-        />
 
         {/* Só faz sentido sair de uma sessão que existe de fato. */}
         {isSupabaseConfigured && (
