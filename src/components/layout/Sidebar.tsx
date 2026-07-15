@@ -63,13 +63,13 @@ export function BottomNav() {
             end={end}
             className={({ isActive }) =>
               cn(
-                "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium uppercase transition-colors",
+                "flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2.5 text-center text-[10px] font-medium uppercase leading-tight transition-colors",
                 isActive ? "text-primary" : "text-muted-foreground"
               )
             }
           >
-            <Icon className="size-5" />
-            {label}
+            <Icon className="size-5 shrink-0" />
+            <span className="w-full break-words px-0.5">{label}</span>
           </NavLink>
         ))}
 
@@ -78,12 +78,12 @@ export function BottomNav() {
             type="button"
             onClick={() => setMoreOpen(true)}
             className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium uppercase transition-colors",
+              "flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2.5 text-center text-[10px] font-medium uppercase leading-tight transition-colors",
               isOverflowActive ? "text-primary" : "text-muted-foreground"
             )}
           >
-            <MoreHorizontal className="size-5" />
-            Mais
+            <MoreHorizontal className="size-5 shrink-0" />
+            <span className="w-full break-words px-0.5">Mais</span>
           </button>
         )}
       </nav>
