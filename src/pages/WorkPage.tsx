@@ -4,6 +4,8 @@ import {
   BriefcaseBusiness,
   Building2,
   CarFront,
+  ChevronDown,
+  ChevronUp,
   Download,
   FileText,
   Info,
@@ -84,6 +86,8 @@ export function WorkPage() {
   const [formObservation, setFormObservation] = useState("");
   const [reportConditionFilter, setReportConditionFilter] = useState<ReportConditionFilter>("todos");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showAllItems, setShowAllItems] = useState(false);
+  const VISIBLE_ITEMS_LIMIT = 3;
 
   const defectiveItems = items.filter((item) => item.condition === "Defeituoso");
 
@@ -133,6 +137,7 @@ export function WorkPage() {
   function selectSection(section: EquipmentSection) {
     setActiveSection(section);
     setSearchQuery("");
+    setShowAllItems(false);
   }
 
   function handleDeleteItem(itemId: string) {
@@ -239,6 +244,13 @@ export function WorkPage() {
           item.observation.toLowerCase().includes(normalizedQuery)
       )
     : visibleItems;
+
+  // Lista de manutenção/EPIs fica curta por padrão (não durante uma busca,
+  // onde faz sentido ver todos os resultados) — "Ver mais" revela o resto.
+  const canCollapseList = activeSection !== "controle" && !normalizedQuery;
+  const displayedItems =
+    canCollapseList && !showAllItems ? filteredItems.slice(0, VISIBLE_ITEMS_LIMIT) : filteredItems;
+  const hiddenItemsCount = canCollapseList ? Math.max(0, filteredItems.length - VISIBLE_ITEMS_LIMIT) : 0;
 
   const createActionLabel =
     activeSection === "manutencao" ? "Adicionar informações" : "Adicionar equipamento";
@@ -377,35 +389,59 @@ export function WorkPage() {
                       Nenhum item encontrado para "{searchQuery}".
                     </p>
                   ) : (
-                    filteredItems.map((item) => (
-                      <div key={item.id} className="rounded-xl border border-border p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex flex-col gap-1.5">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium">{item.name}</p>
-                              {activeSection !== "manutencao" && (
-                                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{item.condition}</span>
-                              )}
+                    <>
+                      {displayedItems.map((item) => (
+                        <div key={item.id} className="rounded-xl border border-border p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-medium">{item.name}</p>
+                                {activeSection !== "manutencao" && (
+                                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{item.condition}</span>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">{item.observation || "Sem observação."}</p>
                             </div>
-                            <p className="text-sm text-muted-foreground">{item.observation || "Sem observação."}</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
-                              Editar
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDeleteItem(item.id)}
-                              aria-label="Excluir item"
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
+                                Editar
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleDeleteItem(item.id)}
+                                aria-label="Excluir item"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      ))}
+                      {hiddenItemsCount > 0 && !showAllItems && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1.5 self-start text-muted-foreground"
+                          onClick={() => setShowAllItems(true)}
+                        >
+                          <ChevronDown className="size-4" />
+                          Ver mais {hiddenItemsCount}
+                        </Button>
+                      )}
+                      {canCollapseList && showAllItems && filteredItems.length > VISIBLE_ITEMS_LIMIT && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1.5 self-start text-muted-foreground"
+                          onClick={() => setShowAllItems(false)}
+                        >
+                          <ChevronUp className="size-4" />
+                          Ver menos
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
 

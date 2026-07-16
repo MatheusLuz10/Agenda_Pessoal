@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   Award,
   Ban,
@@ -19,9 +19,10 @@ import {
   Trash2,
   Upload,
   Wrench,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -173,6 +174,16 @@ export function OperationsPage() {
     [activities]
   );
   const [isActivitiesListOpen, setIsActivitiesListOpen] = useState(false);
+
+  // Cada card da tela fica recolhido por padrão — clique no título expande.
+  const [isCycleCardOpen, setIsCycleCardOpen] = useState(false);
+  const [isProductionCardOpen, setIsProductionCardOpen] = useState(false);
+  const [isCategoryCardOpen, setIsCategoryCardOpen] = useState(false);
+  const [isPrizeCardOpen, setIsPrizeCardOpen] = useState(false);
+  const [isComparisonCardOpen, setIsComparisonCardOpen] = useState(false);
+  const [isPunchCardOpen, setIsPunchCardOpen] = useState(false);
+  const [isIndicatorsCardOpen, setIsIndicatorsCardOpen] = useState(false);
+  const [isFinancialCardOpen, setIsFinancialCardOpen] = useState(false);
 
   // Mesmo pipeline de cálculo do ciclo atual, aplicado à janela do ciclo
   // anterior — usado no card de comparação. "Zerar e memorizar" já
@@ -510,61 +521,60 @@ export function OperationsPage() {
         )}
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         {/* Card 1 – Resumo do Ciclo */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="size-4" />
-              Resumo do ciclo
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+        <CollapsibleCard
+          icon={Calendar}
+          title="Resumo do ciclo"
+          open={isCycleCardOpen}
+          onToggle={() => setIsCycleCardOpen((prev) => !prev)}
+        >
+          <div className="flex flex-col gap-3">
             <StatRow label="Ciclo atual" value={`${formatDateBR(cycle.start)} – ${formatDateBR(cycle.end)}`} />
             <StatRow label="Dias trabalhados" value={String(cycleSummary.daysWorked)} />
             <StatRow label="Dias ponderados" value={formatNumber(cycleSummary.weightedDays, 2)} />
             <p className="text-xs text-muted-foreground">
               3 ciclos por mês (1-10, 11-20, 21-fim). Peso por dia: seg-sex = 1,0 · sábado = 0,85 · domingo = 0,15.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsibleCard>
 
         {/* Card 2 – Produção */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wrench className="size-4" />
-              Produção
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+        <CollapsibleCard
+          icon={Wrench}
+          title="Produção"
+          open={isProductionCardOpen}
+          onToggle={() => setIsProductionCardOpen((prev) => !prev)}
+        >
+          <div className="flex flex-col gap-3">
             <StatRow label="BA (Instalações)" value={String(production.ba)} />
             <StatRow label="BD (Reparos)" value={String(production.bd)} />
             <StatRow label="Total de atividades" value={String(production.total)} />
             <StatRow label="% BA" value={`${formatNumber(production.baPercent)}%`} />
             <StatRow label="% BD" value={`${formatNumber(production.bdPercent)}%`} />
             <StatRow label="Média diária" value={formatNumber(production.average, 2)} />
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsibleCard>
 
         {/* Card 3 – Categoria */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2">
-              <ListChecks className="size-4" />
-              Categoria
-            </CardTitle>
+        <CollapsibleCard
+          icon={ListChecks}
+          title="Categoria"
+          open={isCategoryCardOpen}
+          onToggle={() => setIsCategoryCardOpen((prev) => !prev)}
+          headerAction={
             <Button
               size="icon"
               variant="ghost"
-              className="size-8 text-muted-foreground hover:text-foreground"
+              className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
               onClick={openAdjustDialog}
               aria-label="Ajustar efetividade"
             >
               <Settings className="size-4" />
             </Button>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+          }
+        >
+          <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
               <Award className="size-5 text-primary" />
               <div>
@@ -577,18 +587,17 @@ export function OperationsPage() {
               <p>Reparador: BD ≥ 70%, média ≥ 4/dia e efetividade &gt; 80%.</p>
               <p>Mix: BA &lt; 69%, BD &lt; 70% e média ≥ 3,5/dia.</p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsibleCard>
 
         {/* Card 4 – Prêmio Estimado */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="size-4" />
-              Prêmio estimado
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+        <CollapsibleCard
+          icon={TrendingUp}
+          title="Prêmio estimado"
+          open={isPrizeCardOpen}
+          onToggle={() => setIsPrizeCardOpen((prev) => !prev)}
+        >
+          <div className="flex flex-col gap-3">
             <StatRow label="Categoria atual" value={CATEGORY_LABEL[category]} />
             <StatRow label="Média diária" value={formatNumber(production.average, 2)} />
             <StatRow label="% BA" value={`${formatNumber(production.baPercent)}%`} />
@@ -599,72 +608,70 @@ export function OperationsPage() {
                 {formatCurrency(prizeAmount)}
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsibleCard>
       </div>
 
       {/* Comparação com o ciclo anterior */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="size-4" />
-            Comparação com o ciclo anterior
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 gap-y-1">
-            <span />
-            <span className="text-right text-xs font-medium text-muted-foreground">
-              Atual
-              <br />
-              {formatDateBR(cycle.start)}–{formatDateBR(cycle.end)}
-            </span>
-            <span className="text-right text-xs font-medium text-muted-foreground">
-              Anterior
-              <br />
-              {formatDateBR(previousCycle.start)}–{formatDateBR(previousCycle.end)}
-            </span>
+      <CollapsibleCard
+        icon={History}
+        title="Comparação com o ciclo anterior"
+        open={isComparisonCardOpen}
+        onToggle={() => setIsComparisonCardOpen((prev) => !prev)}
+      >
+        <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 gap-y-1">
+          <span />
+          <span className="text-right text-xs font-medium text-muted-foreground">
+            Atual
+            <br />
+            {formatDateBR(cycle.start)}–{formatDateBR(cycle.end)}
+          </span>
+          <span className="text-right text-xs font-medium text-muted-foreground">
+            Anterior
+            <br />
+            {formatDateBR(previousCycle.start)}–{formatDateBR(previousCycle.end)}
+          </span>
 
-            <CompareRow label="BA" current={String(production.ba)} previous={String(previousProduction.ba)} />
-            <CompareRow label="BD" current={String(production.bd)} previous={String(previousProduction.bd)} />
-            <CompareRow
-              label="Total"
-              current={String(production.total)}
-              previous={String(previousProduction.total)}
-            />
-            <CompareRow
-              label="Média diária"
-              current={formatNumber(production.average, 2)}
-              previous={formatNumber(previousProduction.average, 2)}
-              trend={production.average - previousProduction.average}
-            />
-            <CompareRow
-              label="Categoria"
-              current={CATEGORY_LABEL[category]}
-              previous={CATEGORY_LABEL[previousCategory]}
-            />
-            <CompareRow
-              label="Prêmio"
-              current={formatCurrency(prizeAmount)}
-              previous={formatCurrency(previousPrizeAmount)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+          <CompareRow label="BA" current={String(production.ba)} previous={String(previousProduction.ba)} />
+          <CompareRow label="BD" current={String(production.bd)} previous={String(previousProduction.bd)} />
+          <CompareRow
+            label="Total"
+            current={String(production.total)}
+            previous={String(previousProduction.total)}
+          />
+          <CompareRow
+            label="Média diária"
+            current={formatNumber(production.average, 2)}
+            previous={formatNumber(previousProduction.average, 2)}
+            trend={production.average - previousProduction.average}
+          />
+          <CompareRow
+            label="Categoria"
+            current={CATEGORY_LABEL[category]}
+            previous={CATEGORY_LABEL[previousCategory]}
+          />
+          <CompareRow
+            label="Prêmio"
+            current={formatCurrency(prizeAmount)}
+            previous={formatCurrency(previousPrizeAmount)}
+          />
+        </div>
+      </CollapsibleCard>
 
       {/* Card 5 – Ponto e Horas Extras */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="size-4" />
-            Ponto e horas extras
-          </CardTitle>
-          <Button size="sm" variant="outline" onClick={openPunchDialog} className="gap-1.5">
+      <CollapsibleCard
+        icon={Clock}
+        title="Ponto e horas extras"
+        open={isPunchCardOpen}
+        onToggle={() => setIsPunchCardOpen((prev) => !prev)}
+        headerAction={
+          <Button size="sm" variant="outline" onClick={openPunchDialog} className="shrink-0 gap-1.5">
             <Upload className="size-4" />
             Importar ponto
           </Button>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        }
+      >
+        <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-lg bg-muted/40 p-3">
               <p className="text-xs text-muted-foreground">Horas Extras 50%</p>
@@ -723,45 +730,45 @@ export function OperationsPage() {
                 })
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
       {/* Card 6 – Indicadores Inteligentes */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="size-4" />
-            Indicadores inteligentes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
+      <CollapsibleCard
+        icon={Lightbulb}
+        title="Indicadores inteligentes"
+        open={isIndicatorsCardOpen}
+        onToggle={() => setIsIndicatorsCardOpen((prev) => !prev)}
+      >
+        <div className="flex flex-col gap-2">
           {indicators.map((indicator, index) => (
             <div key={index} className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm">
               <IndicatorIcon level={indicator.level} />
               <span>{indicator.text}</span>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
       {/* Card 7 – Resumo Financeiro */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="size-4" />
-            Resumo financeiro
-          </CardTitle>
+      <CollapsibleCard
+        icon={DollarSign}
+        title="Resumo financeiro"
+        open={isFinancialCardOpen}
+        onToggle={() => setIsFinancialCardOpen((prev) => !prev)}
+        headerAction={
           <Button
             size="icon"
             variant="ghost"
-            className="size-8 text-muted-foreground hover:text-foreground"
+            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
             onClick={openFinancialDialog}
             aria-label="Editar resumo financeiro"
           >
             <Pencil className="size-4" />
           </Button>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        }
+      >
+        <div className="flex flex-col gap-3">
           <StatRow label="Salário base" value={formatCurrency(effectiveFinancial.baseSalary)} edited={overrides.baseSalary !== null} />
           <StatRow label="Periculosidade" value={formatCurrency(effectiveFinancial.hazardPay)} edited={overrides.hazardPay !== null} />
           <StatRow
@@ -781,8 +788,8 @@ export function OperationsPage() {
             <span className="text-sm font-medium">Estimativa total bruta</span>
             <span className="text-xl font-semibold text-success">{formatCurrency(effectiveTotalGross)}</span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent>
@@ -1019,6 +1026,48 @@ export function OperationsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Card recolhível: fica só com o título visível por padrão, clique
+// expande o conteúdo. `headerAction`, quando informado (ex: botão
+// "Importar ponto"), continua acessível mesmo com o card fechado.
+function CollapsibleCard({
+  icon: Icon,
+  title,
+  headerAction,
+  open,
+  onToggle,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  headerAction?: ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-3 p-5">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex flex-1 items-center gap-2 text-left font-semibold leading-none"
+          aria-expanded={open}
+        >
+          <Icon className="size-4 shrink-0" />
+          {title}
+          {open ? (
+            <ChevronUp className="ml-auto size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+        {headerAction}
+      </div>
+      {open && <CardContent className="pt-0">{children}</CardContent>}
+    </Card>
   );
 }
 

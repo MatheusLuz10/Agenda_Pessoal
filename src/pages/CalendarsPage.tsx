@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ListChecks, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ export function CalendarsPage() {
   const { calendars, tasks, getTasksByCalendar, deleteCalendar } = useAgenda();
   const navigate = useNavigate();
   const [calendarFilter, setCalendarFilter] = useState<string>("todos");
+  const [isCalendarsOpen, setIsCalendarsOpen] = useState(false);
 
   const visibleTasks = useMemo(
     () => tasks.filter((task) => task.calendarId !== "work-private"),
@@ -51,8 +52,23 @@ export function CalendarsPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1fr]">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Meus calendários</h2>
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setIsCalendarsOpen((prev) => !prev)}
+              className="flex items-center gap-2 text-lg font-semibold"
+              aria-expanded={isCalendarsOpen}
+            >
+              Meus calendários
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {calendars.length}
+              </span>
+              {isCalendarsOpen ? (
+                <ChevronUp className="size-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-4 text-muted-foreground" />
+              )}
+            </button>
             <AddCalendarDialog
               trigger={
                 <Button size="sm" className="gap-1.5">
@@ -63,6 +79,7 @@ export function CalendarsPage() {
             />
           </div>
 
+          {isCalendarsOpen && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {calendars.map((calendar) => {
               const calendarTasks = getTasksByCalendar(calendar.id);
@@ -113,6 +130,7 @@ export function CalendarsPage() {
               );
             })}
           </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">

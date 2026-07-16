@@ -59,14 +59,29 @@ describe("parsePunchText", () => {
     expect(result.clockOut).toBe("18:00");
   });
 
-  it("só 2 registros: preenche início e fim do almoço, saída fica pra completar manualmente", () => {
+  it("só 2 registros: ancora pelo FIM (saída e fim do almoço certos), início do almoço fica pra completar manualmente", () => {
+    // Ancorar pelo fim é o que importa: a saída (horário mais crítico pro
+    // cálculo de hora extra) tem que continuar certa mesmo quando falta 1.
     const text = "09:00 Meus Registros 12:00 18:00";
     const result = parsePunchText(text);
 
     expect(result.clockIn).toBe("08:00");
-    expect(result.lunchStart).toBe("12:00");
-    expect(result.lunchEnd).toBe("18:00");
-    expect(result.clockOut).toBeUndefined();
+    expect(result.lunchStart).toBeUndefined();
+    expect(result.lunchEnd).toBe("12:00");
+    expect(result.clockOut).toBe("18:00");
+  });
+
+  it("print real (12:02, 13:31, 17:31) com o OCR deixando passar o horário do meio: saída continua correta", () => {
+    // Bug real encontrado com o print de ponto de verdade: a compressão da
+    // foto fez o Tesseract não reconhecer "12:02", restando só 2 horários.
+    // Antes da correção (ancorar pelo início), isso jogava "13:31" pro
+    // lugar de início do almoço e perdia a saída (17:31) por completo.
+    const text = "13:15 Meus Registros 13:31 17:31";
+    const result = parsePunchText(text);
+
+    expect(result.lunchStart).toBeUndefined();
+    expect(result.lunchEnd).toBe("13:31");
+    expect(result.clockOut).toBe("17:31");
   });
 
   it("sem nenhum horário de registro (só a barra de status), não preenche nada além da entrada padrão", () => {
