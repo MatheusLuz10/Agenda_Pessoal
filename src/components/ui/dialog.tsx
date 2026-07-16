@@ -30,9 +30,13 @@ function DialogOverlay({
 
 // Caixa central do modal: centraliza na tela, anima entrada/saída e
 // inclui automaticamente o botão "X" de fechar no canto superior direito.
+// Clicar fora do modal NÃO fecha — só o "X" (ou um botão explícito tipo
+// "Cancelar"/"Fechar" no rodapé) — evita perder um formulário em
+// preenchimento por um clique sem querer fora da caixa.
 function DialogContent({
   className,
   children,
+  onPointerDownOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
@@ -40,6 +44,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onPointerDownOutside={onPointerDownOutside ?? ((e) => e.preventDefault())}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 max-h-[90vh] overflow-y-auto",
           className

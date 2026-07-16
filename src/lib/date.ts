@@ -100,6 +100,17 @@ export function addDays(iso: string, n: number): string {
   return makeISODate(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// Soma (ou subtrai, com n negativo) meses a uma data ISO. Quando o dia não
+// existe no mês de destino (ex: 31/01 + 1 mês), usa o último dia daquele
+// mês em vez de "estourar" para o mês seguinte — comportamento esperado
+// numa repetição mensal (31/01 -> 28 ou 29/02, não 02 ou 03/03).
+export function addMonths(iso: string, n: number): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const anchor = new Date(year, month - 1 + n, 1);
+  const daysInTargetMonth = getDaysInMonth(anchor.getFullYear(), anchor.getMonth());
+  return makeISODate(anchor.getFullYear(), anchor.getMonth(), Math.min(day, daysInTargetMonth));
+}
+
 // Próxima ocorrência de um dia da semana (0 = domingo ... 6 = sábado) a
 // partir de hoje. Se hoje já é esse dia, considera o de hoje (não pula
 // para a semana seguinte) — é o comportamento mais intuitivo quando

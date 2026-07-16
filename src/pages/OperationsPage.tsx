@@ -166,9 +166,11 @@ export function OperationsPage() {
   );
   const prizeAmount = useMemo(() => computePrizeAmount(category), [category]);
 
-  const sortedCycleActivities = useMemo(
-    () => [...cycleActivities].sort((a, b) => b.date.localeCompare(a.date)),
-    [cycleActivities]
+  // Lista completa (não só do ciclo atual) — dá pra editar/excluir BA/BD
+  // de qualquer ciclo, não só o corrente.
+  const sortedAllActivities = useMemo(
+    () => [...activities].sort((a, b) => b.date.localeCompare(a.date)),
+    [activities]
   );
   const [isActivitiesListOpen, setIsActivitiesListOpen] = useState(false);
 
@@ -325,8 +327,10 @@ export function OperationsPage() {
           );
         }
       }
-    } catch {
-      setOcrError("Não foi possível ler essa imagem. Preencha os campos manualmente.");
+    } catch (error) {
+      console.error("Falha ao ler imagem do ponto por OCR:", error);
+      const detail = error instanceof Error ? error.message : String(error);
+      setOcrError(`Não foi possível ler essa imagem (${detail}). Preencha os campos manualmente.`);
     } finally {
       setOcrLoading(false);
     }
@@ -434,8 +438,9 @@ export function OperationsPage() {
         </Button>
       </div>
 
-      {/* Atividades lançadas no ciclo: fica recolhida, só com a contagem —
-          clique expande pra ver/editar/excluir cada uma. */}
+      {/* Todas as atividades (de qualquer ciclo): fica recolhida, só com a
+          contagem — clique expande pra ver/editar/excluir qualquer uma,
+          não só as do ciclo atual. */}
       <Card>
         <button
           type="button"
@@ -445,9 +450,9 @@ export function OperationsPage() {
         >
           <span className="flex items-center gap-2 text-sm font-medium">
             <Info className="size-4 text-muted-foreground" />
-            Atividades lançadas no ciclo
+            Todas as atividades
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {sortedCycleActivities.length}
+              {sortedAllActivities.length}
             </span>
           </span>
           {isActivitiesListOpen ? (
@@ -457,18 +462,18 @@ export function OperationsPage() {
           )}
         </button>
         {isActivitiesListOpen && (
-          <CardContent className="flex flex-col gap-2 pt-0">
-            {sortedCycleActivities.length === 0 ? (
+          <CardContent className="flex max-h-96 flex-col gap-2 overflow-y-auto pt-0">
+            {sortedAllActivities.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                Nenhuma atividade lançada neste ciclo ainda.
+                Nenhuma atividade lançada ainda.
               </p>
             ) : (
-              sortedCycleActivities.map((activity) => (
+              sortedAllActivities.map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-center justify-between gap-3 rounded-xl border border-border p-3"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-medium ${
                         activity.type === "BA" ? "bg-primary/10 text-primary" : "bg-warning/15 text-warning"
@@ -478,6 +483,11 @@ export function OperationsPage() {
                     </span>
                     <span className="text-sm">{formatDateBR(activity.date)}</span>
                     <span className="text-sm text-muted-foreground">Qtd: {activity.quantity}</span>
+                    {isWithinRange(activity.date, cycle.start, cycle.end) && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        ciclo atual
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="sm" onClick={() => openEditDialog(activity)}>

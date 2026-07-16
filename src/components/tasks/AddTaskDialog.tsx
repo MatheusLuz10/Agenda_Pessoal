@@ -9,12 +9,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAgenda } from "@/contexts/AgendaContext";
-import { formatDateBR } from "@/lib/date";
+import { addMonths, formatDateBR } from "@/lib/date";
 import type { Priority, Task } from "@/types";
 
 interface AddTaskDialogProps {
@@ -41,6 +42,8 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
   const [time, setTime] = useState("");
   const [priority, setPriority] = useState<Priority>("media");
   const [observation, setObservation] = useState("");
+  const [repeatMonthly, setRepeatMonthly] = useState(false);
+  const [repeatMonths, setRepeatMonths] = useState("2");
 
   // Limpa o formulário para a próxima vez que o modal for aberto, ou
   // preenche com os dados da tarefa sendo editada.
@@ -51,6 +54,8 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
     setTime(task?.time ?? "");
     setPriority(task?.priority ?? "media");
     setObservation(task?.observation ?? "");
+    setRepeatMonthly(false);
+    setRepeatMonths("2");
   }
 
   // Toda vez que o modal abrir (criação ou edição), garante que o
@@ -75,15 +80,22 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
         observation: observation || undefined,
       });
     } else {
-      addTask({
-        calendarId,
-        title: title.trim(),
-        description: description || undefined,
-        date: taskDate,
-        time: time || undefined,
-        priority,
-        observation: observation || undefined,
-      });
+      // "Repetir todo mês": cria uma tarefa independente por mês (mesmo
+      // dia, ou o último dia do mês quando ele não existe — ex: 31/01 com
+      // repetição vira 28 ou 29/02). São tarefas normais, sem vínculo
+      // entre si — editar/excluir uma não afeta as outras.
+      const occurrences = repeatMonthly ? Math.max(1, Number(repeatMonths) || 1) : 1;
+      for (let i = 0; i < occurrences; i++) {
+        addTask({
+          calendarId,
+          title: title.trim(),
+          description: description || undefined,
+          date: i === 0 ? taskDate : addMonths(taskDate, i),
+          time: time || undefined,
+          priority,
+          observation: observation || undefined,
+        });
+      }
     }
     onOpenChange(false);
   }
@@ -168,6 +180,38 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
               onChange={(e) => setObservation(e.target.value)}
             />
           </div>
+
+          {!isEditing && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="task-repeat"
+                  checked={repeatMonthly}
+                  onCheckedChange={(v) => setRepeatMonthly(Boolean(v))}
+                />
+                <Label htmlFor="task-repeat" className="cursor-pointer font-normal">
+                  Repetir todo mês
+                </Label>
+              </div>
+              {repeatMonthly && (
+                <div className="flex flex-col gap-1.5 pl-6">
+                  <Label htmlFor="task-repeat-months">Por quantos meses</Label>
+                  <Input
+                    id="task-repeat-months"
+                    type="number"
+                    min={2}
+                    max={24}
+                    className="w-24"
+                    value={repeatMonths}
+                    onChange={(e) => setRepeatMonths(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Cria uma atividade por mês, no mesmo dia, começando em {formatDateBR(taskDate)}.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="submit" disabled={!title.trim()}>
