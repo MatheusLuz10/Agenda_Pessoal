@@ -8,13 +8,19 @@ import {
   ChevronUp,
   Download,
   FileText,
+  Gauge,
   Info,
   Inbox,
+  PackageCheck,
   Plus,
   Search,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
+  Users,
+  Wrench,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -498,6 +504,51 @@ export function WorkPage() {
             >
               <Building2 className="size-4" />
               Gestão de prédio e CTO
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => window.open("https://fast.com/pt/", "_blank", "noopener,noreferrer")}
+            >
+              <Gauge className="size-4" />
+              Teste de velocidade
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() =>
+                window.open(
+                  "https://unic.comfica.com.br/pages/geral/analise_preliminar_risco/",
+                  "_blank",
+                  "noopener,noreferrer"
+                )
+              }
+            >
+              <ShieldAlert className="size-4" />
+              Criar APR
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => window.open("https://forms.office.com/r/Sa9raVnQSd", "_blank", "noopener,noreferrer")}
+            >
+              <PackageCheck className="size-4" />
+              Aprovisionamento
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => window.open("https://forms.office.com/r/Sa9raVnQSd", "_blank", "noopener,noreferrer")}
+            >
+              <Users className="size-4" />
+              Associação
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" disabled>
+              <Wrench className="size-4" />
+              Abertura de TTK
+              <Badge variant="warning" className="ml-auto">
+                Desenvolvendo
+              </Badge>
             </Button>
           </CardContent>
         </Card>
