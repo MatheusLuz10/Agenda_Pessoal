@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   BriefcaseBusiness,
@@ -20,7 +21,6 @@ import {
   Users,
   Wrench,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -77,6 +77,7 @@ function relativeISO(offsetDays: number): string {
 }
 
 export function WorkPage() {
+  const navigate = useNavigate();
   const {
     equipmentItems: items,
     addEquipmentItem,
@@ -543,12 +544,13 @@ export function WorkPage() {
               <Users className="size-4" />
               Associação
             </Button>
-            <Button variant="outline" className="justify-start gap-2" disabled>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => navigate("/meu-trabalho/ttk")}
+            >
               <Wrench className="size-4" />
               Abertura de TTK
-              <Badge variant="warning" className="ml-auto">
-                Desenvolvendo
-              </Badge>
             </Button>
           </CardContent>
         </Card>
