@@ -95,8 +95,13 @@ create table if not exists public.operation_activities (
   type text not null check (type in ('BA', 'BD')),
   date date not null,
   quantity integer not null default 1 check (quantity > 0),
+  description text,
   created_at timestamptz not null default now()
 );
+
+-- "add column if not exists" garante que quem já rodou este schema antes
+-- (sem a coluna description) recebe ela numa nova execução, sem erro.
+alter table public.operation_activities add column if not exists description text;
 
 create index if not exists operation_activities_date_idx on public.operation_activities (date);
 

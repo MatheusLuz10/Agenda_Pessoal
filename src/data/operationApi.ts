@@ -9,6 +9,7 @@ interface OperationActivityRow {
   type: OperationActivity["type"];
   date: string;
   quantity: number;
+  description: string | null;
   created_at: string;
 }
 
@@ -34,7 +35,14 @@ interface OperationSettingsRow {
 }
 
 function rowToActivity(row: OperationActivityRow): OperationActivity {
-  return { id: row.id, type: row.type, date: row.date, quantity: row.quantity, createdAt: row.created_at };
+  return {
+    id: row.id,
+    type: row.type,
+    date: row.date,
+    quantity: row.quantity,
+    description: row.description ?? undefined,
+    createdAt: row.created_at,
+  };
 }
 
 // HH:mm:ss (formato "time" do Postgres) -> HH:mm (formato usado no app).
@@ -76,7 +84,12 @@ export async function createOperationActivity(
 ): Promise<OperationActivity> {
   const { data, error } = await supabase!
     .from("operation_activities")
-    .insert({ type: activity.type, date: activity.date, quantity: activity.quantity })
+    .insert({
+      type: activity.type,
+      date: activity.date,
+      quantity: activity.quantity,
+      description: activity.description || null,
+    })
     .select()
     .single();
   if (error) throw error;
@@ -89,7 +102,12 @@ export async function updateOperationActivity(
 ): Promise<OperationActivity> {
   const { data, error } = await supabase!
     .from("operation_activities")
-    .update({ type: activity.type, date: activity.date, quantity: activity.quantity })
+    .update({
+      type: activity.type,
+      date: activity.date,
+      quantity: activity.quantity,
+      description: activity.description || null,
+    })
     .eq("id", activityId)
     .select()
     .single();

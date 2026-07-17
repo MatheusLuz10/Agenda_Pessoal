@@ -119,6 +119,7 @@ export interface OperationActivity {
   type: ActivityType;
   date: string; // ISO date string (yyyy-MM-dd)
   quantity: number;
+  description?: string; // ex: nome do cliente/endereço, detalhes do atendimento
   createdAt: string;
 }
 

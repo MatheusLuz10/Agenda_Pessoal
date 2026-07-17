@@ -40,9 +40,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { fetchFinancialOverrides, saveFinancialOverrides } from "@/data/operationApi";
 import { useOperation } from "@/contexts/OperationContext";
-import { formatDateBR, todayISO } from "@/lib/date";
+import { formatDateBR, MONTH_NAMES_PT, todayISO } from "@/lib/date";
 import { extractPunchFromImage } from "@/lib/ocr";
 import {
   CATEGORY_LABEL,
@@ -122,6 +123,7 @@ export function OperationsPage() {
   const [formType, setFormType] = useState<ActivityType>("BA");
   const [formDate, setFormDate] = useState(todayISO());
   const [formQuantity, setFormQuantity] = useState("1");
+  const [formDescription, setFormDescription] = useState("");
   // Quantas BA/BD foram adicionadas desde que o diálogo foi aberto — sinaliza
   // o progresso pra quem está lançando várias de uma vez, sem fechar.
   const [sessionAdded, setSessionAdded] = useState({ BA: 0, BD: 0 });
@@ -168,12 +170,48 @@ export function OperationsPage() {
   const prizeAmount = useMemo(() => computePrizeAmount(category), [category]);
 
   // Lista completa (não só do ciclo atual) — dá pra editar/excluir BA/BD
-  // de qualquer ciclo, não só o corrente.
-  const sortedAllActivities = useMemo(
-    () => [...activities].sort((a, b) => b.date.localeCompare(a.date)),
-    [activities]
-  );
+  // de qualquer ciclo, não só o corrente. Enquanto a atividade é do mês
+  // corrente, fica solta na lista; mês fechado (mês anterior ao atual)
+  // agrupa tudo num bloco recolhível "Mês Ano" pra não virar uma lista
+  // infinita.
+  const currentMonthKey = todayISO().slice(0, 7); // "yyyy-MM"
+  const { currentMonthActivities, pastMonthGroups } = useMemo(() => {
+    const sorted = [...activities].sort((a, b) => b.date.localeCompare(a.date));
+    const current: OperationActivity[] = [];
+    const pastByMonth = new Map<string, OperationActivity[]>();
+
+    for (const activity of sorted) {
+      const monthKey = activity.date.slice(0, 7);
+      if (monthKey === currentMonthKey) {
+        current.push(activity);
+      } else {
+        const list = pastByMonth.get(monthKey) ?? [];
+        list.push(activity);
+        pastByMonth.set(monthKey, list);
+      }
+    }
+
+    const groups = [...pastByMonth.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([key, items]) => {
+        const [year, month] = key.split("-").map(Number);
+        return { key, label: `${MONTH_NAMES_PT[month - 1]} ${year}`, items };
+      });
+
+    return { currentMonthActivities: current, pastMonthGroups: groups };
+  }, [activities, currentMonthKey]);
+
   const [isActivitiesListOpen, setIsActivitiesListOpen] = useState(false);
+  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
+
+  function toggleMonth(key: string) {
+    setOpenMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   // Cada card da tela fica recolhido por padrão — clique no título expande.
   const [isCycleCardOpen, setIsCycleCardOpen] = useState(false);
@@ -212,6 +250,7 @@ export function OperationsPage() {
     setFormType("BA");
     setFormDate(todayISO());
     setFormQuantity("1");
+    setFormDescription("");
     setSessionAdded({ BA: 0, BD: 0 });
   }
 
@@ -225,25 +264,29 @@ export function OperationsPage() {
     setFormType(activity.type);
     setFormDate(activity.date);
     setFormQuantity(String(activity.quantity));
+    setFormDescription(activity.description ?? "");
     setIsDialogOpen(true);
   }
 
   function handleSave() {
     const quantity = Number(formQuantity);
     if (!quantity || quantity <= 0) return;
+    const description = formDescription.trim() || undefined;
 
     if (editingId) {
       // Editar é uma ação pontual: salva e fecha.
-      updateActivity(editingId, { type: formType, date: formDate, quantity });
+      updateActivity(editingId, { type: formType, date: formDate, quantity, description });
       setIsDialogOpen(false);
       resetForm();
     } else {
       // Lançar fica aberto — o técnico costuma lançar várias BA/BD de
-      // uma vez só no fim do dia. Mantém tipo e data, só reseta a
-      // quantidade pro próximo lançamento; só fecha quando ele mandar.
-      addActivity({ type: formType, date: formDate, quantity });
+      // uma vez só no fim do dia. Mantém tipo e data, só reseta
+      // quantidade/descrição pro próximo lançamento; só fecha quando ele
+      // mandar.
+      addActivity({ type: formType, date: formDate, quantity, description });
       setSessionAdded((prev) => ({ ...prev, [formType]: prev[formType] + quantity }));
       setFormQuantity("1");
+      setFormDescription("");
     }
   }
 
@@ -450,8 +493,10 @@ export function OperationsPage() {
       </div>
 
       {/* Todas as atividades (de qualquer ciclo): fica recolhida, só com a
-          contagem — clique expande pra ver/editar/excluir qualquer uma,
-          não só as do ciclo atual. */}
+          contagem — clique expande pra ver/editar/excluir qualquer uma, não
+          só as do ciclo atual. Enquanto está dentro do mês corrente, cada
+          atividade aparece solta na lista; mês fechado agrupa num bloco
+          "Mês Ano" recolhível. */}
       <Card>
         <button
           type="button"
@@ -463,7 +508,7 @@ export function OperationsPage() {
             <Info className="size-4 text-muted-foreground" />
             Todas as atividades
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {sortedAllActivities.length}
+              {activities.length}
             </span>
           </span>
           {isActivitiesListOpen ? (
@@ -473,49 +518,62 @@ export function OperationsPage() {
           )}
         </button>
         {isActivitiesListOpen && (
-          <CardContent className="flex max-h-96 flex-col gap-2 overflow-y-auto pt-0">
-            {sortedAllActivities.length === 0 ? (
+          <CardContent className="flex max-h-96 flex-col gap-3 overflow-y-auto pt-0">
+            {activities.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
                 Nenhuma atividade lançada ainda.
               </p>
             ) : (
-              sortedAllActivities.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        activity.type === "BA" ? "bg-primary/10 text-primary" : "bg-warning/15 text-warning"
-                      }`}
-                    >
-                      {activity.type}
-                    </span>
-                    <span className="text-sm">{formatDateBR(activity.date)}</span>
-                    <span className="text-sm text-muted-foreground">Qtd: {activity.quantity}</span>
-                    {isWithinRange(activity.date, cycle.start, cycle.end) && (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                        ciclo atual
-                      </span>
-                    )}
+              <>
+                {currentMonthActivities.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma atividade lançada este mês ainda.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {currentMonthActivities.map((activity) => (
+                      <ActivityRow
+                        key={activity.id}
+                        activity={activity}
+                        cycle={cycle}
+                        onEdit={() => openEditDialog(activity)}
+                        onDelete={() => handleDelete(activity.id)}
+                      />
+                    ))}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(activity)}>
-                      Editar
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDelete(activity.id)}
-                      aria-label="Excluir atividade"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))
+                )}
+
+                {pastMonthGroups.map((group) => {
+                  const isOpen = openMonths.has(group.key);
+                  return (
+                    <div key={group.key} className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleMonth(group.key)}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm font-medium capitalize"
+                        aria-expanded={isOpen}
+                      >
+                        {group.label}
+                        <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                          {group.items.length}
+                          {isOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="flex flex-col gap-2 pl-1">
+                          {group.items.map((activity) => (
+                            <ActivityRow
+                              key={activity.id}
+                              activity={activity}
+                              cycle={cycle}
+                              onEdit={() => openEditDialog(activity)}
+                              onDelete={() => handleDelete(activity.id)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
             )}
           </CardContent>
         )}
@@ -827,6 +885,16 @@ export function OperationsPage() {
               </div>
             </div>
 
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="activity-description">Descrição</Label>
+              <Textarea
+                id="activity-description"
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                placeholder="Ex: cliente, endereço ou detalhes do atendimento"
+              />
+            </div>
+
             {!editingId && (
               <>
                 <p className="text-xs text-muted-foreground">
@@ -1025,6 +1093,58 @@ export function OperationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// Uma linha da lista "Todas as atividades" (usada tanto para as do mês
+// corrente quanto dentro de um grupo de mês fechado).
+function ActivityRow({
+  activity,
+  cycle,
+  onEdit,
+  onDelete,
+}: {
+  activity: OperationActivity;
+  cycle: { start: string; end: string };
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-border p-3">
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`rounded-full px-2 py-1 text-xs font-medium ${
+              activity.type === "BA" ? "bg-primary/10 text-primary" : "bg-warning/15 text-warning"
+            }`}
+          >
+            {activity.type}
+          </span>
+          <span className="text-sm">{formatDateBR(activity.date)}</span>
+          <span className="text-sm text-muted-foreground">Qtd: {activity.quantity}</span>
+          {isWithinRange(activity.date, cycle.start, cycle.end) && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              ciclo atual
+            </span>
+          )}
+        </div>
+        {activity.description && <p className="text-sm text-muted-foreground">{activity.description}</p>}
+      </div>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="sm" onClick={onEdit}>
+          Editar
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 text-muted-foreground hover:text-destructive"
+          onClick={onDelete}
+          aria-label="Excluir atividade"
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
     </div>
   );
 }
