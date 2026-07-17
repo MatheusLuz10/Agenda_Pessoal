@@ -5,8 +5,10 @@ import {
   BriefcaseBusiness,
   Building2,
   CarFront,
+  Check,
   ChevronDown,
   ChevronUp,
+  Copy,
   Download,
   FileText,
   Gauge,
@@ -18,7 +20,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Trash2,
-  Users,
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,9 @@ export function WorkPage() {
   const [reportConditionFilter, setReportConditionFilter] = useState<ReportConditionFilter>("todos");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAllItems, setShowAllItems] = useState(false);
+  const [isTextReportOpen, setIsTextReportOpen] = useState(false);
+  const [textReportContent, setTextReportContent] = useState("");
+  const [textReportCopied, setTextReportCopied] = useState(false);
   const VISIBLE_ITEMS_LIMIT = 3;
 
   const defectiveItems = items.filter((item) => item.condition === "Defeituoso");
@@ -198,6 +202,50 @@ export function WorkPage() {
     }
 
     doc.save(`relatorio-${category}-${relativeISO(0)}.pdf`);
+  }
+
+  // Mesmo conteúdo do PDF, mas como texto puro — para o técnico copiar e
+  // colar direto numa conversa (ex: enviar o relatório pro supervisor no
+  // WhatsApp) sem precisar baixar/anexar um arquivo.
+  function buildCategoryReportText(category: "manutencao" | "epis"): string {
+    const categoryItems = items
+      .filter((item) => item.category === category)
+      .filter((item) => reportConditionFilter === "todos" || item.condition === reportConditionFilter);
+
+    const filterLabel =
+      reportConditionFilter === "todos" ? "Todos" : reportConditionFilter === "Bom" ? "Bom" : "Defeituoso";
+
+    const lines: string[] = [`Relatório de ${categoryLabel(category).toLowerCase()}`];
+    if (category !== "manutencao") {
+      lines.push(`Filtro de condição: ${filterLabel}`);
+    }
+    lines.push(`Gerado em: ${nowInBrasilia().toLocaleString("pt-BR")}`);
+    lines.push(`Total de itens: ${categoryItems.length}`);
+    lines.push("");
+
+    if (categoryItems.length === 0) {
+      lines.push("Nenhum item encontrado para este filtro.");
+    } else {
+      categoryItems.forEach((item) => {
+        lines.push(category === "manutencao" ? item.name : `${item.name} (${item.condition})`);
+        lines.push(item.observation || "Sem observação.");
+        lines.push("");
+      });
+    }
+
+    return lines.join("\n").trim();
+  }
+
+  function openTextReport(category: "manutencao" | "epis") {
+    setTextReportContent(buildCategoryReportText(category));
+    setTextReportCopied(false);
+    setIsTextReportOpen(true);
+  }
+
+  async function copyTextReport() {
+    await navigator.clipboard.writeText(textReportContent);
+    setTextReportCopied(true);
+    setTimeout(() => setTextReportCopied(false), 2000);
   }
 
   function handleDownloadDefectsPdf() {
@@ -470,6 +518,15 @@ export function WorkPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => openTextReport(activeSection)}
+                    className="gap-1.5"
+                  >
+                    <Copy className="size-4" />
+                    Gerar relatório
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleDownloadCategoryReportPdf(activeSection)}
                     className="gap-1.5"
                   >
@@ -534,15 +591,7 @@ export function WorkPage() {
               onClick={() => window.open("https://forms.office.com/r/Sa9raVnQSd", "_blank", "noopener,noreferrer")}
             >
               <PackageCheck className="size-4" />
-              Aprovisionamento
-            </Button>
-            <Button
-              variant="outline"
-              className="justify-start gap-2"
-              onClick={() => window.open("https://forms.office.com/r/Sa9raVnQSd", "_blank", "noopener,noreferrer")}
-            >
-              <Users className="size-4" />
-              Associação
+              Aprovisionamento / Associação
             </Button>
             <Button
               variant="outline"
@@ -618,6 +667,21 @@ export function WorkPage() {
               Salvar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTextReportOpen} onOpenChange={setIsTextReportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Relatório em texto</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <Textarea value={textReportContent} readOnly rows={14} className="font-mono text-xs" />
+            <Button variant="outline" className="w-fit gap-2" onClick={copyTextReport}>
+              {textReportCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              {textReportCopied ? "Copiado!" : "Copiar texto"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
