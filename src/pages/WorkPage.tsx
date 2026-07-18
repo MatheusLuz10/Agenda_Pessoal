@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { saveActiveCall } from "@/lib/activeCall";
 import { nowInBrasilia } from "@/lib/date";
 import { useWork } from "@/contexts/WorkContext";
 import type { EquipmentCondition, EquipmentItem } from "@/types";
@@ -71,11 +72,14 @@ const sectionConfig: Record<
   },
 };
 
-// Contatos de discagem rápida do botão redondo em Ações rápidas.
+// Contatos de discagem rápida do botão redondo em Ações rápidas. `setor`
+// presente = liga ao cronômetro de Retenção/C.O (inicia sozinho e leva
+// pra tela de encerrar); ausente = só disca, sem registrar ligação
+// (caso do número de Batimento, que não faz parte desse relatório).
 const QUICK_CONTACTS = [
-  { label: "Retenção", phone: "0800 602 3040" },
-  { label: "Batimento", phone: "0151142930660" },
-  { label: "Suporte C.O", phone: "0800 600 9192" },
+  { label: "Retenção", phone: "0800 602 3040", setor: "Retenção" },
+  { label: "Batimento", phone: "0151142930660", setor: null },
+  { label: "Suporte C.O", phone: "0800 600 9192", setor: "C.O." },
 ] as const;
 
 // Datas relativas a hoje, usadas como padrão para os nomes dos arquivos de
@@ -256,6 +260,15 @@ export function WorkPage() {
     await navigator.clipboard.writeText(textReportContent);
     setTextReportCopied(true);
     setTimeout(() => setTextReportCopied(false), 2000);
+  }
+
+  // Contatos com `setor` disparam o cronômetro de Retenção/C.O sozinhos —
+  // o técnico só precisa tocar em "Encerrar ligação" na tela seguinte.
+  function callAndStartTimer(setor: string, phone: string) {
+    saveActiveCall(setor, nowInBrasilia().getTime());
+    setIsContactsOpen(false);
+    navigate("/meu-trabalho/relatorios?tipo=retencao-co");
+    window.open(`tel:${phone.replace(/[^\d+]/g, "")}`, "_self");
   }
 
   function handleDownloadDefectsPdf() {
@@ -706,19 +719,34 @@ export function WorkPage() {
             <DialogTitle>Contatos rápidos</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2">
-            {QUICK_CONTACTS.map((contact) => (
-              <a
-                key={contact.label}
-                href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border p-3 transition-colors hover:bg-muted/40"
-              >
-                <div>
-                  <p className="font-medium">{contact.label}</p>
-                  <p className="text-sm text-muted-foreground">{contact.phone}</p>
-                </div>
-                <Phone className="size-4 text-primary" />
-              </a>
-            ))}
+            {QUICK_CONTACTS.map((contact) =>
+              contact.setor ? (
+                <button
+                  key={contact.label}
+                  type="button"
+                  onClick={() => callAndStartTimer(contact.setor, contact.phone)}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted/40"
+                >
+                  <div>
+                    <p className="font-medium">{contact.label}</p>
+                    <p className="text-sm text-muted-foreground">{contact.phone}</p>
+                  </div>
+                  <Phone className="size-4 text-primary" />
+                </button>
+              ) : (
+                <a
+                  key={contact.label}
+                  href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3 transition-colors hover:bg-muted/40"
+                >
+                  <div>
+                    <p className="font-medium">{contact.label}</p>
+                    <p className="text-sm text-muted-foreground">{contact.phone}</p>
+                  </div>
+                  <Phone className="size-4 text-primary" />
+                </a>
+              )
+            )}
           </div>
         </DialogContent>
       </Dialog>

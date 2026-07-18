@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Check, Copy, FileStack, Phone, PhoneOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { saveBatimentoReport } from "@/data/batimentoApi";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { nowInBrasilia } from "@/lib/date";
+import { clearActiveCall, loadActiveCall, saveActiveCall } from "@/lib/activeCall";
 
 // Tipos de relatório disponíveis em "/meu-trabalho/relatorios". A lista
 // existe para caber novos tipos depois, sem mudar a navegação.
@@ -30,10 +31,16 @@ const SPLITTER_PORTS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 // Tela "/meu-trabalho/relatorios" — ponto único para os relatórios de
 // texto rápido (copiar e colar) usados no dia a dia, além do PDF já
-// existente em Meu trabalho.
+// existente em Meu trabalho. Aceita "?tipo=retencao-co" na URL — usado
+// pelo botão de contatos rápidos de Meu trabalho, que já inicia a
+// ligação e traz o técnico direto pra cá.
 export function ReportsPage() {
   const navigate = useNavigate();
-  const [selectedType, setSelectedType] = useState<ReportTypeKey | null>(null);
+  const [searchParams] = useSearchParams();
+  const requestedType = searchParams.get("tipo");
+  const [selectedType, setSelectedType] = useState<ReportTypeKey | null>(
+    REPORT_TYPES.some((type) => type.key === requestedType) ? (requestedType as ReportTypeKey) : null
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -253,39 +260,46 @@ function formatDuration(ms: number): string {
 // retenção, supervisão etc.) com início/fim/duração via cronômetro —
 // o técnico só aperta "Iniciar" e "Encerrar", nada de digitar horário.
 function RetencaoCoReportForm() {
-  const [setor, setSetor] = useState("");
+  // Resume uma ligação já em andamento (iniciada pelo botão de contatos
+  // rápidos em Meu trabalho, que salva no localStorage antes de trazer o
+  // técnico pra cá) — se não houver nenhuma, começa em branco.
+  const [initialActiveCall] = useState(() => loadActiveCall());
+  const [setor, setSetor] = useState(initialActiveCall?.setor ?? "");
   const [motivo, setMotivo] = useState("");
   const [calls, setCalls] = useState<CallLogEntry[]>([]);
-  const [callStart, setCallStart] = useState<Date | null>(null);
+  const [callStart, setCallStart] = useState<Date | null>(
+    initialActiveCall ? new Date(initialActiveCall.start) : null
+  );
   const [elapsedMs, setElapsedMs] = useState(0);
   const [reportText, setReportText] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Um único efeito cuida do "tick" do cronômetro sempre que callStart
+  // muda — cobre tanto o início manual (startCall) quanto o resumo de
+  // uma ligação já em andamento (initialActiveCall acima).
   useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
+    if (!callStart) return;
+    const tick = () => setElapsedMs(nowInBrasilia().getTime() - callStart.getTime());
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [callStart]);
 
   function startCall() {
     const start = nowInBrasilia();
+    saveActiveCall(setor.trim(), start.getTime());
     setCallStart(start);
-    setElapsedMs(0);
-    intervalRef.current = setInterval(() => {
-      setElapsedMs(nowInBrasilia().getTime() - start.getTime());
-    }, 1000);
   }
 
   function endCall() {
     if (!callStart) return;
-    if (intervalRef.current) clearInterval(intervalRef.current);
     const end = nowInBrasilia();
     const durationMs = end.getTime() - callStart.getTime();
     setCalls((prev) => [
       ...prev,
       { id: crypto.randomUUID(), setor: setor.trim(), motivo: motivo.trim(), start: callStart, end, durationMs },
     ]);
+    clearActiveCall();
     setCallStart(null);
     setElapsedMs(0);
     setSetor("");
