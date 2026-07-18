@@ -84,7 +84,7 @@ export function HomePage() {
     <div className="flex flex-col gap-6">
       <ProfileCard>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Olá{displayName ? `, ${displayName}` : ""}! 👋
+          Olá{displayName ? `, ${displayName}` : ""}!
         </h1>
         <p className="text-sm text-muted-foreground">
           Hoje é {new Date(todayISO() + "T00:00:00").toLocaleDateString("pt-BR", {

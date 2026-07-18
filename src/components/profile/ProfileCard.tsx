@@ -18,9 +18,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-// Círculo com a foto "cover"-ajustada via CSS puro (min-width/min-height
-// 100% + width/height auto preenche o quadrado sem precisar medir a
-// imagem em JS), deslocada por position (0-100, 50 = centralizado) e
+// Círculo com a foto ajustada via object-fit: cover (o navegador calcula
+// sozinho a escala certa a partir do tamanho real da imagem — evita o
+// "zoom gigante" que dava com fotos de câmera de celular, bem maiores
+// que o círculo), deslocada por position (0-100, 50 = centralizado) e
 // ampliada por zoom — os mesmos três valores salvos no perfil.
 function AvatarPhoto({
   src,
@@ -35,11 +36,6 @@ function AvatarPhoto({
   zoom: number;
   size: number;
 }) {
-  // translate(dx, dy) roda antes de scale() na composição do transform
-  // (a lista de funções aplica da direita pra esquerda ao conteúdo do
-  // próprio elemento), então dx/dy já ficam em pixels finais — daí dar
-  // pra usar diretamente um valor proporcional ao tamanho do círculo
-  // exibido (mesma fração, seja no avatar pequeno ou no editor grande).
   const offsetX = ((positionX - 50) / 100) * size;
   const offsetY = ((positionY - 50) / 100) * size;
   return (
@@ -47,13 +43,9 @@ function AvatarPhoto({
       src={src}
       alt=""
       draggable={false}
-      className="absolute left-1/2 top-1/2 max-w-none select-none"
+      className="absolute inset-0 size-full select-none object-cover"
       style={{
-        minWidth: "100%",
-        minHeight: "100%",
-        width: "auto",
-        height: "auto",
-        transform: `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
+        transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
       }}
     />
   );
