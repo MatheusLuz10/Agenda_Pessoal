@@ -4,8 +4,10 @@ import { Inbox } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { TaskListItem } from "@/components/tasks/TaskListItem";
+import { ProfileCard } from "@/components/profile/ProfileCard";
 import { useAgenda } from "@/contexts/AgendaContext";
 import { getTaskTimeStatus, nowInBrasilia, todayISO } from "@/lib/date";
+import { getDisplayName } from "@/lib/userProfile";
 
 // Tela "/" — visão geral: mini calendário do mês com marcadores de
 // tarefas pendentes + lista de "Próximos Avisos" da semana atual,
@@ -17,6 +19,7 @@ export function HomePage() {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [displayName] = useState(getDisplayName);
 
   const generalTasks = useMemo(
     () => tasks.filter((task) => task.calendarId !== "work-private"),
@@ -79,8 +82,10 @@ export function HomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Olá! 👋</h1>
+      <ProfileCard>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Olá{displayName ? `, ${displayName}` : ""}! 👋
+        </h1>
         <p className="text-sm text-muted-foreground">
           Hoje é {new Date(todayISO() + "T00:00:00").toLocaleDateString("pt-BR", {
             weekday: "long",
@@ -88,7 +93,7 @@ export function HomePage() {
             month: "long",
           })}
         </p>
-      </div>
+      </ProfileCard>
 
       <Card>
         <CardContent className="pt-5">

@@ -148,6 +148,16 @@ export interface FinancialOverrides {
   prizeAmount: number | null;
 }
 
+// Foto de perfil exibida na tela Início, com posição/zoom escolhidos
+// pelo usuário no editor. Linha única (mesmo padrão de OperationSettings).
+// photoPositionX/Y ficam em 0-100 (50 = centralizado); photoZoom em 1-3.
+export interface UserProfile {
+  photoUrl: string | null;
+  photoPositionX: number;
+  photoPositionY: number;
+  photoZoom: number;
+}
+
 // Configurações usadas nos cálculos da aba Operação. Linha única
 // (não há multiusuário nesta base — ver demais tabelas do app).
 export interface OperationSettings {

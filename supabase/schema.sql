@@ -87,6 +87,30 @@ create table if not exists public.service_orders (
 
 create index if not exists service_orders_date_idx on public.service_orders (date);
 
+-- Foto de perfil da tela Início: linha única com a posição/zoom
+-- escolhidos no editor (ver src/data/userProfileApi.ts). A foto em si
+-- fica no Storage (bucket "avatars" abaixo), aqui só a URL pública.
+create table if not exists public.user_profile (
+  id uuid primary key default gen_random_uuid(),
+  photo_url text,
+  photo_position_x numeric(5, 2) not null default 50,
+  photo_position_y numeric(5, 2) not null default 50,
+  photo_zoom numeric(5, 2) not null default 1,
+  updated_at timestamptz not null default now()
+);
+
+-- Bucket público (leitura livre da foto, sem precisar de token) onde a
+-- foto de perfil é enviada. "on conflict do nothing" torna seguro rodar
+-- este script mais de uma vez.
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+drop policy if exists "authenticated manage avatars" on storage.objects;
+create policy "authenticated manage avatars" on storage.objects
+  for all using (bucket_id = 'avatars' and auth.uid() is not null)
+  with check (bucket_id = 'avatars' and auth.uid() is not null);
+
 -- Atividades (BA/BD) da aba "Operação", uma por dia+tipo (ou várias, se
 -- lançadas em momentos diferentes) — usadas para calcular produção,
 -- categoria e prêmio do ciclo.
@@ -176,6 +200,7 @@ alter table public.operation_punches enable row level security;
 alter table public.operation_settings enable row level security;
 alter table public.operation_financial_overrides enable row level security;
 alter table public.batimento_reports enable row level security;
+alter table public.user_profile enable row level security;
 
 -- Este é um calendário PESSOAL: qualquer usuário autenticado (logado via
 -- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
@@ -197,6 +222,7 @@ drop policy if exists "authenticated full access operation_punches" on public.op
 drop policy if exists "authenticated full access operation_settings" on public.operation_settings;
 drop policy if exists "authenticated full access operation_financial_overrides" on public.operation_financial_overrides;
 drop policy if exists "authenticated full access batimento_reports" on public.batimento_reports;
+drop policy if exists "authenticated full access user_profile" on public.user_profile;
 
 create policy "authenticated full access calendars" on public.calendars
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -229,4 +255,7 @@ create policy "authenticated full access operation_financial_overrides" on publi
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access batimento_reports" on public.batimento_reports
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access user_profile" on public.user_profile
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

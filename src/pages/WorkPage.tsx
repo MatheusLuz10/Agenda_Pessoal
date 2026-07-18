@@ -162,7 +162,9 @@ export function WorkPage() {
   function handleDownloadCategoryReportPdf(category: "manutencao" | "epis") {
     const categoryItems = items
       .filter((item) => item.category === category)
-      .filter((item) => reportConditionFilter === "todos" || item.condition === reportConditionFilter);
+      .filter(
+        (item) => category === "manutencao" || reportConditionFilter === "todos" || item.condition === reportConditionFilter
+      );
 
     const filterLabel =
       reportConditionFilter === "todos" ? "Todos" : reportConditionFilter === "Bom" ? "Bom" : "Defeituoso";
@@ -213,7 +215,9 @@ export function WorkPage() {
   function buildCategoryReportText(category: "manutencao" | "epis"): string {
     const categoryItems = items
       .filter((item) => item.category === category)
-      .filter((item) => reportConditionFilter === "todos" || item.condition === reportConditionFilter);
+      .filter(
+        (item) => category === "manutencao" || reportConditionFilter === "todos" || item.condition === reportConditionFilter
+      );
 
     const filterLabel =
       reportConditionFilter === "todos" ? "Todos" : reportConditionFilter === "Bom" ? "Bom" : "Defeituoso";
@@ -519,19 +523,21 @@ export function WorkPage() {
 
                 <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                   <span className="text-xs font-medium text-muted-foreground">Relatório:</span>
-                  <Select
-                    value={reportConditionFilter}
-                    onValueChange={(value) => setReportConditionFilter(value as ReportConditionFilter)}
-                  >
-                    <SelectTrigger className="h-8 w-[120px] text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="Bom">Bom</SelectItem>
-                      <SelectItem value="Defeituoso">Defeituoso</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {activeSection === "epis" && (
+                    <Select
+                      value={reportConditionFilter}
+                      onValueChange={(value) => setReportConditionFilter(value as ReportConditionFilter)}
+                    >
+                      <SelectTrigger className="h-8 w-[120px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos</SelectItem>
+                        <SelectItem value="Bom">Bom</SelectItem>
+                        <SelectItem value="Defeituoso">Defeituoso</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"

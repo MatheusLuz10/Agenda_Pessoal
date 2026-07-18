@@ -3,8 +3,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Bell, Moon, Database, Gauge } from "lucide-react";
+import { Bell, Moon, Database, Gauge, User } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { getDisplayName, setDisplayName } from "@/lib/userProfile";
 import { useOperation } from "@/contexts/OperationContext";
 import type { OperationSettings } from "@/types";
 
@@ -15,10 +16,16 @@ export function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [overdueAlerts, setOverdueAlerts] = useState(true);
   const [todayAlerts, setTodayAlerts] = useState(true);
+  const [name, setName] = useState(getDisplayName);
   const { settings: operationSettings, updateSettings: updateOperationSettings } = useOperation();
 
   function patchOperationSettings(patch: Partial<OperationSettings>) {
     updateOperationSettings({ ...operationSettings, ...patch });
+  }
+
+  function handleNameChange(value: string) {
+    setName(value);
+    setDisplayName(value);
   }
 
   return (
@@ -27,6 +34,23 @@ export function SettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Configurações</h1>
         <p className="text-sm text-muted-foreground">Preferências do aplicativo.</p>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2">
+          <User className="size-4.5 text-muted-foreground" />
+          <CardTitle>Perfil</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-1.5">
+          <Label htmlFor="profile-name">Seu nome</Label>
+          <Input
+            id="profile-name"
+            value={name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            placeholder="Ex: Matheus"
+          />
+          <p className="text-xs text-muted-foreground">Usado no cumprimento da tela Início.</p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center gap-2">
