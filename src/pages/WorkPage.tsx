@@ -16,7 +16,6 @@ import {
   Info,
   Inbox,
   PackageCheck,
-  Phone,
   Plus,
   Search,
   ShieldAlert,
@@ -43,7 +42,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { saveActiveCall } from "@/lib/activeCall";
 import { nowInBrasilia } from "@/lib/date";
 import { useWork } from "@/contexts/WorkContext";
 import type { EquipmentCondition, EquipmentItem } from "@/types";
@@ -71,16 +69,6 @@ const sectionConfig: Record<
     helper: "Equipamentos de proteção e itens essenciais para segurança.",
   },
 };
-
-// Contatos de discagem rápida do botão redondo em Ações rápidas. `setor`
-// presente = liga ao cronômetro de Retenção/C.O (inicia sozinho e leva
-// pra tela de encerrar); ausente = só disca, sem registrar ligação
-// (caso do número de Batimento, que não faz parte desse relatório).
-const QUICK_CONTACTS = [
-  { label: "Retenção", phone: "0800 602 3040", setor: "Retenção" },
-  { label: "Batimento", phone: "0151142930660", setor: null },
-  { label: "Suporte C.O", phone: "0800 600 9192", setor: "C.O." },
-] as const;
 
 // Datas relativas a hoje, usadas como padrão para os nomes dos arquivos de
 // relatório baixados.
@@ -111,7 +99,7 @@ export function WorkPage() {
   const [isTextReportOpen, setIsTextReportOpen] = useState(false);
   const [textReportContent, setTextReportContent] = useState("");
   const [textReportCopied, setTextReportCopied] = useState(false);
-  const [isContactsOpen, setIsContactsOpen] = useState(false);
+  const [isItemsListOpen, setIsItemsListOpen] = useState(false);
   const VISIBLE_ITEMS_LIMIT = 3;
 
   const defectiveItems = items.filter((item) => item.condition === "Defeituoso");
@@ -163,6 +151,7 @@ export function WorkPage() {
     setActiveSection(section);
     setSearchQuery("");
     setShowAllItems(false);
+    setIsItemsListOpen(false);
   }
 
   function handleDeleteItem(itemId: string) {
@@ -262,15 +251,6 @@ export function WorkPage() {
     setTimeout(() => setTextReportCopied(false), 2000);
   }
 
-  // Contatos com `setor` disparam o cronômetro de Retenção/C.O sozinhos —
-  // o técnico só precisa tocar em "Encerrar ligação" na tela seguinte.
-  function callAndStartTimer(setor: string, phone: string) {
-    saveActiveCall(setor, nowInBrasilia().getTime());
-    setIsContactsOpen(false);
-    navigate("/meu-trabalho/relatorios?tipo=retencao-co");
-    window.open(`tel:${phone.replace(/[^\d+]/g, "")}`, "_self");
-  }
-
   function handleDownloadDefectsPdf() {
     const doc = new jsPDF();
     const marginX = 14;
@@ -329,6 +309,9 @@ export function WorkPage() {
   const displayedItems =
     canCollapseList && !showAllItems ? filteredItems.slice(0, VISIBLE_ITEMS_LIMIT) : filteredItems;
   const hiddenItemsCount = canCollapseList ? Math.max(0, filteredItems.length - VISIBLE_ITEMS_LIMIT) : 0;
+  // Digitar uma busca já abre a lista sozinha — esconder os resultados
+  // que o técnico acabou de procurar seria confuso.
+  const shouldShowItemsList = isItemsListOpen || normalizedQuery.length > 0;
 
   const createActionLabel =
     activeSection === "manutencao" ? "Adicionar informações" : "Adicionar equipamento";
@@ -452,6 +435,16 @@ export function WorkPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
+                <button
+                  type="button"
+                  onClick={() => setIsItemsListOpen((open) => !open)}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/40"
+                >
+                  <span>Itens ({visibleItems.length})</span>
+                  {shouldShowItemsList ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                </button>
+
+                {shouldShowItemsList && (
                 <div className="flex flex-col gap-3">
                   {visibleItems.length === 0 ? (
                     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground">
@@ -522,6 +515,7 @@ export function WorkPage() {
                     </>
                   )}
                 </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                   <span className="text-xs font-medium text-muted-foreground">Relatório:</span>
@@ -570,18 +564,6 @@ export function WorkPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <div className="flex flex-col items-center gap-1.5 self-center">
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-12 rounded-full"
-                onClick={() => setIsContactsOpen(true)}
-                aria-label="Contatos rápidos"
-              >
-                <Phone className="size-5" />
-              </Button>
-              <span className="text-xs text-muted-foreground">Contatos</span>
-            </div>
             <Button
               variant="outline"
               className="justify-start gap-2"
@@ -710,44 +692,6 @@ export function WorkPage() {
               Salvar
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isContactsOpen} onOpenChange={setIsContactsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Contatos rápidos</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            {QUICK_CONTACTS.map((contact) =>
-              contact.setor ? (
-                <button
-                  key={contact.label}
-                  type="button"
-                  onClick={() => callAndStartTimer(contact.setor, contact.phone)}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted/40"
-                >
-                  <div>
-                    <p className="font-medium">{contact.label}</p>
-                    <p className="text-sm text-muted-foreground">{contact.phone}</p>
-                  </div>
-                  <Phone className="size-4 text-primary" />
-                </button>
-              ) : (
-                <a
-                  key={contact.label}
-                  href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3 transition-colors hover:bg-muted/40"
-                >
-                  <div>
-                    <p className="font-medium">{contact.label}</p>
-                    <p className="text-sm text-muted-foreground">{contact.phone}</p>
-                  </div>
-                  <Phone className="size-4 text-primary" />
-                </a>
-              )
-            )}
-          </div>
         </DialogContent>
       </Dialog>
 

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Check, Copy, FileStack, Phone, PhoneOff, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Check, Copy, FileStack } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,15 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { saveBatimentoReport } from "@/data/batimentoApi";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
-import { nowInBrasilia } from "@/lib/date";
-import { clearActiveCall, loadActiveCall, saveActiveCall } from "@/lib/activeCall";
 
 // Tipos de relatório disponíveis em "/meu-trabalho/relatorios". A lista
 // existe para caber novos tipos depois, sem mudar a navegação.
-const REPORT_TYPES = [
-  { key: "batimento", label: "Batimento de caixa - Fibrasil" },
-  { key: "retencao-co", label: "Retenção/C.O" },
-] as const;
+const REPORT_TYPES = [{ key: "batimento", label: "Batimento de caixa - Fibrasil" }] as const;
 
 type ReportTypeKey = (typeof REPORT_TYPES)[number]["key"];
 
@@ -24,16 +19,10 @@ const SPLITTER_PORTS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 // Tela "/meu-trabalho/relatorios" — ponto único para os relatórios de
 // texto rápido (copiar e colar) usados no dia a dia, além do PDF já
-// existente em Meu trabalho. Aceita "?tipo=retencao-co" na URL — usado
-// pelo botão de contatos rápidos de Meu trabalho, que já inicia a
-// ligação e traz o técnico direto pra cá.
+// existente em Meu trabalho.
 export function ReportsPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const requestedType = searchParams.get("tipo");
-  const [selectedType, setSelectedType] = useState<ReportTypeKey | null>(
-    REPORT_TYPES.some((type) => type.key === requestedType) ? (requestedType as ReportTypeKey) : null
-  );
+  const [selectedType, setSelectedType] = useState<ReportTypeKey | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,7 +57,6 @@ export function ReportsPage() {
       </Card>
 
       {selectedType === "batimento" && <BatimentoReportForm />}
-      {selectedType === "retencao-co" && <RetencaoCoReportForm />}
     </div>
   );
 }
@@ -236,210 +224,3 @@ function BatimentoReportForm() {
   );
 }
 
-interface CallLogEntry {
-  id: string;
-  setor: string;
-  motivo: string;
-  start: Date;
-  end: Date;
-  durationMs: number;
-}
-
-function formatClock(date: Date): string {
-  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds].map((n) => String(n).padStart(2, "0")).join(":");
-}
-
-// Registra as ligações feitas durante um atendimento (cliente, C.O.,
-// retenção, supervisão etc.) com início/fim/duração via cronômetro —
-// o técnico só aperta "Iniciar" e "Encerrar", nada de digitar horário.
-function RetencaoCoReportForm() {
-  // Resume uma ligação já em andamento (iniciada pelo botão de contatos
-  // rápidos em Meu trabalho, que salva no localStorage antes de trazer o
-  // técnico pra cá) — se não houver nenhuma, começa em branco.
-  const [initialActiveCall] = useState(() => loadActiveCall());
-  const [setor, setSetor] = useState(initialActiveCall?.setor ?? "");
-  const [motivo, setMotivo] = useState("");
-  const [calls, setCalls] = useState<CallLogEntry[]>([]);
-  const [callStart, setCallStart] = useState<Date | null>(
-    initialActiveCall ? new Date(initialActiveCall.start) : null
-  );
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [reportText, setReportText] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  // Um único efeito cuida do "tick" do cronômetro sempre que callStart
-  // muda — cobre tanto o início manual (startCall) quanto o resumo de
-  // uma ligação já em andamento (initialActiveCall acima).
-  useEffect(() => {
-    if (!callStart) return;
-    const tick = () => setElapsedMs(nowInBrasilia().getTime() - callStart.getTime());
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [callStart]);
-
-  function startCall() {
-    const start = nowInBrasilia();
-    saveActiveCall(setor.trim(), start.getTime());
-    setCallStart(start);
-  }
-
-  function endCall() {
-    if (!callStart) return;
-    const end = nowInBrasilia();
-    const durationMs = end.getTime() - callStart.getTime();
-    setCalls((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), setor: setor.trim(), motivo: motivo.trim(), start: callStart, end, durationMs },
-    ]);
-    clearActiveCall();
-    setCallStart(null);
-    setElapsedMs(0);
-    setSetor("");
-    setMotivo("");
-  }
-
-  function removeCall(id: string) {
-    setCalls((prev) => prev.filter((call) => call.id !== id));
-  }
-
-  function buildReportText(): string {
-    const totalMs = calls.reduce((sum, call) => sum + call.durationMs, 0);
-    const lines = ["##REGISTRO DE LIGAÇÕES - RETENÇÃO/C.O##", ""];
-
-    if (calls.length === 0) {
-      lines.push("Nenhuma ligação registrada.");
-    } else {
-      calls.forEach((call, index) => {
-        lines.push(`LIGAÇÃO ${index + 1}`);
-        lines.push(`SETOR: ${call.setor}`);
-        lines.push(`INÍCIO: ${formatClock(call.start)}`);
-        lines.push(`FIM: ${formatClock(call.end)}`);
-        lines.push(`DURAÇÃO: ${formatDuration(call.durationMs)}`);
-        lines.push(`MOTIVO: ${call.motivo}`);
-        lines.push("");
-      });
-      lines.push(`TOTAL DE LIGAÇÕES: ${calls.length}`);
-      lines.push(`TEMPO TOTAL: ${formatDuration(totalMs)}`);
-    }
-
-    return lines.join("\n").trim();
-  }
-
-  function handleGenerateReport() {
-    setReportText(buildReportText());
-    setCopied(false);
-  }
-
-  async function copyReport() {
-    if (!reportText) return;
-    await navigator.clipboard.writeText(reportText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  const isCallActive = callStart !== null;
-
-  return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Registrar ligação</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="retencao-setor">Setor/contato</Label>
-              <Input
-                id="retencao-setor"
-                value={setor}
-                onChange={(e) => setSetor(e.target.value)}
-                placeholder="Ex: Retenção, C.O., Cliente, Supervisão"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="retencao-motivo">Motivo</Label>
-              <Input id="retencao-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isCallActive ? (
-              <Button variant="destructive" className="gap-2" onClick={endCall}>
-                <PhoneOff className="size-4" />
-                Encerrar ligação
-              </Button>
-            ) : (
-              <Button className="gap-2" onClick={startCall}>
-                <Phone className="size-4" />
-                Iniciar ligação
-              </Button>
-            )}
-            {isCallActive && (
-              <span className="font-mono text-lg tabular-nums text-primary">{formatDuration(elapsedMs)}</span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {calls.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Ligações registradas ({calls.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {calls.map((call, index) => (
-              <div key={call.id} className="flex items-start justify-between gap-3 rounded-xl border border-border p-3">
-                <div className="flex flex-col gap-0.5 text-sm">
-                  <p className="font-medium">
-                    Ligação {index + 1} — {call.setor || "Sem setor"}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {formatClock(call.start)} até {formatClock(call.end)} · Duração {formatDuration(call.durationMs)}
-                  </p>
-                  {call.motivo && <p className="text-muted-foreground">Motivo: {call.motivo}</p>}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-muted-foreground hover:text-destructive"
-                  onClick={() => removeCall(call.id)}
-                  aria-label="Remover ligação"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardContent className="flex flex-col gap-3 pt-6">
-          <Button className="w-fit gap-2" onClick={handleGenerateReport} disabled={isCallActive}>
-            <FileStack className="size-4" />
-            Gerar relatório
-          </Button>
-
-          {reportText && (
-            <>
-              <Textarea value={reportText} readOnly rows={10} className="font-mono text-xs" />
-              <Button variant="outline" className="w-fit gap-2" onClick={copyReport}>
-                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                {copied ? "Copiado!" : "Copiar texto"}
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </>
-  );
-}
