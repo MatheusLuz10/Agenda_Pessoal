@@ -147,6 +147,24 @@ export function TtkPage() {
     patchForm({ motivo: type });
   }
 
+  // Converte coordenadas em endereço legível via Nominatim (OpenStreetMap,
+  // gratuito e sem chave de API). Retorna null se a busca falhar — nesse
+  // caso as coordenadas já capturadas continuam válidas, só o endereço
+  // fica em branco para preenchimento manual.
+  async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+        { headers: { Accept: "application/json" } }
+      );
+      if (!response.ok) return null;
+      const data = await response.json();
+      return typeof data.display_name === "string" ? data.display_name : null;
+    } catch {
+      return null;
+    }
+  }
+
   function requestCurrentLocation(target: "cto" | "cliente") {
     if (!navigator.geolocation) {
       setLocationError((prev) => ({ ...prev, [target]: "Geolocalização não suportada neste dispositivo." }));
@@ -155,14 +173,28 @@ export function TtkPage() {
     setLocating((prev) => ({ ...prev, [target]: true }));
     setLocationError((prev) => ({ ...prev, [target]: null }));
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude.toFixed(6);
-        const lng = position.coords.longitude.toFixed(6);
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const lat = latitude.toFixed(6);
+        const lng = longitude.toFixed(6);
+        const address = await reverseGeocode(latitude, longitude);
+
         if (target === "cto") {
-          patchForm({ latitudeCto: lat, longitudeCto: lng });
+          patchForm({ latitudeCto: lat, longitudeCto: lng, ...(address ? { enderecoCto: address } : {}) });
         } else {
-          patchForm({ latitudeCliente: lat, longitudeCliente: lng });
+          patchForm({
+            latitudeCliente: lat,
+            longitudeCliente: lng,
+            ...(address ? { enderecoCliente: address } : {}),
+          });
         }
+
+        setLocationError((prev) => ({
+          ...prev,
+          [target]: address
+            ? null
+            : "Coordenadas capturadas, mas não foi possível identificar o endereço automaticamente.",
+        }));
         setLocating((prev) => ({ ...prev, [target]: false }));
       },
       () => {
@@ -308,7 +340,7 @@ export function TtkPage() {
                   disabled={locating.cto}
                 >
                   <LocateFixed className="size-4" />
-                  {locating.cto ? "Obtendo localização..." : "Usar minha localização"}
+                  {locating.cto ? "Buscando endereço..." : "Usar minha localização"}
                 </Button>
                 {locationError.cto && <p className="text-xs text-destructive">{locationError.cto}</p>}
               </div>
@@ -347,7 +379,7 @@ export function TtkPage() {
                   disabled={locating.cliente}
                 >
                   <LocateFixed className="size-4" />
-                  {locating.cliente ? "Obtendo localização..." : "Usar minha localização"}
+                  {locating.cliente ? "Buscando endereço..." : "Usar minha localização"}
                 </Button>
                 {locationError.cliente && <p className="text-xs text-destructive">{locationError.cliente}</p>}
               </div>
