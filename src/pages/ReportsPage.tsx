@@ -5,13 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { saveBatimentoReport } from "@/data/batimentoApi";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
@@ -191,19 +184,27 @@ function BatimentoReportForm() {
           </div>
 
           <div className="flex flex-col gap-1.5 sm:col-span-2">
-            <Label htmlFor="batimento-porta-utilizada">Porta utilizada</Label>
-            <Select value={portaUtilizada} onValueChange={setPortaUtilizada} disabled={portasLivres.length === 0}>
-              <SelectTrigger id="batimento-porta-utilizada">
-                <SelectValue placeholder={portasLivres.length === 0 ? "Nenhuma porta livre" : "Selecione a porta"} />
-              </SelectTrigger>
-              <SelectContent>
+            <Label>Porta utilizada</Label>
+            {portasLivres.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhuma porta livre para escolher.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
                 {portasLivres.map((port) => (
-                  <SelectItem key={port} value={String(port)}>
+                  <button
+                    key={port}
+                    type="button"
+                    onClick={() => setPortaUtilizada(String(port) === portaUtilizada ? "" : String(port))}
+                    className={`flex size-9 items-center justify-center rounded-full border text-sm font-medium transition-colors ${
+                      portaUtilizada === String(port)
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
                     {port}
-                  </SelectItem>
+                  </button>
                 ))}
-              </SelectContent>
-            </Select>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5 sm:col-span-2">
