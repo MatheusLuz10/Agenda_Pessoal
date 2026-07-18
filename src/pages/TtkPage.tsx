@@ -159,7 +159,12 @@ export function TtkPage() {
       );
       if (!response.ok) return null;
       const data = await response.json();
-      return typeof data.display_name === "string" ? data.display_name : null;
+      const road = data.address?.road;
+      if (typeof road !== "string") {
+        return typeof data.display_name === "string" ? data.display_name : null;
+      }
+      const houseNumber = data.address?.house_number;
+      return typeof houseNumber === "string" ? `${road}, ${houseNumber}` : road;
     } catch {
       return null;
     }

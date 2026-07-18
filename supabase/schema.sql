@@ -146,6 +146,22 @@ create table if not exists public.operation_financial_overrides (
   updated_at timestamptz not null default now()
 );
 
+-- Relatórios de "batimento de caixa" (contagem de portas livres/ocupadas
+-- de uma CTO) gerados na aba "Meu trabalho" > Ações rápidas > Relatórios.
+-- Só os 3 mais recentes são mantidos (ver saveBatimentoReport em
+-- src/data/batimentoApi.ts, que apaga o excedente após cada insert) —
+-- por isso não há necessidade de índice por data aqui.
+create table if not exists public.batimento_reports (
+  id uuid primary key default gen_random_uuid(),
+  atendente text,
+  protocolo text,
+  caixa_batida text,
+  portas_livres text,
+  porta_utilizada text,
+  obs text,
+  created_at timestamptz not null default now()
+);
+
 -- Row Level Security (RLS): obrigatório no Supabase para que a anon key
 -- (pública, exposta no front-end) só acesse o que as políticas abaixo
 -- permitirem.
@@ -159,6 +175,7 @@ alter table public.operation_activities enable row level security;
 alter table public.operation_punches enable row level security;
 alter table public.operation_settings enable row level security;
 alter table public.operation_financial_overrides enable row level security;
+alter table public.batimento_reports enable row level security;
 
 -- Este é um calendário PESSOAL: qualquer usuário autenticado (logado via
 -- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
@@ -179,6 +196,7 @@ drop policy if exists "authenticated full access operation_activities" on public
 drop policy if exists "authenticated full access operation_punches" on public.operation_punches;
 drop policy if exists "authenticated full access operation_settings" on public.operation_settings;
 drop policy if exists "authenticated full access operation_financial_overrides" on public.operation_financial_overrides;
+drop policy if exists "authenticated full access batimento_reports" on public.batimento_reports;
 
 create policy "authenticated full access calendars" on public.calendars
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -208,4 +226,7 @@ create policy "authenticated full access operation_settings" on public.operation
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access operation_financial_overrides" on public.operation_financial_overrides
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access batimento_reports" on public.batimento_reports
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

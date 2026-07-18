@@ -10,11 +10,13 @@ import {
   ChevronUp,
   Copy,
   Download,
+  FileStack,
   FileText,
   Gauge,
   Info,
   Inbox,
   PackageCheck,
+  Phone,
   Plus,
   Search,
   ShieldAlert,
@@ -69,6 +71,13 @@ const sectionConfig: Record<
   },
 };
 
+// Contatos de discagem rápida do botão redondo em Ações rápidas.
+const QUICK_CONTACTS = [
+  { label: "Retenção", phone: "0800 602 3040" },
+  { label: "Batimento", phone: "0151142930660" },
+  { label: "Suporte C.O", phone: "0800 600 9192" },
+] as const;
+
 // Datas relativas a hoje, usadas como padrão para os nomes dos arquivos de
 // relatório baixados.
 function relativeISO(offsetDays: number): string {
@@ -98,6 +107,7 @@ export function WorkPage() {
   const [isTextReportOpen, setIsTextReportOpen] = useState(false);
   const [textReportContent, setTextReportContent] = useState("");
   const [textReportCopied, setTextReportCopied] = useState(false);
+  const [isContactsOpen, setIsContactsOpen] = useState(false);
   const VISIBLE_ITEMS_LIMIT = 3;
 
   const defectiveItems = items.filter((item) => item.condition === "Defeituoso");
@@ -547,6 +557,18 @@ export function WorkPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-col items-center gap-1.5 self-center">
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-12 rounded-full"
+                onClick={() => setIsContactsOpen(true)}
+                aria-label="Contatos rápidos"
+              >
+                <Phone className="size-5" />
+              </Button>
+              <span className="text-xs text-muted-foreground">Contatos</span>
+            </div>
             <Button
               variant="outline"
               className="justify-start gap-2"
@@ -600,6 +622,14 @@ export function WorkPage() {
             >
               <Wrench className="size-4" />
               Abertura de TTK
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => navigate("/meu-trabalho/relatorios")}
+            >
+              <FileStack className="size-4" />
+              Relatórios
             </Button>
           </CardContent>
         </Card>
@@ -667,6 +697,29 @@ export function WorkPage() {
               Salvar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isContactsOpen} onOpenChange={setIsContactsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Contatos rápidos</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            {QUICK_CONTACTS.map((contact) => (
+              <a
+                key={contact.label}
+                href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border p-3 transition-colors hover:bg-muted/40"
+              >
+                <div>
+                  <p className="font-medium">{contact.label}</p>
+                  <p className="text-sm text-muted-foreground">{contact.phone}</p>
+                </div>
+                <Phone className="size-4 text-primary" />
+              </a>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
 
