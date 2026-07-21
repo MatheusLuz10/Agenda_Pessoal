@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Lightbulb, LogOut, Moon, Sun } from "lucide-react";
+import { Globe, LogOut, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
@@ -7,22 +7,18 @@ import { isSupabaseConfigured } from "@/lib/supabaseClient";
 // Cabeçalho fixo no topo, presente em todas as páginas (renderizado pelo
 // AppLayout). Contém a logo e o alternador de tema claro/escuro.
 export function Header() {
-  const [darkMode, setDarkMode] = useState(false);
-  const { signOut } = useAuth();
-
-  // Ao montar o componente, decide o tema inicial: usa o que foi salvo
-  // antes no localStorage ou, na primeira visita, segue a preferência do
-  // sistema operacional do usuário (prefers-color-scheme).
-  useEffect(() => {
+  // Tema inicial: usa o que foi salvo antes no localStorage ou, na
+  // primeira visita, segue a preferência do sistema operacional do
+  // usuário (prefers-color-scheme).
+  const [darkMode, setDarkMode] = useState(() => {
     const storedTheme = localStorage.getItem("theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const isDark = storedTheme ? storedTheme === "dark" : prefersDark;
+    return storedTheme ? storedTheme === "dark" : prefersDark;
+  });
+  const { signOut } = useAuth();
 
-    setDarkMode(isDark);
-    document.documentElement.classList.toggle("dark", isDark);
-  }, []);
-
-  // Sempre que `darkMode` mudar (ex: usuário clicou no botão), aplica a
+  // Sempre que `darkMode` mudar (ex: usuário clicou no botão, ou o valor
+  // inicial calculado acima), aplica a
   // classe "dark" no <html> (o Tailwind usa essa classe para trocar as
   // variáveis de cor definidas em index.css) e salva a escolha.
   useEffect(() => {
@@ -34,9 +30,14 @@ export function Header() {
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur-md sm:px-6">
       <div className="flex items-center gap-2">
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Lightbulb className="size-4.5" />
+          <Globe className="size-4.5" />
         </div>
-        <span className="text-base font-semibold tracking-tight">Otimizza camp</span>
+        <span
+          className="text-lg font-bold tracking-tight"
+          style={{ fontFamily: "'Quicksand', sans-serif" }}
+        >
+          Otimizza Vida
+        </span>
       </div>
 
       <div className="flex items-center gap-2">

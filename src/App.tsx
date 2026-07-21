@@ -15,6 +15,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { OperationsPage } from "@/pages/OperationsPage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { TimeManagementPage } from "@/pages/TimeManagementPage";
 import { TtkPage } from "@/pages/TtkPage";
 import { WorkPage } from "@/pages/WorkPage";
 
@@ -46,6 +47,7 @@ function App() {
               <Route path="/meu-trabalho/ttk" element={<TtkPage />} />
               <Route path="/meu-trabalho/relatorios" element={<ReportsPage />} />
               <Route path="/operacao" element={<OperationsPage />} />
+              <Route path="/gestao-de-tempo" element={<TimeManagementPage />} />
               <Route path="/assistente" element={<AssistantPage />} />
               <Route path="/financas" element={<FinancesPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />

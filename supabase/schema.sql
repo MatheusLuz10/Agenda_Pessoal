@@ -186,6 +186,169 @@ create table if not exists public.batimento_reports (
   created_at timestamptz not null default now()
 );
 
+-- ==========================================================================
+-- Módulo "Motor de Regras" (src/modules/rule-engine) — completamente
+-- isolado do resto do app: organiza automaticamente as tarefas do
+-- usuário por regras determinísticas (sem IA). Tabelas prefixadas com
+-- "rule_engine_" para não colidir com nada existente.
+-- ==========================================================================
+
+-- Ordem de prioridade das categorias (Desenvolvimento pessoal, Saúde,
+-- Relacionamento, Casa, Pets, Financeiro por padrão) — configurável pelo
+-- usuário. Vazio = o front-end usa a ordem padrão até o usuário reordenar
+-- pela primeira vez (mesmo padrão de operation_settings: null/vazio =
+-- "usar valor padrão").
+create table if not exists public.rule_engine_priorities (
+  id uuid primary key default gen_random_uuid(),
+  category text not null unique,
+  position integer not null,
+  created_at timestamptz not null default now()
+);
+
+-- Horários fixos/bloqueados da rotina (trabalho, faculdade, sono etc.),
+-- recorrentes por dia da semana (0 = domingo .. 6 = sábado).
+create table if not exists public.rule_engine_blocked_schedules (
+  id uuid primary key default gen_random_uuid(),
+  label text not null,
+  day_of_week integer not null check (day_of_week between 0 and 6),
+  start_time time not null,
+  end_time time not null,
+  created_at timestamptz not null default now()
+);
+
+-- Regras de negócio cadastráveis (ex: "Nunca sacrificar horário de
+-- estudo") que o motor de decisão usa pra organizar o dia.
+create table if not exists public.rule_engine_rules (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  enabled boolean not null default true,
+  priority integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Índice único usado pelo "on conflict (name)" do seed de regras mais
+-- abaixo, pra rodar este script de novo sem duplicar a regra padrão.
+create unique index if not exists rule_engine_rules_name_idx on public.rule_engine_rules (name);
+
+-- Histórico de decisões tomadas pelo motor (ex: "Banheiro adiado porque
+-- estudo possui prioridade maior"), exibido na aba Histórico.
+create table if not exists public.rule_engine_planner_logs (
+  id uuid primary key default gen_random_uuid(),
+  decision text not null,
+  reason text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Registro de execução de cada atividade da vida diária (não é do
+-- trabalho) medido pelo cronômetro de "Gestão de tempo", vinculado a
+-- uma categoria de prioridade — usado internamente pelo motor pra
+-- calcular o tempo médio de cada atividade e melhorar o planejamento
+-- ("montar o dia" com base no tempo real de cada uma). task_id não tem
+-- FK pra public.tasks de propósito: o histórico deve sobreviver mesmo
+-- que a tarefa original seja apagada depois.
+create table if not exists public.rule_engine_execution_history (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid,
+  activity_name text,
+  category text,
+  started_at timestamptz not null,
+  finished_at timestamptz,
+  duration_seconds integer,
+  created_at timestamptz not null default now()
+);
+
+-- "add column if not exists" garante que quem já rodou este schema
+-- antes (sem essas colunas) recebe elas numa nova execução, sem erro.
+alter table public.rule_engine_execution_history add column if not exists activity_name text;
+alter table public.rule_engine_execution_history add column if not exists category text;
+
+-- Estado do planejamento do dia (gerado ao clicar em "Iniciar Dia"), uma
+-- linha por data.
+create table if not exists public.rule_engine_daily_plan (
+  id uuid primary key default gen_random_uuid(),
+  date date not null unique,
+  status text not null default 'nao_iniciado' check (status in ('nao_iniciado', 'em_andamento', 'concluido')),
+  current_task_id uuid,
+  generated_at timestamptz not null default now()
+);
+
+-- Tarefas de rotina (casa, saúde, relacionamento etc.) — diferente de
+-- public.tasks (compromissos com data fixa em Calendários): aqui é
+-- "faça isso a cada N dias", sem data marcada. "Iniciar Dia" cruza
+-- interval_days com o último registro em rule_engine_execution_history
+-- (task_id = id desta tarefa de rotina) pra saber se já venceu.
+-- name é unique pra permitir seed idempotente (on conflict do nothing).
+create table if not exists public.rule_engine_routine_tasks (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  category text not null,
+  interval_days integer not null check (interval_days > 0),
+  priority integer not null default 0,
+  enabled boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- Carga inicial da rotina de casa, saúde, relacionamento etc. — só
+-- entra na primeira vez (on conflict do nothing pelo nome), então é
+-- seguro editar/apagar essas linhas pelo app depois: rodar este script
+-- de novo não vai trazê-las de volta nem duplicar.
+insert into public.rule_engine_routine_tasks (name, category, interval_days, priority) values
+  ('Lavar roupas brancas', 'Casa', 7, 0),
+  ('Lavar roupas pretas', 'Casa', 7, 0),
+  ('Lavar roupas de cores', 'Casa', 7, 0),
+  ('Lavar roupa de trabalho', 'Casa', 2, 1),
+  ('Lavar lençol dos pets', 'Pets', 7, 0),
+  ('Dobrar e guardar roupa', 'Casa', 3, 0),
+  ('Limpar a máquina de lavar', 'Casa', 30, 0),
+  ('Arrumar armário da cozinha', 'Casa', 30, 0),
+  ('Limpar geladeira', 'Casa', 30, 0),
+  ('Lavar e guardar louça', 'Casa', 1, 1),
+  ('Limpar fogão', 'Casa', 7, 0),
+  ('Limpar forno do fogão', 'Casa', 30, 0),
+  ('Aguar planta da cozinha', 'Casa', 3, 0),
+  ('Limpar forno e airfryer (quando houver uso)', 'Casa', 14, 0),
+  ('Organizar armário do quarto', 'Casa', 30, 0),
+  ('Organizar material de limpeza', 'Casa', 30, 0),
+  ('Trocar água (antes de acabar o 4º garrafão de 20L)', 'Casa', 20, 0),
+  ('Varrer a casa', 'Casa', 2, 0),
+  ('Organizar quarto', 'Casa', 3, 0),
+  ('Organizar escritório', 'Casa', 7, 0),
+  ('Alimentar os pets', 'Pets', 1, 2),
+  ('Limpar a sala (onde os pets ficam)', 'Pets', 2, 0),
+  ('Passear com os pets', 'Pets', 2, 1),
+  ('Lavar garagem', 'Casa', 2, 0),
+  ('Juntar cocô dos pets (manhã)', 'Pets', 1, 2),
+  ('Limpar areia dos gatos (manhã)', 'Pets', 1, 2),
+  ('Limpar e organizar o carro', 'Casa', 7, 0),
+  ('Estudar material da faculdade', 'Desenvolvimento pessoal', 1, 2),
+  ('Estudar material no Prime Video', 'Desenvolvimento pessoal', 2, 1),
+  ('Tempo de qualidade com o marido', 'Relacionamento', 2, 1),
+  ('Fazer uma surpresa para o marido', 'Relacionamento', 30, 0),
+  ('Limpar banheiro', 'Casa', 7, 0),
+  ('Faxina bruta', 'Casa', 40, 0),
+  ('Cuidar das plantas', 'Casa', 30, 0),
+  ('Correr', 'Saúde', 2, 0),
+  ('Ir para academia', 'Saúde', 2, 0),
+  ('Sexo', 'Relacionamento', 3, 1),
+  ('Pegar sol', 'Saúde', 30, 0),
+  ('Rodar de Uber', 'Financeiro', 2, 0)
+on conflict (name) do nothing;
+
+-- Regra que documenta o princípio de priorização pedido explicitamente:
+-- desenvolvimento pessoal nunca deve ser sacrificado por tarefas de
+-- prioridade mais baixa (ver DEFAULT_PRIORITY_CATEGORIES). O motor de
+-- decisão já respeita isso ao ordenar a fila por posição em
+-- Prioridades — esta linha só torna a regra visível/editável pro
+-- usuário na aba Regras.
+insert into public.rule_engine_rules (name, description, enabled, priority) values (
+  'Nunca sacrificar desenvolvimento pessoal',
+  'Tarefas de Desenvolvimento pessoal (estudo, faculdade) sempre vêm antes de tarefas de Casa, Pets ou Financeiro na fila do dia, mesmo que estas estejam atrasadas — a não ser que o atraso da tarefa de casa seja crítico.',
+  true,
+  10
+)
+on conflict (name) do nothing;
+
 -- Row Level Security (RLS): obrigatório no Supabase para que a anon key
 -- (pública, exposta no front-end) só acesse o que as políticas abaixo
 -- permitirem.
@@ -201,6 +364,13 @@ alter table public.operation_settings enable row level security;
 alter table public.operation_financial_overrides enable row level security;
 alter table public.batimento_reports enable row level security;
 alter table public.user_profile enable row level security;
+alter table public.rule_engine_priorities enable row level security;
+alter table public.rule_engine_blocked_schedules enable row level security;
+alter table public.rule_engine_rules enable row level security;
+alter table public.rule_engine_planner_logs enable row level security;
+alter table public.rule_engine_execution_history enable row level security;
+alter table public.rule_engine_daily_plan enable row level security;
+alter table public.rule_engine_routine_tasks enable row level security;
 
 -- Este é um calendário PESSOAL: qualquer usuário autenticado (logado via
 -- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
@@ -223,6 +393,13 @@ drop policy if exists "authenticated full access operation_settings" on public.o
 drop policy if exists "authenticated full access operation_financial_overrides" on public.operation_financial_overrides;
 drop policy if exists "authenticated full access batimento_reports" on public.batimento_reports;
 drop policy if exists "authenticated full access user_profile" on public.user_profile;
+drop policy if exists "authenticated full access rule_engine_priorities" on public.rule_engine_priorities;
+drop policy if exists "authenticated full access rule_engine_blocked_schedules" on public.rule_engine_blocked_schedules;
+drop policy if exists "authenticated full access rule_engine_rules" on public.rule_engine_rules;
+drop policy if exists "authenticated full access rule_engine_planner_logs" on public.rule_engine_planner_logs;
+drop policy if exists "authenticated full access rule_engine_execution_history" on public.rule_engine_execution_history;
+drop policy if exists "authenticated full access rule_engine_daily_plan" on public.rule_engine_daily_plan;
+drop policy if exists "authenticated full access rule_engine_routine_tasks" on public.rule_engine_routine_tasks;
 
 create policy "authenticated full access calendars" on public.calendars
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -258,4 +435,25 @@ create policy "authenticated full access batimento_reports" on public.batimento_
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access user_profile" on public.user_profile
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access rule_engine_priorities" on public.rule_engine_priorities
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access rule_engine_blocked_schedules" on public.rule_engine_blocked_schedules
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access rule_engine_rules" on public.rule_engine_rules
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access rule_engine_planner_logs" on public.rule_engine_planner_logs
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access rule_engine_execution_history" on public.rule_engine_execution_history
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access rule_engine_daily_plan" on public.rule_engine_daily_plan
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access rule_engine_routine_tasks" on public.rule_engine_routine_tasks
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
