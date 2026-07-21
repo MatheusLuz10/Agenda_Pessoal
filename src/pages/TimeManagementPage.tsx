@@ -266,10 +266,18 @@ export function TimeManagementPage() {
     if (!callStart) return;
     const end = nowInBrasilia();
     const durationSeconds = Math.round((end.getTime() - callStart.getTime()) / 1000);
+    const trimmedName = activityName.trim() || "Sem nome";
+    // Se o nome bater com uma tarefa de rotina já cadastrada, vincula o
+    // registro a ela (taskId) — assim ela conta como "feita agora" e só
+    // volta pra fila de "Iniciar Dia" quando o intervalo dela vencer de
+    // novo, mesmo tendo sido cronometrada por aqui em vez de lá.
+    const matchedRoutine = routineTasks.find(
+      (routine) => routine.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
     addEntry({
-      taskId: null,
-      activityName: activityName.trim() || "Sem nome",
-      category: activityCategory || null,
+      taskId: matchedRoutine?.id ?? null,
+      activityName: trimmedName,
+      category: activityCategory || matchedRoutine?.category || null,
       startedAt: callStart.toISOString(),
       finishedAt: end.toISOString(),
       durationSeconds,
@@ -292,6 +300,10 @@ export function TimeManagementPage() {
       else next.add(id);
       return next;
     });
+  }
+
+  function toggleAllEntriesSelection() {
+    setSelectedEntryIds((prev) => (prev.size === entries.length ? new Set() : new Set(entries.map((e) => e.id))));
   }
 
   function handleDeleteSelectedEntries() {
@@ -422,6 +434,12 @@ export function TimeManagementPage() {
       else next.add(id);
       return next;
     });
+  }
+
+  function toggleAllRoutinesSelection() {
+    setSelectedRoutineIds((prev) =>
+      prev.size === routineTasks.length ? new Set() : new Set(routineTasks.map((r) => r.id))
+    );
   }
 
   function handleDeleteSelectedRoutines() {
@@ -809,7 +827,15 @@ export function TimeManagementPage() {
                 Nenhuma tarefa de rotina cadastrada ainda (ex: lavar louça, alimentar os pets, limpar banheiro).
               </p>
             ) : (
-              routineTasks.map((routine) => (
+              <>
+                <label className="flex w-fit items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={selectedRoutineIds.size === routineTasks.length}
+                    onCheckedChange={toggleAllRoutinesSelection}
+                  />
+                  Selecionar todas
+                </label>
+                {routineTasks.map((routine) => (
                 <div
                   key={routine.id}
                   className="flex items-start justify-between gap-3 rounded-xl border border-border p-3"
@@ -849,7 +875,8 @@ export function TimeManagementPage() {
                     </Button>
                   </div>
                 </div>
-              ))
+                ))}
+              </>
             )}
           </CardContent>
         </Card>
@@ -918,7 +945,15 @@ export function TimeManagementPage() {
                 Nenhuma atividade registrada ainda.
               </p>
             ) : (
-              entries.map((entry) => {
+              <>
+                <label className="flex w-fit items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={selectedEntryIds.size === entries.length}
+                    onCheckedChange={toggleAllEntriesSelection}
+                  />
+                  Selecionar todos
+                </label>
+                {entries.map((entry) => {
                 const start = new Date(entry.startedAt);
                 const end = entry.finishedAt ? new Date(entry.finishedAt) : null;
                 return (
@@ -948,7 +983,8 @@ export function TimeManagementPage() {
                     <EntryMenu onEdit={() => setEditingEntry(entry)} onDelete={() => handleDelete(entry.id)} />
                   </div>
                 );
-              })
+                })}
+              </>
             )}
           </CardContent>
         </Card>
