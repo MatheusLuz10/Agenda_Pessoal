@@ -42,5 +42,11 @@ export function useExecutionHistory() {
     if (isSupabaseConfigured) await removeExecutionHistoryEntry(id);
   }
 
-  return { entries, loading, addEntry, editEntry, deleteEntry };
+  async function deleteEntries(ids: string[]) {
+    const idSet = new Set(ids);
+    setEntries((prev) => prev.filter((entry) => !idSet.has(entry.id)));
+    if (isSupabaseConfigured) await Promise.all(ids.map((id) => removeExecutionHistoryEntry(id)));
+  }
+
+  return { entries, loading, addEntry, editEntry, deleteEntry, deleteEntries };
 }

@@ -41,5 +41,11 @@ export function useRoutineTasks() {
     if (isSupabaseConfigured) await removeRoutineTask(id);
   }
 
-  return { routineTasks, loading, addRoutineTask, editRoutineTask, deleteRoutineTask };
+  async function deleteRoutineTasks(ids: string[]) {
+    const idSet = new Set(ids);
+    setRoutineTasks((prev) => prev.filter((task) => !idSet.has(task.id)));
+    if (isSupabaseConfigured) await Promise.all(ids.map((id) => removeRoutineTask(id)));
+  }
+
+  return { routineTasks, loading, addRoutineTask, editRoutineTask, deleteRoutineTask, deleteRoutineTasks };
 }

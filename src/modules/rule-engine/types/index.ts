@@ -20,7 +20,7 @@ export interface PriorityCategory {
 export interface BlockedSchedule {
   id: string;
   label: string;
-  dayOfWeek: number; // 0 = domingo .. 6 = sábado
+  dayOfWeek: number | null; // 0 = domingo .. 6 = sábado; null = todos os dias
   startTime: string; // HH:mm
   endTime: string; // HH:mm
 }
@@ -60,6 +60,11 @@ export interface RoutineTask {
   category: string;
   intervalDays: number;
   priority: number;
+  // Duração estimada em minutos. null = ainda sem cronograma definido —
+  // a tarefa não fica "ativa" (não aparece em "Iniciar Dia") até ter um
+  // valor aqui, porque sem isso o resumo do dia não sabe quanto tempo
+  // ela vai ocupar.
+  estimatedMinutes: number | null;
   enabled: boolean;
 }
 

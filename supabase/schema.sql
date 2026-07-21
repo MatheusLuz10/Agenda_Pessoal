@@ -206,15 +206,20 @@ create table if not exists public.rule_engine_priorities (
 );
 
 -- Horários fixos/bloqueados da rotina (trabalho, faculdade, sono etc.),
--- recorrentes por dia da semana (0 = domingo .. 6 = sábado).
+-- recorrentes por dia da semana (0 = domingo .. 6 = sábado). day_of_week
+-- nulo = todos os dias da semana (ex: sono, que bloqueia todo dia).
 create table if not exists public.rule_engine_blocked_schedules (
   id uuid primary key default gen_random_uuid(),
   label text not null,
-  day_of_week integer not null check (day_of_week between 0 and 6),
+  day_of_week integer check (day_of_week between 0 and 6),
   start_time time not null,
   end_time time not null,
   created_at timestamptz not null default now()
 );
+
+-- Permite rodar este script de novo em quem já tinha a coluna como
+-- "not null" de uma versão anterior, sem dar erro.
+alter table public.rule_engine_blocked_schedules alter column day_of_week drop not null;
 
 -- Regras de negócio cadastráveis (ex: "Nunca sacrificar horário de
 -- estudo") que o motor de decisão usa pra organizar o dia.
@@ -285,54 +290,62 @@ create table if not exists public.rule_engine_routine_tasks (
   category text not null,
   interval_days integer not null check (interval_days > 0),
   priority integer not null default 0,
+  -- Duração estimada (em minutos) da tarefa. Sem isso definido, o item
+  -- não aparece em "Iniciar Dia" (só fica "ativo" depois de ter uma
+  -- estimativa de tempo) e não entra na conta do resumo do dia.
+  estimated_minutes integer,
   enabled boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+-- "add column if not exists" garante que quem já rodou este schema
+-- antes (sem essa coluna) recebe ela numa nova execução, sem erro.
+alter table public.rule_engine_routine_tasks add column if not exists estimated_minutes integer;
 
 -- Carga inicial da rotina de casa, saúde, relacionamento etc. — só
 -- entra na primeira vez (on conflict do nothing pelo nome), então é
 -- seguro editar/apagar essas linhas pelo app depois: rodar este script
 -- de novo não vai trazê-las de volta nem duplicar.
-insert into public.rule_engine_routine_tasks (name, category, interval_days, priority) values
-  ('Lavar roupas brancas', 'Casa', 7, 0),
-  ('Lavar roupas pretas', 'Casa', 7, 0),
-  ('Lavar roupas de cores', 'Casa', 7, 0),
-  ('Lavar roupa de trabalho', 'Casa', 2, 1),
-  ('Lavar lençol dos pets', 'Pets', 7, 0),
-  ('Dobrar e guardar roupa', 'Casa', 3, 0),
-  ('Limpar a máquina de lavar', 'Casa', 30, 0),
-  ('Arrumar armário da cozinha', 'Casa', 30, 0),
-  ('Limpar geladeira', 'Casa', 30, 0),
-  ('Lavar e guardar louça', 'Casa', 1, 1),
-  ('Limpar fogão', 'Casa', 7, 0),
-  ('Limpar forno do fogão', 'Casa', 30, 0),
-  ('Aguar planta da cozinha', 'Casa', 3, 0),
-  ('Limpar forno e airfryer (quando houver uso)', 'Casa', 14, 0),
-  ('Organizar armário do quarto', 'Casa', 30, 0),
-  ('Organizar material de limpeza', 'Casa', 30, 0),
-  ('Trocar água (antes de acabar o 4º garrafão de 20L)', 'Casa', 20, 0),
-  ('Varrer a casa', 'Casa', 2, 0),
-  ('Organizar quarto', 'Casa', 3, 0),
-  ('Organizar escritório', 'Casa', 7, 0),
-  ('Alimentar os pets', 'Pets', 1, 2),
-  ('Limpar a sala (onde os pets ficam)', 'Pets', 2, 0),
-  ('Passear com os pets', 'Pets', 2, 1),
-  ('Lavar garagem', 'Casa', 2, 0),
-  ('Juntar cocô dos pets (manhã)', 'Pets', 1, 2),
-  ('Limpar areia dos gatos (manhã)', 'Pets', 1, 2),
-  ('Limpar e organizar o carro', 'Casa', 7, 0),
-  ('Estudar material da faculdade', 'Desenvolvimento pessoal', 1, 2),
-  ('Estudar material no Prime Video', 'Desenvolvimento pessoal', 2, 1),
-  ('Tempo de qualidade com o marido', 'Relacionamento', 2, 1),
-  ('Fazer uma surpresa para o marido', 'Relacionamento', 30, 0),
-  ('Limpar banheiro', 'Casa', 7, 0),
-  ('Faxina bruta', 'Casa', 40, 0),
-  ('Cuidar das plantas', 'Casa', 30, 0),
-  ('Correr', 'Saúde', 2, 0),
-  ('Ir para academia', 'Saúde', 2, 0),
-  ('Sexo', 'Relacionamento', 3, 1),
-  ('Pegar sol', 'Saúde', 30, 0),
-  ('Rodar de Uber', 'Financeiro', 2, 0)
+insert into public.rule_engine_routine_tasks (name, category, interval_days, priority, estimated_minutes) values
+  ('Lavar roupas brancas', 'Casa', 7, 0, 10),
+  ('Lavar roupas pretas', 'Casa', 7, 0, 10),
+  ('Lavar roupas de cores', 'Casa', 7, 0, 10),
+  ('Lavar roupa de trabalho', 'Casa', 2, 1, 10),
+  ('Lavar lençol dos pets', 'Pets', 7, 0, 15),
+  ('Dobrar e guardar roupa', 'Casa', 3, 0, 20),
+  ('Limpar a máquina de lavar', 'Casa', 30, 0, 20),
+  ('Arrumar armário da cozinha', 'Casa', 30, 0, 30),
+  ('Limpar geladeira', 'Casa', 30, 0, 30),
+  ('Lavar e guardar louça', 'Casa', 1, 1, 20),
+  ('Limpar fogão', 'Casa', 7, 0, 15),
+  ('Limpar forno do fogão', 'Casa', 30, 0, 25),
+  ('Aguar planta da cozinha', 'Casa', 3, 0, 5),
+  ('Limpar forno e airfryer (quando houver uso)', 'Casa', 14, 0, 15),
+  ('Organizar armário do quarto', 'Casa', 30, 0, 30),
+  ('Organizar material de limpeza', 'Casa', 30, 0, 20),
+  ('Trocar água (antes de acabar o 4º garrafão de 20L)', 'Casa', 20, 0, 5),
+  ('Varrer a casa', 'Casa', 2, 0, 20),
+  ('Organizar quarto', 'Casa', 3, 0, 20),
+  ('Organizar escritório', 'Casa', 7, 0, 20),
+  ('Alimentar os pets', 'Pets', 1, 2, 10),
+  ('Limpar a sala (onde os pets ficam)', 'Pets', 2, 0, 15),
+  ('Passear com os pets', 'Pets', 2, 1, 30),
+  ('Lavar garagem', 'Casa', 2, 0, 20),
+  ('Juntar cocô dos pets (manhã)', 'Pets', 1, 2, 10),
+  ('Limpar areia dos gatos (manhã)', 'Pets', 1, 2, 10),
+  ('Limpar e organizar o carro', 'Casa', 7, 0, 40),
+  ('Estudar material da faculdade', 'Desenvolvimento pessoal', 1, 2, 60),
+  ('Estudar material no Prime Video', 'Desenvolvimento pessoal', 2, 1, 45),
+  ('Tempo de qualidade com o marido', 'Relacionamento', 2, 1, 60),
+  ('Fazer uma surpresa para o marido', 'Relacionamento', 30, 0, 45),
+  ('Limpar banheiro', 'Casa', 7, 0, 30),
+  ('Faxina bruta', 'Casa', 40, 0, 120),
+  ('Cuidar das plantas', 'Casa', 30, 0, 30),
+  ('Correr', 'Saúde', 2, 0, 40),
+  ('Ir para academia', 'Saúde', 2, 0, 60),
+  ('Sexo', 'Relacionamento', 3, 1, 30),
+  ('Pegar sol', 'Saúde', 30, 0, 30),
+  ('Rodar de Uber', 'Financeiro', 2, 0, 120)
 on conflict (name) do nothing;
 
 -- Regra que documenta o princípio de priorização pedido explicitamente:

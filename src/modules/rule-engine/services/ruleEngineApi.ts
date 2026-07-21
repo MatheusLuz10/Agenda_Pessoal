@@ -46,7 +46,7 @@ export async function saveAllPriorities(categories: string[]): Promise<PriorityC
 interface BlockedScheduleRow {
   id: string;
   label: string;
-  day_of_week: number;
+  day_of_week: number | null;
   start_time: string;
   end_time: string;
 }
@@ -244,6 +244,7 @@ interface RoutineTaskRow {
   category: string;
   interval_days: number;
   priority: number;
+  estimated_minutes: number | null;
   enabled: boolean;
 }
 
@@ -254,6 +255,7 @@ function rowToRoutineTask(row: RoutineTaskRow): RoutineTask {
     category: row.category,
     intervalDays: row.interval_days,
     priority: row.priority,
+    estimatedMinutes: row.estimated_minutes,
     enabled: row.enabled,
   };
 }
@@ -275,6 +277,7 @@ export async function createRoutineTask(task: Omit<RoutineTask, "id">): Promise<
       category: task.category,
       interval_days: task.intervalDays,
       priority: task.priority,
+      estimated_minutes: task.estimatedMinutes,
       enabled: task.enabled,
     })
     .select()
@@ -291,6 +294,7 @@ export async function updateRoutineTask(id: string, task: Omit<RoutineTask, "id"
       category: task.category,
       interval_days: task.intervalDays,
       priority: task.priority,
+      estimated_minutes: task.estimatedMinutes,
       enabled: task.enabled,
     })
     .eq("id", id)
