@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { CalendarGroup, Task } from "@/types";
+import type { CalendarGroup, Tag, Task } from "@/types";
 
 // Esta camada isola o "formato do banco" (colunas em snake_case, como
 // `calendar_id`) do "formato do app" (campos em camelCase, como
@@ -47,7 +47,7 @@ function rowToCalendar(row: CalendarRow): CalendarGroup {
   };
 }
 
-function rowToTask(row: TaskRow): Task {
+function rowToTask(row: TaskRow, tags: Tag[] = []): Task {
   return {
     id: row.id,
     calendarId: row.calendar_id,
@@ -58,7 +58,19 @@ function rowToTask(row: TaskRow): Task {
     priority: row.priority,
     observation: row.observation ?? undefined,
     status: row.status,
+    tags,
   };
+}
+
+// Formato de uma linha da tabela "tags" no Postgres.
+interface TagRow {
+  id: string;
+  name: string;
+  color: string;
+}
+
+function rowToTag(row: TagRow): Tag {
+  return { id: row.id, name: row.name, color: row.color };
 }
 
 // Busca todos os calendários do usuário, mais recentes primeiro.
@@ -72,14 +84,77 @@ export async function fetchCalendars(): Promise<CalendarGroup[]> {
 }
 
 // Busca todas as tarefas de todos os calendários (o AgendaContext filtra
-// por calendário em memória via getTasksByCalendar).
+// por calendário em memória via getTasksByCalendar), já com as
+// etiquetas de cada uma juntadas em memória (task_tags não guarda o
+// nome/cor, só o vínculo — por isso duas buscas + merge, em vez de um
+// join só, mesmo padrão simples usado no resto do app).
 export async function fetchTasks(): Promise<Task[]> {
-  const { data, error } = await supabase!
-    .from("tasks")
-    .select("*")
-    .order("date", { ascending: true });
+  const [tasksResult, tags, links] = await Promise.all([
+    supabase!.from("tasks").select("*").order("date", { ascending: true }),
+    fetchTags(),
+    fetchTaskTagLinks(),
+  ]);
+  if (tasksResult.error) throw tasksResult.error;
+
+  const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
+  const tagIdsByTask = new Map<string, string[]>();
+  links.forEach((link) => {
+    const list = tagIdsByTask.get(link.taskId) ?? [];
+    list.push(link.tagId);
+    tagIdsByTask.set(link.taskId, list);
+  });
+
+  return (tasksResult.data as TaskRow[]).map((row) => {
+    const tagIds = tagIdsByTask.get(row.id) ?? [];
+    const taskTags = tagIds.map((id) => tagsById.get(id)).filter((tag): tag is Tag => tag !== undefined);
+    return rowToTask(row, taskTags);
+  });
+}
+
+// --- Etiquetas ---
+
+export async function fetchTags(): Promise<Tag[]> {
+  const { data, error } = await supabase!.from("tags").select("*").order("name", { ascending: true });
   if (error) throw error;
-  return (data as TaskRow[]).map(rowToTask);
+  return (data as TagRow[]).map(rowToTag);
+}
+
+export async function createTag(name: string, color: string): Promise<Tag> {
+  const { data, error } = await supabase!.from("tags").insert({ name, color }).select().single();
+  if (error) throw error;
+  return rowToTag(data as TagRow);
+}
+
+export async function removeTag(tagId: string): Promise<void> {
+  const { error } = await supabase!.from("tags").delete().eq("id", tagId);
+  if (error) throw error;
+}
+
+interface TaskTagLink {
+  taskId: string;
+  tagId: string;
+}
+
+async function fetchTaskTagLinks(): Promise<TaskTagLink[]> {
+  const { data, error } = await supabase!.from("task_tags").select("task_id, tag_id");
+  if (error) throw error;
+  return (data as { task_id: string; tag_id: string }[]).map((row) => ({
+    taskId: row.task_id,
+    tagId: row.tag_id,
+  }));
+}
+
+// Substitui todas as etiquetas de uma tarefa pelas informadas — mais
+// simples e seguro que calcular um diff, e a lista de etiquetas por
+// tarefa é sempre pequena.
+export async function setTaskTags(taskId: string, tagIds: string[]): Promise<void> {
+  const { error: deleteError } = await supabase!.from("task_tags").delete().eq("task_id", taskId);
+  if (deleteError) throw deleteError;
+  if (tagIds.length === 0) return;
+  const { error: insertError } = await supabase!
+    .from("task_tags")
+    .insert(tagIds.map((tagId) => ({ task_id: taskId, tag_id: tagId })));
+  if (insertError) throw insertError;
 }
 
 // Insere um novo calendário e devolve a linha criada (com o id gerado
@@ -103,9 +178,11 @@ export async function createCalendar(
   return rowToCalendar(data as CalendarRow);
 }
 
-// Insere uma nova tarefa e devolve a linha criada.
+// Insere uma nova tarefa e devolve a linha criada. tagIds é opcional —
+// se vier, vincula as etiquetas logo em seguida (task_tags depende do
+// id gerado pelo insert, por isso é um segundo passo).
 export async function createTask(
-  task: Omit<Task, "id" | "status"> & { status?: Task["status"] }
+  task: Omit<Task, "id" | "status" | "tags"> & { status?: Task["status"]; tagIds?: string[] }
 ): Promise<Task> {
   const { data, error } = await supabase!
     .from("tasks")
@@ -122,7 +199,13 @@ export async function createTask(
     .select()
     .single();
   if (error) throw error;
-  return rowToTask(data as TaskRow);
+  const row = data as TaskRow;
+
+  if (task.tagIds && task.tagIds.length > 0) {
+    await setTaskTags(row.id, task.tagIds);
+  }
+
+  return rowToTask(row, []);
 }
 
 // Atualiza o status (pendente/concluída) de uma tarefa existente.

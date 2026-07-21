@@ -133,6 +133,15 @@ export function TaskListItem({ task, showCalendarName = false, onClick }: TaskLi
           {timeStatus === "vencida" && <Badge variant="destructive">Vencida</Badge>}
           {timeStatus === "hoje" && <Badge variant="warning">Hoje</Badge>}
           {timeStatus === "concluida" && <Badge variant="success">Concluída</Badge>}
+          {task.tags.map((tag) => (
+            <span
+              key={tag.id}
+              className="rounded-full border px-2 py-0.5 text-[11px] font-medium"
+              style={{ borderColor: tag.color, color: tag.color }}
+            >
+              {tag.name}
+            </span>
+          ))}
         </div>
       </div>
     </div>

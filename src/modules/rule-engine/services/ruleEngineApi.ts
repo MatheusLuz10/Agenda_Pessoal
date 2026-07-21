@@ -1,5 +1,12 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { BlockedSchedule, ExecutionHistoryEntry, PriorityCategory, RoutineTask, Rule } from "../types";
+import type {
+  BlockedSchedule,
+  ExecutionHistoryEntry,
+  PlannerLog,
+  PriorityCategory,
+  RoutineTask,
+  Rule,
+} from "../types";
 
 // Camada de acesso ao Supabase do Motor de Regras — isola o formato das
 // tabelas (snake_case) do formato usado no módulo (camelCase), mesmo
@@ -307,4 +314,37 @@ export async function updateRoutineTask(id: string, task: Omit<RoutineTask, "id"
 export async function removeRoutineTask(id: string): Promise<void> {
   const { error } = await supabase!.from("rule_engine_routine_tasks").delete().eq("id", id);
   if (error) throw error;
+}
+
+// --- Histórico de decisões do motor ---
+
+interface PlannerLogRow {
+  id: string;
+  decision: string;
+  reason: string;
+  created_at: string;
+}
+
+function rowToPlannerLog(row: PlannerLogRow): PlannerLog {
+  return { id: row.id, decision: row.decision, reason: row.reason, createdAt: row.created_at };
+}
+
+export async function fetchPlannerLogs(): Promise<PlannerLog[]> {
+  const { data, error } = await supabase!
+    .from("rule_engine_planner_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data as PlannerLogRow[]).map(rowToPlannerLog);
+}
+
+export async function createPlannerLog(decision: string, reason: string): Promise<PlannerLog> {
+  const { data, error } = await supabase!
+    .from("rule_engine_planner_logs")
+    .insert({ decision, reason })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToPlannerLog(data as PlannerLogRow);
 }

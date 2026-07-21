@@ -6,6 +6,7 @@ import type {
   OperationSettings,
   PunchRecord,
   ServiceOrder,
+  Tag,
   Task,
   Transaction,
 } from "@/types";
@@ -15,6 +16,12 @@ import { nowInBrasilia } from "@/lib/date";
 // Servem só para o app ter conteúdo visível antes de qualquer integração
 // com um backend real. Quando o Supabase estiver configurado
 // (ver src/lib/supabaseClient.ts), estes arrays deixam de ser usados.
+
+export const mockTags: Tag[] = [
+  { id: "tag-urgente", name: "Urgente", color: "#ef4444" },
+  { id: "tag-faculdade", name: "Faculdade", color: "#3b82f6" },
+  { id: "tag-casa", name: "Casa", color: "#f97316" },
+];
 
 export const mockCalendars: CalendarGroup[] = [
   {
@@ -77,6 +84,7 @@ export const mockTasks: Task[] = [
     time: "23:59",
     priority: "alta",
     status: "pendente",
+    tags: [],
   },
   {
     id: "t2",
@@ -86,6 +94,7 @@ export const mockTasks: Task[] = [
     time: "19:00",
     priority: "media",
     status: "pendente",
+    tags: [],
   },
   {
     id: "t3",
@@ -96,6 +105,7 @@ export const mockTasks: Task[] = [
     time: "10:00",
     priority: "alta",
     status: "pendente",
+    tags: [],
   },
   {
     id: "t4",
@@ -104,6 +114,7 @@ export const mockTasks: Task[] = [
     date: "2026-06-25",
     priority: "media",
     status: "pendente",
+    tags: [],
   },
   {
     id: "t5",
@@ -113,6 +124,7 @@ export const mockTasks: Task[] = [
     time: "14:00",
     priority: "media",
     status: "pendente",
+    tags: [],
   },
   {
     id: "t6",
@@ -121,6 +133,7 @@ export const mockTasks: Task[] = [
     date: "2026-06-15",
     priority: "alta",
     status: "pendente",
+    tags: [],
   },
   {
     id: "t7",
@@ -129,6 +142,7 @@ export const mockTasks: Task[] = [
     date: "2026-06-28",
     priority: "baixa",
     status: "pendente",
+    tags: [],
   },
   {
     id: "t8",
@@ -137,6 +151,7 @@ export const mockTasks: Task[] = [
     date: "2026-06-19",
     priority: "baixa",
     status: "concluida",
+    tags: [],
   },
   {
     id: "t9",
@@ -145,6 +160,7 @@ export const mockTasks: Task[] = [
     date: "2026-07-03",
     priority: "alta",
     status: "pendente",
+    tags: [],
   },
 ];
 

@@ -1,14 +1,18 @@
 import * as React from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { CalendarGroup, Task } from "@/types";
-import { mockCalendars, mockTasks } from "@/data/mockData";
+import type { CalendarGroup, Tag, Task } from "@/types";
+import { mockCalendars, mockTags, mockTasks } from "@/data/mockData";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { todayISO } from "@/lib/date";
 import {
   fetchCalendars,
   fetchTasks,
+  fetchTags,
   createCalendar,
   createTask,
+  createTag,
+  removeTag,
+  setTaskTags,
   updateTaskStatus,
   updateTask as updateTaskApi,
   removeTask,
@@ -23,16 +27,23 @@ import {
 interface AgendaContextValue {
   calendars: CalendarGroup[];
   tasks: Task[];
+  tags: Tag[];
   loading: boolean;
   addCalendar: (calendar: Omit<CalendarGroup, "id" | "createdAt">) => void;
-  addTask: (task: Omit<Task, "id" | "status"> & { status?: Task["status"] }) => void;
+  addTask: (
+    task: Omit<Task, "id" | "status" | "tags"> & { status?: Task["status"]; tagIds?: string[] }
+  ) => void;
   updateTask: (
     taskId: string,
-    fields: Partial<Pick<Task, "title" | "description" | "date" | "time" | "priority" | "observation">>
+    fields: Partial<Pick<Task, "title" | "description" | "date" | "time" | "priority" | "observation">> & {
+      tagIds?: string[];
+    }
   ) => void;
   toggleTaskStatus: (taskId: string) => void;
   deleteTask: (taskId: string) => void;
   deleteCalendar: (calendarId: string) => void;
+  addTag: (name: string, color: string) => Promise<Tag>;
+  deleteTag: (tagId: string) => void;
   getCalendarById: (calendarId: string) => CalendarGroup | undefined;
   getTasksByCalendar: (calendarId: string) => Task[];
 }
@@ -61,6 +72,7 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
     isSupabaseConfigured ? [] : mockCalendars
   );
   const [tasks, setTasks] = useState<Task[]>(isSupabaseConfigured ? [] : mockTasks);
+  const [tags, setTags] = useState<Tag[]>(isSupabaseConfigured ? [] : mockTags);
   const [loading, setLoading] = useState(isSupabaseConfigured);
 
   // Busca os dados reais uma única vez, quando o app inicia (array de
@@ -69,11 +81,12 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
     if (!isSupabaseConfigured) return;
 
     let isMounted = true;
-    Promise.all([fetchCalendars(), fetchTasks()])
-      .then(([calendarsData, tasksData]) => {
+    Promise.all([fetchCalendars(), fetchTasks(), fetchTags()])
+      .then(([calendarsData, tasksData, tagsData]) => {
         if (!isMounted) return;
         setCalendars(calendarsData);
         setTasks(tasksData);
+        setTags(tagsData);
       })
       .catch((error) => {
         console.error("Falha ao carregar dados do Supabase:", error);
@@ -112,31 +125,46 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Mesma lógica de atualização otimista usada em addCalendar, aplicada
-  // à criação de tarefas.
+  // à criação de tarefas. tagIds vira `tags` (objetos completos) só na
+  // UI local, resolvidos a partir do estado `tags` já carregado — o
+  // Supabase guarda só o vínculo (task_tags), não os objetos.
   const addTask: AgendaContextValue["addTask"] = (task) => {
+    const { tagIds, ...taskFields } = task;
+    const resolvedTags = tags.filter((tag) => tagIds?.includes(tag.id));
     const optimisticTask: Task = {
-      ...task,
+      ...taskFields,
       id: `task-${Date.now()}`,
       status: task.status ?? "pendente",
+      tags: resolvedTags,
     };
     setTasks((prev) => [...prev, optimisticTask]);
 
     if (isSupabaseConfigured) {
       createTask(task)
         .then((saved) => {
-          setTasks((prev) => prev.map((t) => (t.id === optimisticTask.id ? saved : t)));
+          setTasks((prev) =>
+            prev.map((t) => (t.id === optimisticTask.id ? { ...saved, tags: resolvedTags } : t))
+          );
         })
         .catch((error) => console.error("Falha ao criar tarefa:", error));
     }
   };
 
   // Atualiza os campos editáveis de uma tarefa já existente. Mesma
-  // estratégia otimista das demais funções de escrita.
+  // estratégia otimista das demais funções de escrita. tagIds, quando
+  // presente, substitui a lista de etiquetas da tarefa por completo.
   const updateTask: AgendaContextValue["updateTask"] = (taskId, fields) => {
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...fields } : t)));
+    const { tagIds, ...restFields } = fields;
+    const resolvedTags = tagIds ? tags.filter((tag) => tagIds.includes(tag.id)) : undefined;
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, ...restFields, ...(resolvedTags ? { tags: resolvedTags } : {}) } : t))
+    );
 
     if (isSupabaseConfigured) {
-      updateTaskApi(taskId, fields).catch((error) =>
+      if (tagIds) {
+        setTaskTags(taskId, tagIds).catch((error) => console.error("Falha ao atualizar etiquetas:", error));
+      }
+      updateTaskApi(taskId, restFields).catch((error) =>
         console.error("Falha ao atualizar tarefa:", error)
       );
     }
@@ -181,6 +209,42 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Cria uma etiqueta nova (ex: "Urgente"), disponível pra qualquer
+  // tarefa a partir de então. Devolve (via Promise) o id final da
+  // etiqueta — quando o Supabase está configurado, espera o id real do
+  // banco em vez do id otimista temporário, pra quem chamou (ex: o
+  // seletor de etiquetas do formulário de tarefa) poder selecionar a
+  // etiqueta certa sem risco de ficar com um id que vai deixar de
+  // existir assim que a resposta do servidor chegar.
+  const addTag: AgendaContextValue["addTag"] = async (name, color) => {
+    const optimisticTag: Tag = { id: `tag-${Date.now()}`, name, color };
+    setTags((prev) => [...prev, optimisticTag]);
+
+    if (isSupabaseConfigured) {
+      try {
+        const saved = await createTag(name, color);
+        setTags((prev) => prev.map((tag) => (tag.id === optimisticTag.id ? saved : tag)));
+        return saved;
+      } catch (error) {
+        console.error("Falha ao criar etiqueta:", error);
+        return optimisticTag;
+      }
+    }
+    return optimisticTag;
+  };
+
+  // Remove a etiqueta e, localmente, tira ela de qualquer tarefa que a
+  // usava. No Supabase, task_tags é limpo pelo próprio banco (ON DELETE
+  // CASCADE, ver supabase/schema.sql).
+  const deleteTag = (tagId: string) => {
+    setTags((prev) => prev.filter((tag) => tag.id !== tagId));
+    setTasks((prev) => prev.map((task) => ({ ...task, tags: task.tags.filter((tag) => tag.id !== tagId) })));
+
+    if (isSupabaseConfigured) {
+      removeTag(tagId).catch((error) => console.error("Falha ao excluir etiqueta:", error));
+    }
+  };
+
   const getCalendarById = (calendarId: string) =>
     calendars.find((c) => c.id === calendarId);
 
@@ -189,11 +253,12 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
 
   // useMemo evita recriar este objeto (e disparar re-renders em cascata
   // nos componentes que usam o contexto) a cada render do Provider,
-  // recalculando só quando calendars/tasks/loading realmente mudam.
+  // recalculando só quando calendars/tasks/tags/loading realmente mudam.
   const value = useMemo(
     () => ({
       calendars,
       tasks,
+      tags,
       loading,
       addCalendar,
       addTask,
@@ -201,10 +266,12 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
       toggleTaskStatus,
       deleteTask,
       deleteCalendar,
+      addTag,
+      deleteTag,
       getCalendarById,
       getTasksByCalendar,
     }),
-    [calendars, tasks, loading]
+    [calendars, tasks, tags, loading]
   );
 
   return <AgendaContext.Provider value={value}>{children}</AgendaContext.Provider>;
