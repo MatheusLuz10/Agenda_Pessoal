@@ -18,10 +18,6 @@ import { useAgenda } from "@/contexts/AgendaContext";
 import { addMonths, formatDateBR } from "@/lib/date";
 import type { Priority, Task } from "@/types";
 
-// Paleta usada pra sortear a cor de uma etiqueta nova (sem precisar de
-// um seletor de cor completo — só um ciclo simples de tons distintos).
-const TAG_COLOR_PALETTE = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#64748b"];
-
 interface AddTaskDialogProps {
   calendarId: string;
   date: string;
@@ -38,7 +34,7 @@ interface AddTaskDialogProps {
 // do AddCalendarDialog, este não tem modo "não controlado" porque sempre
 // precisa saber qual dia/calendário (ou tarefa) está em jogo.
 export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: AddTaskDialogProps) {
-  const { addTask, updateTask, tags, addTag } = useAgenda();
+  const { addTask, updateTask } = useAgenda();
   const isEditing = Boolean(task);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -48,8 +44,6 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
   const [observation, setObservation] = useState("");
   const [repeatMonthly, setRepeatMonthly] = useState(false);
   const [repeatMonths, setRepeatMonths] = useState("2");
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [newTagName, setNewTagName] = useState("");
 
   // Limpa o formulário para a próxima vez que o modal for aberto, ou
   // preenche com os dados da tarefa sendo editada.
@@ -62,25 +56,6 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
     setObservation(task?.observation ?? "");
     setRepeatMonthly(false);
     setRepeatMonths("2");
-    setSelectedTagIds(task?.tags.map((tag) => tag.id) ?? []);
-    setNewTagName("");
-  }
-
-  function toggleTag(tagId: string) {
-    setSelectedTagIds((prev) => (prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]));
-  }
-
-  // Cria a etiqueta e já espera o id final (real, do Supabase, quando
-  // configurado) antes de selecionar — evita selecionar um id
-  // temporário que deixa de existir assim que a resposta do servidor
-  // chegar (ver comentário de addTag em AgendaContext).
-  async function handleCreateTag() {
-    const name = newTagName.trim();
-    if (!name) return;
-    const color = TAG_COLOR_PALETTE[tags.length % TAG_COLOR_PALETTE.length];
-    const created = await addTag(name, color);
-    setSelectedTagIds((prev) => [...prev, created.id]);
-    setNewTagName("");
   }
 
   // Toda vez que o modal abrir (criação ou edição), garante que o
@@ -103,7 +78,6 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
         time: time || undefined,
         priority,
         observation: observation || undefined,
-        tagIds: selectedTagIds,
       });
     } else {
       // "Repetir todo mês": cria uma tarefa independente por mês (mesmo
@@ -119,7 +93,6 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
           date: i === 0 ? taskDate : addMonths(taskDate, i),
           time: time || undefined,
           priority,
-          tagIds: selectedTagIds,
           observation: observation || undefined,
         });
       }
@@ -206,47 +179,6 @@ export function AddTaskDialog({ calendarId, date, open, onOpenChange, task }: Ad
               value={observation}
               onChange={(e) => setObservation(e.target.value)}
             />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label>Etiquetas</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {tags.map((tag) => {
-                const isSelected = selectedTagIds.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => toggleTag(tag.id)}
-                    className="rounded-full border px-2.5 py-1 text-xs font-medium transition-colors"
-                    style={
-                      isSelected
-                        ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
-                        : { borderColor: tag.color, color: tag.color }
-                    }
-                  >
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={newTagName}
-                onChange={(e) => setNewTagName(e.target.value)}
-                placeholder="Nova etiqueta..."
-                className="h-8 text-xs"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleCreateTag();
-                  }
-                }}
-              />
-              <Button type="button" variant="outline" size="sm" onClick={handleCreateTag} disabled={!newTagName.trim()}>
-                Adicionar
-              </Button>
-            </div>
           </div>
 
           {!isEditing && (

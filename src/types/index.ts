@@ -6,14 +6,6 @@ export type Priority = "baixa" | "media" | "alta";
 
 export type TaskStatus = "pendente" | "concluida";
 
-// Uma etiqueta livre (ex: "Urgente", "Faculdade", "Casa") aplicável a
-// qualquer tarefa — várias tarefas podem usar a mesma etiqueta.
-export interface Tag {
-  id: string;
-  name: string;
-  color: string; // hex, ex: "#64748b"
-}
-
 // Uma tarefa/atividade dentro de um calendário específico.
 export interface Task {
   id: string;
@@ -25,7 +17,6 @@ export interface Task {
   priority: Priority;
   observation?: string;
   status: TaskStatus;
-  tags: Tag[];
 }
 
 // Um calendário independente (ex: "Faculdade", "Pets", "Contas").

@@ -3,18 +3,6 @@
 -- arquivo inteiro -> Run. Depois copie a "Project URL" e a "anon key"
 -- (Project Settings > API) para o seu .env.local (ver .env.example).
 
--- Função compartilhada por todas as tabelas: toda vez que uma linha é
--- atualizada, marca updated_at com o horário atual sozinha (não precisa
--- o app lembrar de fazer isso em cada update). "create or replace" torna
--- seguro rodar este script de novo.
-create or replace function public.update_updated_at()
-returns trigger as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$ language plpgsql;
-
 -- Tabela de calendários (grupos independentes, ex: "Faculdade", "Pets").
 create table if not exists public.calendars (
   id uuid primary key default gen_random_uuid(),
@@ -374,92 +362,6 @@ insert into public.rule_engine_rules (name, description, enabled, priority) valu
 )
 on conflict (name) do nothing;
 
--- Etiquetas livres (ex: "Urgente", "Faculdade", "Casa", "Compras",
--- "Saúde") aplicáveis a qualquer tarefa de Calendários. task_tags é a
--- tabela de junção (uma tarefa pode ter várias etiquetas, uma etiqueta
--- pode estar em várias tarefas).
-create table if not exists public.tags (
-  id uuid primary key default gen_random_uuid(),
-  name text not null unique,
-  color text not null default '#64748b',
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.task_tags (
-  task_id uuid not null references public.tasks (id) on delete cascade,
-  tag_id uuid not null references public.tags (id) on delete cascade,
-  created_at timestamptz not null default now(),
-  primary key (task_id, tag_id)
-);
-
-create index if not exists task_tags_tag_id_idx on public.task_tags (tag_id);
-
--- updated_at em todas as tabelas + trigger que mantém ele atualizado
--- sozinho a cada UPDATE (ver update_updated_at() lá no topo do
--- arquivo). "add column if not exists" cobre as tabelas que ainda não
--- tinham essa coluna; as 3 que já tinham (user_profile,
--- operation_settings, operation_financial_overrides) só ganham a
--- trigger agora — antes essa coluna existia mas nunca era atualizada
--- de verdade em nenhum update.
-alter table public.calendars add column if not exists updated_at timestamptz not null default now();
-alter table public.tasks add column if not exists updated_at timestamptz not null default now();
-alter table public.transactions add column if not exists updated_at timestamptz not null default now();
-alter table public.goals add column if not exists updated_at timestamptz not null default now();
-alter table public.equipment_items add column if not exists updated_at timestamptz not null default now();
-alter table public.service_orders add column if not exists updated_at timestamptz not null default now();
-alter table public.operation_activities add column if not exists updated_at timestamptz not null default now();
-alter table public.operation_punches add column if not exists updated_at timestamptz not null default now();
-alter table public.batimento_reports add column if not exists updated_at timestamptz not null default now();
-alter table public.rule_engine_priorities add column if not exists updated_at timestamptz not null default now();
-alter table public.rule_engine_blocked_schedules add column if not exists updated_at timestamptz not null default now();
-alter table public.rule_engine_rules add column if not exists updated_at timestamptz not null default now();
-alter table public.rule_engine_planner_logs add column if not exists updated_at timestamptz not null default now();
-alter table public.rule_engine_execution_history add column if not exists updated_at timestamptz not null default now();
-alter table public.rule_engine_daily_plan add column if not exists updated_at timestamptz not null default now();
-alter table public.rule_engine_routine_tasks add column if not exists updated_at timestamptz not null default now();
-alter table public.tags add column if not exists updated_at timestamptz not null default now();
-
-drop trigger if exists set_updated_at on public.calendars;
-create trigger set_updated_at before update on public.calendars for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.tasks;
-create trigger set_updated_at before update on public.tasks for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.transactions;
-create trigger set_updated_at before update on public.transactions for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.goals;
-create trigger set_updated_at before update on public.goals for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.equipment_items;
-create trigger set_updated_at before update on public.equipment_items for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.service_orders;
-create trigger set_updated_at before update on public.service_orders for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.user_profile;
-create trigger set_updated_at before update on public.user_profile for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.operation_activities;
-create trigger set_updated_at before update on public.operation_activities for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.operation_punches;
-create trigger set_updated_at before update on public.operation_punches for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.operation_settings;
-create trigger set_updated_at before update on public.operation_settings for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.operation_financial_overrides;
-create trigger set_updated_at before update on public.operation_financial_overrides for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.batimento_reports;
-create trigger set_updated_at before update on public.batimento_reports for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.rule_engine_priorities;
-create trigger set_updated_at before update on public.rule_engine_priorities for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.rule_engine_blocked_schedules;
-create trigger set_updated_at before update on public.rule_engine_blocked_schedules for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.rule_engine_rules;
-create trigger set_updated_at before update on public.rule_engine_rules for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.rule_engine_planner_logs;
-create trigger set_updated_at before update on public.rule_engine_planner_logs for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.rule_engine_execution_history;
-create trigger set_updated_at before update on public.rule_engine_execution_history for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.rule_engine_daily_plan;
-create trigger set_updated_at before update on public.rule_engine_daily_plan for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.rule_engine_routine_tasks;
-create trigger set_updated_at before update on public.rule_engine_routine_tasks for each row execute function public.update_updated_at();
-drop trigger if exists set_updated_at on public.tags;
-create trigger set_updated_at before update on public.tags for each row execute function public.update_updated_at();
-
 -- Row Level Security (RLS): obrigatório no Supabase para que a anon key
 -- (pública, exposta no front-end) só acesse o que as políticas abaixo
 -- permitirem.
@@ -482,8 +384,6 @@ alter table public.rule_engine_planner_logs enable row level security;
 alter table public.rule_engine_execution_history enable row level security;
 alter table public.rule_engine_daily_plan enable row level security;
 alter table public.rule_engine_routine_tasks enable row level security;
-alter table public.tags enable row level security;
-alter table public.task_tags enable row level security;
 
 -- Este é um calendário PESSOAL: qualquer usuário autenticado (logado via
 -- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
@@ -513,8 +413,6 @@ drop policy if exists "authenticated full access rule_engine_planner_logs" on pu
 drop policy if exists "authenticated full access rule_engine_execution_history" on public.rule_engine_execution_history;
 drop policy if exists "authenticated full access rule_engine_daily_plan" on public.rule_engine_daily_plan;
 drop policy if exists "authenticated full access rule_engine_routine_tasks" on public.rule_engine_routine_tasks;
-drop policy if exists "authenticated full access tags" on public.tags;
-drop policy if exists "authenticated full access task_tags" on public.task_tags;
 
 create policy "authenticated full access calendars" on public.calendars
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -571,10 +469,4 @@ create policy "authenticated full access rule_engine_daily_plan" on public.rule_
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access rule_engine_routine_tasks" on public.rule_engine_routine_tasks
-  for all using (auth.uid() is not null) with check (auth.uid() is not null);
-
-create policy "authenticated full access tags" on public.tags
-  for all using (auth.uid() is not null) with check (auth.uid() is not null);
-
-create policy "authenticated full access task_tags" on public.task_tags
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
