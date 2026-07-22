@@ -56,6 +56,8 @@ interface BlockedScheduleRow {
   day_of_week: number | null;
   start_time: string;
   end_time: string;
+  mid_start: string | null;
+  mid_end: string | null;
 }
 
 function rowToBlockedSchedule(row: BlockedScheduleRow): BlockedSchedule {
@@ -65,6 +67,8 @@ function rowToBlockedSchedule(row: BlockedScheduleRow): BlockedSchedule {
     dayOfWeek: row.day_of_week,
     startTime: row.start_time.slice(0, 5),
     endTime: row.end_time.slice(0, 5),
+    midStart: row.mid_start ? row.mid_start.slice(0, 5) : null,
+    midEnd: row.mid_end ? row.mid_end.slice(0, 5) : null,
   };
 }
 
@@ -87,6 +91,8 @@ export async function createBlockedSchedule(
       day_of_week: schedule.dayOfWeek,
       start_time: schedule.startTime,
       end_time: schedule.endTime,
+      mid_start: schedule.midStart,
+      mid_end: schedule.midEnd,
     })
     .select()
     .single();

@@ -57,6 +57,24 @@ function minutesBetween(startTime: string, endTime: string): number {
   return endTotal >= startTotal ? endTotal - startTotal : 24 * 60 - startTotal + endTotal;
 }
 
+// Minutos realmente bloqueados por um horário — se tiver pausa no meio
+// (ex: almoço), o trecho midStart→midEnd fica de fora da conta.
+function scheduleBlockedMinutes(schedule: BlockedSchedule): number {
+  if (schedule.midStart && schedule.midEnd) {
+    return (
+      minutesBetween(schedule.startTime, schedule.midStart) + minutesBetween(schedule.midEnd, schedule.endTime)
+    );
+  }
+  return minutesBetween(schedule.startTime, schedule.endTime);
+}
+
+function formatScheduleRange(schedule: BlockedSchedule): string {
+  if (schedule.midStart && schedule.midEnd) {
+    return `${schedule.startTime} às ${schedule.midStart} e ${schedule.midEnd} às ${schedule.endTime} (pausa entre ${schedule.midStart} e ${schedule.midEnd})`;
+  }
+  return `${schedule.startTime} às ${schedule.endTime}`;
+}
+
 // Tarefas atrasadas vêm primeiro, depois ordena por prioridade (alta >
 // média > baixa) e por horário (com horário antes de sem horário).
 function priorityWeight(priority: Task["priority"]): number {
@@ -575,7 +593,7 @@ export function TimeManagementPage() {
     const todayWeekday = nowInBrasilia().getDay();
     const blockedMinutesToday = schedules
       .filter((schedule) => schedule.dayOfWeek === null || schedule.dayOfWeek === todayWeekday)
-      .reduce((sum, schedule) => sum + minutesBetween(schedule.startTime, schedule.endTime), 0);
+      .reduce((sum, schedule) => sum + scheduleBlockedMinutes(schedule), 0);
     const budget = Math.max(0, 24 * 60 - blockedMinutesToday);
 
     const usedFromHistoryToday = entries
@@ -897,7 +915,7 @@ export function TimeManagementPage() {
                   <div className="text-sm">
                     <p className="font-medium">{schedule.label}</p>
                     <p className="text-muted-foreground">
-                      {formatDayOfWeek(schedule.dayOfWeek)} · {schedule.startTime} às {schedule.endTime}
+                      {formatDayOfWeek(schedule.dayOfWeek)} · {formatScheduleRange(schedule)}
                     </p>
                   </div>
                   <Button
@@ -1191,8 +1209,8 @@ export function TimeManagementPage() {
         <ScheduleDialog
           open={isScheduleDialogOpen}
           onOpenChange={setIsScheduleDialogOpen}
-          onSave={(schedule) => {
-            addSchedule(schedule);
+          onSave={(newSchedules) => {
+            newSchedules.forEach((schedule) => addSchedule(schedule));
             setIsScheduleDialogOpen(false);
           }}
         />
@@ -1418,6 +1436,10 @@ function EditEntryDialog({
   );
 }
 
+// Dias úteis (segunda a sexta) não cabem no campo dayOfWeek (um único
+// dia ou "todos"), então viram várias BlockedSchedule — uma por dia.
+const WEEKDAYS_MON_TO_FRI = [1, 2, 3, 4, 5];
+
 function ScheduleDialog({
   open,
   onOpenChange,
@@ -1425,25 +1447,36 @@ function ScheduleDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (schedule: Omit<BlockedSchedule, "id">) => void;
+  onSave: (schedules: Omit<BlockedSchedule, "id">[]) => void;
 }) {
   const [label, setLabel] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState("all");
+  const [dayOfWeek, setDayOfWeek] = useState("weekdays");
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("17:00");
+  const [hasBreak, setHasBreak] = useState(false);
+  const [midStart, setMidStart] = useState("12:00");
+  const [midEnd, setMidEnd] = useState("13:00");
 
   function handleSave() {
     if (!label.trim()) return;
-    onSave({
-      label: label.trim(),
-      dayOfWeek: dayOfWeek === "all" ? null : Number(dayOfWeek),
-      startTime,
-      endTime,
-    });
+    const days = dayOfWeek === "weekdays" ? WEEKDAYS_MON_TO_FRI : dayOfWeek === "all" ? [null] : [Number(dayOfWeek)];
+    onSave(
+      days.map((day) => ({
+        label: label.trim(),
+        dayOfWeek: day,
+        startTime,
+        endTime,
+        midStart: hasBreak ? midStart : null,
+        midEnd: hasBreak ? midEnd : null,
+      }))
+    );
     setLabel("");
-    setDayOfWeek("all");
+    setDayOfWeek("weekdays");
     setStartTime("08:00");
     setEndTime("17:00");
+    setHasBreak(false);
+    setMidStart("12:00");
+    setMidEnd("13:00");
   }
 
   return (
@@ -1469,6 +1502,7 @@ function ScheduleDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="weekdays">Dias úteis (segunda a sexta)</SelectItem>
                 <SelectItem value="all">Todos os dias (semana toda)</SelectItem>
                 {WEEKDAY_LABELS.map((day, index) => (
                   <SelectItem key={day} value={String(index)}>
@@ -1493,6 +1527,39 @@ function ScheduleDialog({
               <Input id="schedule-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="schedule-has-break"
+              checked={hasBreak}
+              onCheckedChange={(v) => setHasBreak(Boolean(v))}
+            />
+            <Label htmlFor="schedule-has-break" className="cursor-pointer font-normal">
+              Tem pausa no meio (ex: almoço)
+            </Label>
+          </div>
+          {hasBreak && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="schedule-mid-start">Meio · início da pausa</Label>
+                <Input
+                  id="schedule-mid-start"
+                  type="time"
+                  value={midStart}
+                  onChange={(e) => setMidStart(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="schedule-mid-end">Meio · fim da pausa</Label>
+                <Input
+                  id="schedule-mid-end"
+                  type="time"
+                  value={midEnd}
+                  onChange={(e) => setMidEnd(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

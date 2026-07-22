@@ -214,12 +214,20 @@ create table if not exists public.rule_engine_blocked_schedules (
   day_of_week integer check (day_of_week between 0 and 6),
   start_time time not null,
   end_time time not null,
+  mid_start time,
+  mid_end time,
   created_at timestamptz not null default now()
 );
 
 -- Permite rodar este script de novo em quem já tinha a coluna como
 -- "not null" de uma versão anterior, sem dar erro.
 alter table public.rule_engine_blocked_schedules alter column day_of_week drop not null;
+
+-- Pausa no meio do bloqueio (ex: almoço no meio do horário de
+-- trabalho) — colunas novas, opcionais, adicionadas com segurança em
+-- quem já tinha a tabela sem elas.
+alter table public.rule_engine_blocked_schedules add column if not exists mid_start time;
+alter table public.rule_engine_blocked_schedules add column if not exists mid_end time;
 
 -- Regras de negócio cadastráveis (ex: "Nunca sacrificar horário de
 -- estudo") que o motor de decisão usa pra organizar o dia.

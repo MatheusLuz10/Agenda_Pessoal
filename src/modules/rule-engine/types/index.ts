@@ -21,8 +21,14 @@ export interface BlockedSchedule {
   id: string;
   label: string;
   dayOfWeek: number | null; // 0 = domingo .. 6 = sábado; null = todos os dias
-  startTime: string; // HH:mm
-  endTime: string; // HH:mm
+  startTime: string; // HH:mm — início
+  endTime: string; // HH:mm — fim
+  // Pausa no meio do bloqueio (ex: almoço no meio do horário de
+  // trabalho): o trecho midStart→midEnd fica livre, e o bloqueio real
+  // vira dois trechos, startTime→midStart e midEnd→endTime. null/null
+  // quando não há pausa (bloqueio contínuo, como antes).
+  midStart: string | null; // HH:mm
+  midEnd: string | null; // HH:mm
 }
 
 export interface Rule {
