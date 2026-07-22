@@ -309,6 +309,15 @@ export function TimeManagementPage() {
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [isRoutineDialogOpen, setIsRoutineDialogOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<RoutineTask | null>(null);
+  // Listas ficam recolhidas por padrão — só mostram o conteúdo quando o
+  // usuário clica no cabeçalho do card, pra reduzir a rolagem da aba.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  function toggleSection(key: string) {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+  function isSectionOpen(key: string) {
+    return Boolean(openSections[key]);
+  }
 
   // "Iniciar Dia": null = ainda não começou o dia (mostra a tela normal
   // com todos os cards). Uma vez montada, a fila só mostra um item de
@@ -846,9 +855,18 @@ export function TimeManagementPage() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader
+            className="flex flex-row items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => toggleSection("priorities")}
+          >
             <CardTitle>Prioridades</CardTitle>
+            {isSectionOpen("priorities") ? (
+              <ChevronUp className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-4 text-muted-foreground" />
+            )}
           </CardHeader>
+          {isSectionOpen("priorities") && (
           <CardContent className="flex flex-col gap-2">
             {categories.map((category, index) => (
               <div
@@ -884,23 +902,41 @@ export function TimeManagementPage() {
               </div>
             ))}
           </CardContent>
+          )}
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardHeader
+            className="flex flex-row items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => toggleSection("schedules")}
+          >
             <CardTitle className="flex items-center gap-2">
               <Clock className="size-4 text-orange-700 dark:text-orange-300" />
               Horários bloqueados
             </CardTitle>
-            <Button
-              size="sm"
-              className="gap-1.5 bg-orange-700 text-white hover:opacity-90"
-              onClick={() => setIsScheduleDialogOpen(true)}
-            >
-              <Plus className="size-4" />
-              Novo bloqueio
-            </Button>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <Button
+                size="sm"
+                className="gap-1.5 bg-orange-700 text-white hover:opacity-90"
+                onClick={() => setIsScheduleDialogOpen(true)}
+              >
+                <Plus className="size-4" />
+                Novo bloqueio
+              </Button>
+              {isSectionOpen("schedules") ? (
+                <ChevronUp
+                  className="size-4 cursor-pointer text-muted-foreground"
+                  onClick={() => toggleSection("schedules")}
+                />
+              ) : (
+                <ChevronDown
+                  className="size-4 cursor-pointer text-muted-foreground"
+                  onClick={() => toggleSection("schedules")}
+                />
+              )}
+            </div>
           </CardHeader>
+          {isSectionOpen("schedules") && (
           <CardContent className="flex flex-col gap-3">
             {schedules.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
@@ -931,20 +967,38 @@ export function TimeManagementPage() {
               ))
             )}
           </CardContent>
+          )}
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardHeader
+            className="flex flex-row items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => toggleSection("rules")}
+          >
             <CardTitle>Regras ({rules.length})</CardTitle>
-            <Button
-              size="sm"
-              className="gap-1.5 bg-orange-700 text-white hover:opacity-90"
-              onClick={openCreateRuleDialog}
-            >
-              <Plus className="size-4" />
-              Nova regra
-            </Button>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <Button
+                size="sm"
+                className="gap-1.5 bg-orange-700 text-white hover:opacity-90"
+                onClick={openCreateRuleDialog}
+              >
+                <Plus className="size-4" />
+                Nova regra
+              </Button>
+              {isSectionOpen("rules") ? (
+                <ChevronUp
+                  className="size-4 cursor-pointer text-muted-foreground"
+                  onClick={() => toggleSection("rules")}
+                />
+              ) : (
+                <ChevronDown
+                  className="size-4 cursor-pointer text-muted-foreground"
+                  onClick={() => toggleSection("rules")}
+                />
+              )}
+            </div>
           </CardHeader>
+          {isSectionOpen("rules") && (
           <CardContent className="flex flex-col gap-3">
             {rules.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
@@ -984,12 +1038,16 @@ export function TimeManagementPage() {
               ))
             )}
           </CardContent>
+          )}
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+          <CardHeader
+            className="flex flex-row flex-wrap items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => toggleSection("routines")}
+          >
             <CardTitle>Rotina da casa ({routineTasks.length})</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               {selectedRoutineIds.size > 0 && (
                 <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDeleteSelectedRoutines}>
                   <Trash2 className="size-4" />
@@ -1004,8 +1062,20 @@ export function TimeManagementPage() {
                 <Plus className="size-4" />
                 Nova tarefa de rotina
               </Button>
+              {isSectionOpen("routines") ? (
+                <ChevronUp
+                  className="size-4 cursor-pointer text-muted-foreground"
+                  onClick={() => toggleSection("routines")}
+                />
+              ) : (
+                <ChevronDown
+                  className="size-4 cursor-pointer text-muted-foreground"
+                  onClick={() => toggleSection("routines")}
+                />
+              )}
             </div>
           </CardHeader>
+          {isSectionOpen("routines") && (
           <CardContent className="flex flex-col gap-3">
             {routineTasks.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
@@ -1064,15 +1134,25 @@ export function TimeManagementPage() {
               </>
             )}
           </CardContent>
+          )}
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader
+            className="flex flex-row items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => toggleSection("stats")}
+          >
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="size-4 text-orange-700 dark:text-orange-300" />
               Estatísticas
             </CardTitle>
+            {isSectionOpen("stats") ? (
+              <ChevronUp className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-4 text-muted-foreground" />
+            )}
           </CardHeader>
+          {isSectionOpen("stats") && (
           <CardContent className="flex flex-col gap-3">
             {entries.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
@@ -1109,21 +1189,39 @@ export function TimeManagementPage() {
               </>
             )}
           </CardContent>
+          )}
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+          <CardHeader
+            className="flex flex-row flex-wrap items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => toggleSection("history")}
+          >
             <CardTitle className="flex items-center gap-2">
               <History className="size-4 text-orange-700 dark:text-orange-300" />
               Histórico ({entries.length})
             </CardTitle>
-            {selectedEntryIds.size > 0 && (
-              <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDeleteSelectedEntries}>
-                <Trash2 className="size-4" />
-                Excluir {selectedEntryIds.size} selecionado(s)
-              </Button>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              {selectedEntryIds.size > 0 && (
+                <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDeleteSelectedEntries}>
+                  <Trash2 className="size-4" />
+                  Excluir {selectedEntryIds.size} selecionado(s)
+                </Button>
+              )}
+            </div>
+            {isSectionOpen("history") ? (
+              <ChevronUp
+                className="size-4 cursor-pointer text-muted-foreground"
+                onClick={() => toggleSection("history")}
+              />
+            ) : (
+              <ChevronDown
+                className="size-4 cursor-pointer text-muted-foreground"
+                onClick={() => toggleSection("history")}
+              />
             )}
           </CardHeader>
+          {isSectionOpen("history") && (
           <CardContent className="flex flex-col gap-3">
             {entries.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
@@ -1172,12 +1270,22 @@ export function TimeManagementPage() {
               </>
             )}
           </CardContent>
+          )}
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader
+            className="flex flex-row items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => toggleSection("logs")}
+          >
             <CardTitle>Decisões do motor ({plannerLogs.length})</CardTitle>
+            {isSectionOpen("logs") ? (
+              <ChevronUp className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-4 text-muted-foreground" />
+            )}
           </CardHeader>
+          {isSectionOpen("logs") && (
           <CardContent className="flex flex-col gap-3">
             {plannerLogs.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
@@ -1193,6 +1301,7 @@ export function TimeManagementPage() {
               ))
             )}
           </CardContent>
+          )}
         </Card>
         </>
         )}
@@ -1751,20 +1860,28 @@ function RoutineDialog({
               onChange={(e) => setPriority(Number(e.target.value) || 0)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="routine-estimate">Tempo estimado (minutos)</Label>
-            <Input
-              id="routine-estimate"
-              type="number"
-              min={1}
-              value={estimatedMinutes}
-              onChange={(e) => setEstimatedMinutes(e.target.value)}
-              placeholder="Ex: 20"
-            />
-            <p className="text-xs text-muted-foreground">
-              Sem essa estimativa, a tarefa não aparece em "Iniciar Dia" nem entra no resumo do dia.
+          {editingRoutine ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="routine-estimate">Tempo estimado (minutos)</Label>
+              <Input
+                id="routine-estimate"
+                type="number"
+                min={1}
+                value={estimatedMinutes}
+                onChange={(e) => setEstimatedMinutes(e.target.value)}
+                placeholder="Ex: 20"
+              />
+              <p className="text-xs text-muted-foreground">
+                Normalmente calibrado sozinho pelo Cronômetro — só mexa aqui se quiser forçar um valor diferente.
+                Sem essa estimativa, a tarefa não aparece em "Iniciar Dia" nem entra no resumo do dia.
+              </p>
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">
+              Depois de salvar, selecione essa tarefa no Cronômetro e cronometre a primeira execução — é assim
+              que ela ganha o tempo estimado e passa a aparecer em "Iniciar Dia".
             </p>
-          </div>
+          )}
           <div className="flex items-center gap-2">
             <Checkbox checked={enabled} onCheckedChange={(v) => setEnabled(Boolean(v))} />
             <Label>Ativa</Label>
