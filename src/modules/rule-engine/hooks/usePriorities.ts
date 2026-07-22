@@ -22,7 +22,11 @@ export function usePriorities() {
   async function reorder(next: string[]) {
     setCategories(next);
     if (isSupabaseConfigured) {
-      await saveAllPriorities(next);
+      try {
+        await saveAllPriorities(next);
+      } catch (error) {
+        console.error("Falha ao salvar ordem de prioridades no Supabase (mantida localmente):", error);
+      }
     }
   }
 

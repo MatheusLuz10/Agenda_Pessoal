@@ -16,23 +16,43 @@ export function useRules() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Otimista: aparece na tela na hora, e só depois tenta salvar no
+  // Supabase — se falhar (ex: tabela ainda não migrada), continua
+  // visível localmente em vez de sumir sem explicação.
   async function addRule(rule: Omit<Rule, "id" | "createdAt">) {
+    const optimisticRule: Rule = { ...rule, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    setRules((prev) => [optimisticRule, ...prev]);
+
     if (isSupabaseConfigured) {
-      const created = await createRule(rule);
-      setRules((prev) => [created, ...prev]);
-    } else {
-      setRules((prev) => [{ ...rule, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...prev]);
+      try {
+        const created = await createRule(rule);
+        setRules((prev) => prev.map((r) => (r.id === optimisticRule.id ? created : r)));
+      } catch (error) {
+        console.error("Falha ao salvar regra no Supabase (mantida localmente):", error);
+      }
     }
   }
 
   async function editRule(id: string, rule: Omit<Rule, "id" | "createdAt">) {
     setRules((prev) => prev.map((existing) => (existing.id === id ? { ...existing, ...rule } : existing)));
-    if (isSupabaseConfigured) await updateRule(id, rule);
+    if (isSupabaseConfigured) {
+      try {
+        await updateRule(id, rule);
+      } catch (error) {
+        console.error("Falha ao atualizar regra no Supabase:", error);
+      }
+    }
   }
 
   async function deleteRule(id: string) {
     setRules((prev) => prev.filter((rule) => rule.id !== id));
-    if (isSupabaseConfigured) await removeRule(id);
+    if (isSupabaseConfigured) {
+      try {
+        await removeRule(id);
+      } catch (error) {
+        console.error("Falha ao excluir regra no Supabase:", error);
+      }
+    }
   }
 
   return { rules, loading, addRule, editRule, deleteRule };

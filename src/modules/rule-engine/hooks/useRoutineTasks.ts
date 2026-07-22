@@ -22,29 +22,56 @@ export function useRoutineTasks() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Otimista: a tarefa aparece na tela na hora, e só depois tenta salvar
+  // no Supabase — se a tabela ainda não existir lá (schema pendente) ou
+  // a gravação falhar por qualquer motivo, a tarefa continua visível
+  // localmente em vez de sumir/nunca aparecer sem explicação.
   async function addRoutineTask(task: Omit<RoutineTask, "id">) {
+    const optimisticTask: RoutineTask = { ...task, id: crypto.randomUUID() };
+    setRoutineTasks((prev) => [...prev, optimisticTask]);
+
     if (isSupabaseConfigured) {
-      const created = await createRoutineTask(task);
-      setRoutineTasks((prev) => [...prev, created]);
-    } else {
-      setRoutineTasks((prev) => [...prev, { ...task, id: crypto.randomUUID() }]);
+      try {
+        const created = await createRoutineTask(task);
+        setRoutineTasks((prev) => prev.map((t) => (t.id === optimisticTask.id ? created : t)));
+      } catch (error) {
+        console.error("Falha ao salvar tarefa de rotina no Supabase (mantida localmente):", error);
+      }
     }
   }
 
   async function editRoutineTask(id: string, task: Omit<RoutineTask, "id">) {
     setRoutineTasks((prev) => prev.map((existing) => (existing.id === id ? { ...existing, ...task } : existing)));
-    if (isSupabaseConfigured) await updateRoutineTask(id, task);
+    if (isSupabaseConfigured) {
+      try {
+        await updateRoutineTask(id, task);
+      } catch (error) {
+        console.error("Falha ao atualizar tarefa de rotina no Supabase:", error);
+      }
+    }
   }
 
   async function deleteRoutineTask(id: string) {
     setRoutineTasks((prev) => prev.filter((task) => task.id !== id));
-    if (isSupabaseConfigured) await removeRoutineTask(id);
+    if (isSupabaseConfigured) {
+      try {
+        await removeRoutineTask(id);
+      } catch (error) {
+        console.error("Falha ao excluir tarefa de rotina no Supabase:", error);
+      }
+    }
   }
 
   async function deleteRoutineTasks(ids: string[]) {
     const idSet = new Set(ids);
     setRoutineTasks((prev) => prev.filter((task) => !idSet.has(task.id)));
-    if (isSupabaseConfigured) await Promise.all(ids.map((id) => removeRoutineTask(id)));
+    if (isSupabaseConfigured) {
+      try {
+        await Promise.all(ids.map((id) => removeRoutineTask(id)));
+      } catch (error) {
+        console.error("Falha ao excluir tarefas de rotina no Supabase:", error);
+      }
+    }
   }
 
   return { routineTasks, loading, addRoutineTask, editRoutineTask, deleteRoutineTask, deleteRoutineTasks };

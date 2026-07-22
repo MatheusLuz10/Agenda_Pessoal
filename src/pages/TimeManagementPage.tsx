@@ -34,6 +34,7 @@ import { useAgenda } from "@/contexts/AgendaContext";
 import { nowInBrasilia, todayISO } from "@/lib/date";
 import { useBlockedSchedules } from "@/modules/rule-engine/hooks/useBlockedSchedules";
 import { useExecutionHistory } from "@/modules/rule-engine/hooks/useExecutionHistory";
+import { usePlannerLogs } from "@/modules/rule-engine/hooks/usePlannerLogs";
 import { usePriorities } from "@/modules/rule-engine/hooks/usePriorities";
 import { useRoutineTasks } from "@/modules/rule-engine/hooks/useRoutineTasks";
 import { useRules } from "@/modules/rule-engine/hooks/useRules";
@@ -66,6 +67,35 @@ function priorityWeight(priority: Task["priority"]): number {
 // valor padrão só pra entrar na conta do resumo do dia.
 const DEFAULT_TASK_ESTIMATE_MINUTES = 30;
 
+// Quantos dias de atraso (tarefa) ou quantas vezes o intervalo (rotina)
+// transformam um item "atrasado" em "crítico" — crítico nunca é
+// escondido por um Modo, mesmo que a categoria não bata com o filtro.
+const CRITICAL_TASK_OVERDUE_DAYS = 3;
+const CRITICAL_ROUTINE_INTERVAL_MULTIPLIER = 2;
+
+// "Modo" do dia: um jeito rápido de dizer "só me mostra isso agora",
+// sempre respeitando que Desenvolvimento pessoal nunca deve ficar de
+// fora só porque um modo mais restrito está ativo em outra categoria.
+type DailyMode = "trabalho" | "estudo" | "descanso" | null;
+
+const DAILY_MODE_CATEGORIES: Record<Exclude<DailyMode, null>, string[]> = {
+  estudo: ["Desenvolvimento pessoal"],
+  descanso: ["Saúde", "Relacionamento"],
+  trabalho: ["Casa", "Pets", "Financeiro"],
+};
+
+const DAILY_MODE_LABELS: Record<Exclude<DailyMode, null>, string> = {
+  estudo: "Estudo",
+  descanso: "Descanso",
+  trabalho: "Casa/afazeres",
+};
+
+const DAILY_MODE_STORAGE_KEY = "gestao-tempo-modo-dia";
+
+// Valor sentinela do seletor de tarefa do cronômetro pra "não é nenhuma
+// tarefa de rotina cadastrada, vou digitar o nome" (atividade avulsa).
+const FREE_TEXT_OPTION = "__avulsa__";
+
 // Um item da fila do dia: tanto uma tarefa de Calendários (com data)
 // quanto uma tarefa de rotina que venceu (sem data, definida pelo
 // intervalo de dias). "Iniciar Dia" só mostra um de cada vez.
@@ -75,6 +105,7 @@ interface QueueItem {
   source: "task" | "routine";
   category: string | null;
   overdue: boolean;
+  critical: boolean;
   time?: string;
   priorityWeight: number;
   estimatedMinutes: number;
@@ -99,17 +130,28 @@ function buildCategoryBoosts(rules: Rule[], categories: string[]): Map<string, n
   return boosts;
 }
 
+// Dias corridos entre duas datas ISO (yyyy-MM-dd), sempre >= 0.
+function daysOverdue(dateISO: string, todayIso: string): number {
+  const diffMs = new Date(`${todayIso}T00:00:00`).getTime() - new Date(`${dateISO}T00:00:00`).getTime();
+  return Math.max(0, Math.round(diffMs / 86_400_000));
+}
+
 // Cruza cada tarefa de rotina com o histórico de execução (última vez
 // que foi concluída) pra decidir se já venceu (dias desde a última
 // execução >= intervalo configurado). Nunca feita = sempre vencida.
 // Rotinas sem tempo estimado ficam de fora — "só ficam ativas depois de
 // ter um cronograma" (ver RoutineTask.estimatedMinutes).
+//
+// `mode` restringe a fila às categorias daquele modo (ver
+// DAILY_MODE_CATEGORIES) — itens críticos sempre aparecem, mesmo fora
+// do modo, pra nunca esconder algo realmente urgente.
 function buildDailyQueue(
   tasks: Task[],
   routineTasks: RoutineTask[],
   history: ExecutionHistoryEntry[],
   categories: string[],
-  rules: Rule[]
+  rules: Rule[],
+  mode: DailyMode = null
 ): QueueItem[] {
   const today = todayISO();
   const categoryRank = (category: string | null): number => {
@@ -127,6 +169,7 @@ function buildDailyQueue(
       source: "task" as const,
       category: null,
       overdue: task.date < today,
+      critical: daysOverdue(task.date, today) >= CRITICAL_TASK_OVERDUE_DAYS,
       time: task.time,
       priorityWeight: priorityWeight(task.priority),
       estimatedMinutes: DEFAULT_TASK_ESTIMATE_MINUTES,
@@ -155,21 +198,31 @@ function buildDailyQueue(
       source: "routine" as const,
       category: routine.category,
       overdue: daysSince !== Infinity && daysSince > routine.intervalDays * 1.5,
+      critical: daysSince !== Infinity && daysSince > routine.intervalDays * CRITICAL_ROUTINE_INTERVAL_MULTIPLIER,
       priorityWeight: -routine.priority,
       estimatedMinutes: routine.estimatedMinutes ?? DEFAULT_TASK_ESTIMATE_MINUTES,
     }));
 
   // Pontuação única: posição em Prioridades pesa mais, atraso é só um
   // empurrão dentro do mesmo nível (não domina sozinho), regras
-  // cadastradas puxam a categoria citada pra frente, e a prioridade do
-  // próprio item desempata por último.
+  // cadastradas puxam a categoria citada pra frente, itens críticos
+  // vão praticamente sempre pro topo, e a prioridade do próprio item
+  // desempata por último.
   const score = (item: QueueItem): number =>
+    (item.critical ? -1000 : 0) +
     categoryRank(item.category) * 100 +
     (item.overdue ? 20 : 0) +
     item.priorityWeight -
     (categoryBoosts.get(item.category ?? "") ?? 0) * 5;
 
-  return [...taskItems, ...routineItems].sort((a, b) => {
+  const modeCategories = mode ? DAILY_MODE_CATEGORIES[mode] : null;
+  const filtered = modeCategories
+    ? [...taskItems, ...routineItems].filter(
+        (item) => item.critical || item.category === null || modeCategories.includes(item.category)
+      )
+    : [...taskItems, ...routineItems];
+
+  return filtered.sort((a, b) => {
     const scoreDiff = score(a) - score(b);
     if (scoreDiff !== 0) return scoreDiff;
     return (a.time ?? "99:99").localeCompare(b.time ?? "99:99");
@@ -210,6 +263,7 @@ function withTime(base: Date, timeValue: string): Date {
 // e o "Iniciar Dia" (motor de decisão) numa aba só: peças do mesmo
 // recurso, uma alimenta a outra — separá-las só criava confusão.
 export function TimeManagementPage() {
+  const [selectedRoutineId, setSelectedRoutineId] = useState("");
   const [activityName, setActivityName] = useState("");
   const [activityCategory, setActivityCategory] = useState("");
   const [callStart, setCallStart] = useState<Date | null>(null);
@@ -221,8 +275,16 @@ export function TimeManagementPage() {
   const { rules, addRule, editRule, deleteRule } = useRules();
   const { routineTasks, addRoutineTask, editRoutineTask, deleteRoutineTask, deleteRoutineTasks } = useRoutineTasks();
   const { entries, addEntry, editEntry, deleteEntry, deleteEntries } = useExecutionHistory();
+  const { logs: plannerLogs, logDecision } = usePlannerLogs();
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [selectedRoutineIds, setSelectedRoutineIds] = useState<Set<string>>(new Set());
+  // "Modo do dia" filtra a fila por um grupo de categorias (ver
+  // DAILY_MODE_CATEGORIES) — persistido no localStorage (não é dado do
+  // Supabase, só uma preferência local de sessão).
+  const [dailyMode, setDailyMode] = useState<DailyMode>(() => {
+    const stored = localStorage.getItem(DAILY_MODE_STORAGE_KEY);
+    return stored === "trabalho" || stored === "estudo" || stored === "descanso" ? stored : null;
+  });
   const { tasks, toggleTaskStatus } = useAgenda();
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [isRuleDialogOpen, setIsRuleDialogOpen] = useState(false);
@@ -266,26 +328,40 @@ export function TimeManagementPage() {
     if (!callStart) return;
     const end = nowInBrasilia();
     const durationSeconds = Math.round((end.getTime() - callStart.getTime()) / 1000);
-    const trimmedName = activityName.trim() || "Sem nome";
-    // Se o nome bater com uma tarefa de rotina já cadastrada, vincula o
-    // registro a ela (taskId) — assim ela conta como "feita agora" e só
-    // volta pra fila de "Iniciar Dia" quando o intervalo dela vencer de
-    // novo, mesmo tendo sido cronometrada por aqui em vez de lá.
-    const matchedRoutine = routineTasks.find(
-      (routine) => routine.name.trim().toLowerCase() === trimmedName.toLowerCase()
-    );
+    const selectedRoutine = routineTasks.find((routine) => routine.id === selectedRoutineId);
+    const finalName = selectedRoutine ? selectedRoutine.name : activityName.trim() || "Sem nome";
+    const finalCategory = selectedRoutine ? selectedRoutine.category : activityCategory || null;
+
     addEntry({
-      taskId: matchedRoutine?.id ?? null,
-      activityName: trimmedName,
-      category: activityCategory || matchedRoutine?.category || null,
+      taskId: selectedRoutine?.id ?? null,
+      activityName: finalName,
+      category: finalCategory,
       startedAt: callStart.toISOString(),
       finishedAt: end.toISOString(),
       durationSeconds,
     });
+
+    // Cronometrar uma tarefa de rotina calibra (ou define pela primeira
+    // vez) o tempo estimado dela com a média real medida — é assim que
+    // ela "aprende" e passa a ficar ativa em "Iniciar Dia" sem precisar
+    // digitar uma estimativa manual.
+    if (selectedRoutine) {
+      const priorDurations = entries
+        .filter((entry) => entry.taskId === selectedRoutine.id && entry.durationSeconds != null)
+        .map((entry) => entry.durationSeconds as number);
+      const allDurations = [...priorDurations, durationSeconds];
+      const averageMinutes = Math.max(
+        1,
+        Math.round(allDurations.reduce((sum, seconds) => sum + seconds, 0) / allDurations.length / 60)
+      );
+      editRoutineTask(selectedRoutine.id, { ...selectedRoutine, estimatedMinutes: averageMinutes });
+    }
+
     setCallStart(null);
     setElapsedMs(0);
     setActivityName("");
     setActivityCategory("");
+    setSelectedRoutineId("");
   }
 
   function handleDelete(id: string) {
@@ -313,14 +389,46 @@ export function TimeManagementPage() {
     setSelectedEntryIds(new Set());
   }
 
+  function changeDailyMode(mode: DailyMode) {
+    setDailyMode(mode);
+    if (mode) localStorage.setItem(DAILY_MODE_STORAGE_KEY, mode);
+    else localStorage.removeItem(DAILY_MODE_STORAGE_KEY);
+  }
+
   // Monta a fila do dia (tarefas de hoje + atrasadas + rotinas vencidas,
   // atrasadas primeiro, depois por posição em Prioridades) e começa a
   // cronometrar o primeiro item.
   function handleStartDay() {
-    const queue = buildDailyQueue(tasks, routineTasks, entries, categories, rules);
+    const queue = buildDailyQueue(tasks, routineTasks, entries, categories, rules, dailyMode);
     setDailyQueue(queue);
     setQueueIndex(0);
     setCurrentTaskStartedAt(queue.length > 0 ? nowInBrasilia() : null);
+
+    // Registra no histórico de decisões toda categoria que apareceu na
+    // fila de hoje e foi puxada pra frente por alguma regra ativa, e
+    // também qual Modo estava filtrando a fila — assim dá pra consultar
+    // depois por que o dia ficou organizado daquele jeito.
+    const categoryBoosts = buildCategoryBoosts(rules, categories);
+    const categoriesInQueue = new Set(
+      queue.map((item) => item.category).filter((category): category is string => category !== null)
+    );
+    categoriesInQueue.forEach((category) => {
+      if (!categoryBoosts.get(category)) return;
+      const matchingRules = rules.filter(
+        (rule) => rule.enabled && `${rule.name} ${rule.description}`.toLowerCase().includes(category.toLowerCase())
+      );
+      if (matchingRules.length === 0) return;
+      logDecision(
+        `Categoria "${category}" priorizada na fila de hoje`,
+        `Regra(s) ativa(s): ${matchingRules.map((rule) => rule.name).join(", ")}`
+      );
+    });
+    if (dailyMode) {
+      logDecision(
+        `Modo "${DAILY_MODE_LABELS[dailyMode]}" ativo`,
+        `Fila restrita a ${DAILY_MODE_CATEGORIES[dailyMode].join(", ")} (itens críticos continuam aparecendo mesmo fora do modo).`
+      );
+    }
   }
 
   // Marca o item atual como concluído, registra quanto tempo ele levou
@@ -512,6 +620,36 @@ export function TimeManagementPage() {
           )}
         </div>
 
+        {dailyQueue === null && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">Modo do dia:</span>
+            <Button
+              size="sm"
+              variant={dailyMode === null ? "default" : "outline"}
+              className={dailyMode === null ? "bg-orange-700 text-white hover:opacity-90" : ""}
+              onClick={() => changeDailyMode(null)}
+            >
+              Padrão
+            </Button>
+            {(Object.keys(DAILY_MODE_LABELS) as Array<Exclude<DailyMode, null>>).map((mode) => (
+              <Button
+                key={mode}
+                size="sm"
+                variant={dailyMode === mode ? "default" : "outline"}
+                className={dailyMode === mode ? "bg-orange-700 text-white hover:opacity-90" : ""}
+                onClick={() => changeDailyMode(mode)}
+              >
+                {DAILY_MODE_LABELS[mode]}
+              </Button>
+            ))}
+            <span className="text-xs text-muted-foreground">
+              {dailyMode
+                ? `Só ${DAILY_MODE_CATEGORIES[dailyMode].join(", ")} (críticos aparecem sempre).`
+                : "Todas as categorias."}
+            </span>
+          </div>
+        )}
+
         {dailyQueue !== null && (
           <Card className="border-orange-200 dark:border-orange-900">
             <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
@@ -525,7 +663,10 @@ export function TimeManagementPage() {
                     {dailyQueue[queueIndex].category && (
                       <Badge variant="secondary">{dailyQueue[queueIndex].category}</Badge>
                     )}
-                    {dailyQueue[queueIndex].overdue && <Badge variant="destructive">Atrasada</Badge>}
+                    {dailyQueue[queueIndex].critical && <Badge variant="destructive">🔥 Crítica</Badge>}
+                    {!dailyQueue[queueIndex].critical && dailyQueue[queueIndex].overdue && (
+                      <Badge variant="destructive">Atrasada</Badge>
+                    )}
                   </div>
                   {dailyQueue[queueIndex].time && (
                     <p className="text-sm text-muted-foreground">Horário: {dailyQueue[queueIndex].time}</p>
@@ -603,31 +744,51 @@ export function TimeManagementPage() {
               o planejamento automático do dia mais pra frente.
             </p>
             <div className="grid gap-4 sm:max-w-md sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="activity-name">Nome da atividade</Label>
-                <Input
-                  id="activity-name"
-                  value={activityName}
-                  onChange={(e) => setActivityName(e.target.value)}
-                  placeholder="Ex: Ler, treinar, arrumar a casa"
-                  disabled={isTimerActive}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="activity-category">Prioridade</Label>
-                <Select value={activityCategory} onValueChange={setActivityCategory} disabled={isTimerActive}>
-                  <SelectTrigger id="activity-category">
-                    <SelectValue placeholder="Selecione" />
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label htmlFor="activity-routine">Tarefa</Label>
+                <Select value={selectedRoutineId} onValueChange={setSelectedRoutineId} disabled={isTimerActive}>
+                  <SelectTrigger id="activity-routine">
+                    <SelectValue placeholder="Selecione uma tarefa de rotina" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
+                    {routineTasks.map((routine) => (
+                      <SelectItem key={routine.id} value={routine.id}>
+                        {routine.name} · {routine.category}
                       </SelectItem>
                     ))}
+                    <SelectItem value={FREE_TEXT_OPTION}>✏️ Atividade avulsa (digitar nome)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {selectedRoutineId === FREE_TEXT_OPTION && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="activity-name">Nome da atividade</Label>
+                    <Input
+                      id="activity-name"
+                      value={activityName}
+                      onChange={(e) => setActivityName(e.target.value)}
+                      placeholder="Ex: Ler, treinar, arrumar a casa"
+                      disabled={isTimerActive}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="activity-category">Prioridade</Label>
+                    <Select value={activityCategory} onValueChange={setActivityCategory} disabled={isTimerActive}>
+                      <SelectTrigger id="activity-category">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -640,7 +801,10 @@ export function TimeManagementPage() {
                 <Button
                   className="gap-2 bg-orange-700 text-white hover:opacity-90"
                   onClick={startTimer}
-                  disabled={!activityName.trim() || !activityCategory}
+                  disabled={
+                    !selectedRoutineId ||
+                    (selectedRoutineId === FREE_TEXT_OPTION && (!activityName.trim() || !activityCategory))
+                  }
                 >
                   <Clock className="size-4" />
                   Iniciar
@@ -652,11 +816,14 @@ export function TimeManagementPage() {
                 </span>
               )}
             </div>
-            {!isTimerActive && (!activityName.trim() || !activityCategory) && (
-              <p className="text-xs text-muted-foreground">
-                Preencha o nome da atividade e a prioridade para iniciar o cronômetro.
-              </p>
-            )}
+            {!isTimerActive &&
+              (!selectedRoutineId ||
+                (selectedRoutineId === FREE_TEXT_OPTION && (!activityName.trim() || !activityCategory))) && (
+                <p className="text-xs text-muted-foreground">
+                  Selecione uma tarefa de rotina (ou uma atividade avulsa com nome e prioridade) para iniciar o
+                  cronômetro.
+                </p>
+              )}
           </CardContent>
         </Card>
 
@@ -985,6 +1152,27 @@ export function TimeManagementPage() {
                 );
                 })}
               </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Decisões do motor ({plannerLogs.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {plannerLogs.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                Nenhuma decisão registrada ainda — aparece aqui toda vez que uma regra ativa ou um Modo
+                influenciar a fila de "Iniciar Dia".
+              </p>
+            ) : (
+              plannerLogs.map((log) => (
+                <div key={log.id} className="rounded-xl border border-border p-3 text-sm">
+                  <p className="font-medium">{log.decision}</p>
+                  <p className="text-xs text-muted-foreground">{log.reason}</p>
+                </div>
+              ))
             )}
           </CardContent>
         </Card>

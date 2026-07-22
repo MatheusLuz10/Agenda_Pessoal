@@ -16,18 +16,32 @@ export function useBlockedSchedules() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Otimista: aparece na tela na hora, e só depois tenta salvar no
+  // Supabase — se falhar (ex: tabela ainda não migrada), continua
+  // visível localmente em vez de sumir sem explicação.
   async function addSchedule(schedule: Omit<BlockedSchedule, "id">) {
+    const optimisticSchedule: BlockedSchedule = { ...schedule, id: crypto.randomUUID() };
+    setSchedules((prev) => [...prev, optimisticSchedule]);
+
     if (isSupabaseConfigured) {
-      const created = await createBlockedSchedule(schedule);
-      setSchedules((prev) => [...prev, created]);
-    } else {
-      setSchedules((prev) => [...prev, { ...schedule, id: crypto.randomUUID() }]);
+      try {
+        const created = await createBlockedSchedule(schedule);
+        setSchedules((prev) => prev.map((s) => (s.id === optimisticSchedule.id ? created : s)));
+      } catch (error) {
+        console.error("Falha ao salvar horário bloqueado no Supabase (mantido localmente):", error);
+      }
     }
   }
 
   async function deleteSchedule(id: string) {
     setSchedules((prev) => prev.filter((schedule) => schedule.id !== id));
-    if (isSupabaseConfigured) await removeBlockedSchedule(id);
+    if (isSupabaseConfigured) {
+      try {
+        await removeBlockedSchedule(id);
+      } catch (error) {
+        console.error("Falha ao excluir horário bloqueado no Supabase:", error);
+      }
+    }
   }
 
   return { schedules, loading, addSchedule, deleteSchedule };
