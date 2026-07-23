@@ -769,9 +769,25 @@ export function TimeManagementPage() {
   // comprometido com tarefas/rotinas de hoje e quanto sobra livre pra
   // adicionar coisa nova — visível antes mesmo de "Iniciar Dia".
   let timeAvailability: { budget: number; committed: number; free: number } | null = null;
+  // Mesmo comprometido, mas quebrado por categoria (cor fixa cada uma)
+  // pra mostrar de relance pra onde o tempo de hoje está indo.
+  let categorySegments: { name: string; minutes: number; color: string }[] = [];
   if (dailyQueue === null) {
     const committed = previewQueue.reduce((sum, item) => sum + item.estimatedMinutes, 0);
-    timeAvailability = { budget: todayBudget, committed, free: todayBudget - committed };
+    const free = todayBudget - committed;
+    timeAvailability = { budget: todayBudget, committed, free };
+
+    const minutesByCategory = new Map<string, number>();
+    previewQueue.forEach((item) => {
+      const key = item.category ?? UNCATEGORIZED_LABEL;
+      minutesByCategory.set(key, (minutesByCategory.get(key) ?? 0) + item.estimatedMinutes);
+    });
+    categorySegments = [...minutesByCategory.entries()].map(([name, minutes]) => ({
+      name,
+      minutes,
+      color: CATEGORY_COLORS[name] ?? UNCATEGORIZED_COLOR,
+    }));
+    if (free > 0) categorySegments.push({ name: "Livre", minutes: free, color: FREE_TIME_COLOR });
   }
 
   // Resumo do dia: quanto do orçamento já foi usado, quanto ainda falta
@@ -879,10 +895,15 @@ export function TimeManagementPage() {
                 </div>
               </div>
               <div className="flex-1">
-                <DaySummaryChart
-                  summary={{ budget: timeAvailability.budget, used: 0, remaining: timeAvailability.committed, free: timeAvailability.free }}
-                  labels={{ used: "", remaining: "Comprometido", free: "Livre" }}
-                />
+                <CategoryTimeChart segments={categorySegments} />
+                <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
+                  {categorySegments.map((segment) => (
+                    <span key={segment.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="size-2.5 rounded-full" style={{ backgroundColor: segment.color }} />
+                      {segment.name}
+                    </span>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1653,6 +1674,60 @@ function DaySummaryChart({
         >
           {data.map((slice) => (
             <Cell key={slice.name} fill={slice.color} />
+          ))}
+        </Pie>
+        <Tooltip formatter={(value) => formatMinutes(Number(value))} />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Cor fixa por categoria de prioridade — usada no gráfico de Tempo
+// disponível hoje pra mostrar de relance pra onde o tempo comprometido
+// está indo, em vez de um bloco genérico "Comprometido".
+const CATEGORY_COLORS: Record<string, string> = {
+  "Desenvolvimento pessoal": "#7c3aed",
+  Saúde: "#16a34a",
+  Relacionamento: "#db2777",
+  Casa: "#d97706",
+  Pets: "#2563eb",
+  Financeiro: "#64748b",
+};
+// Tarefas do Calendário não têm categoria (category: null) — aparecem
+// com esse rótulo/cor neutra em vez de sumir do gráfico.
+const UNCATEGORIZED_LABEL = "Compromissos";
+const UNCATEGORIZED_COLOR = "#78716c";
+const FREE_TIME_COLOR = "#cbd5e1";
+
+// Donut do Tempo disponível hoje: uma fatia colorida por categoria de
+// prioridade (tempo comprometido) + uma fatia cinza "Livre".
+function CategoryTimeChart({ segments }: { segments: { name: string; minutes: number; color: string }[] }) {
+  const data = segments.filter((slice) => slice.minutes > 0);
+
+  if (data.length === 0) {
+    return (
+      <p className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+        Sem dados suficientes ainda.
+      </p>
+    );
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <PieChart>
+        <Pie
+          data={data}
+          dataKey="minutes"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          innerRadius={50}
+          outerRadius={80}
+          paddingAngle={2}
+          label={({ name, value }) => `${name}: ${formatMinutes(Number(value))}`}
+        >
+          {data.map((slice) => (
+            <Cell key={slice.name} fill={slice.color} stroke="#ffffff" strokeWidth={1} />
           ))}
         </Pie>
         <Tooltip formatter={(value) => formatMinutes(Number(value))} />
