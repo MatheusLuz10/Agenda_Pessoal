@@ -7,6 +7,7 @@ import {
   updateExecutionHistoryEntry,
 } from "../services/ruleEngineApi";
 import type { ExecutionHistoryEntry } from "../types";
+import { mergeLoaded } from "./mergeLoaded";
 
 // Histórico de atividades cronometradas (vida diária, vinculadas a uma
 // categoria de prioridade) — a base de dados que o motor de decisão vai
@@ -19,7 +20,7 @@ export function useExecutionHistory() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     fetchExecutionHistory()
-      .then(setEntries)
+      .then((rows) => setEntries((prev) => mergeLoaded(rows, prev)))
       .finally(() => setLoading(false));
   }, []);
 

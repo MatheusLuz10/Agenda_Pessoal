@@ -7,6 +7,7 @@ import {
   updateRoutineTask,
 } from "../services/ruleEngineApi";
 import type { RoutineTask } from "../types";
+import { mergeLoaded } from "./mergeLoaded";
 
 // Tarefas de rotina (casa, saúde, relacionamento etc.), sem data fixa —
 // "Iniciar Dia" decide se cada uma venceu cruzando intervalDays com o
@@ -18,7 +19,7 @@ export function useRoutineTasks() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     fetchRoutineTasks()
-      .then(setRoutineTasks)
+      .then((rows) => setRoutineTasks((prev) => mergeLoaded(rows, prev)))
       .finally(() => setLoading(false));
   }, []);
 

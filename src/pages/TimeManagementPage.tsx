@@ -68,11 +68,64 @@ function scheduleBlockedMinutes(schedule: BlockedSchedule): number {
   return minutesBetween(schedule.startTime, schedule.endTime);
 }
 
-function formatScheduleRange(schedule: BlockedSchedule): string {
+function formatScheduleRange(schedule: Pick<BlockedSchedule, "startTime" | "endTime" | "midStart" | "midEnd">): string {
   if (schedule.midStart && schedule.midEnd) {
     return `${schedule.startTime} às ${schedule.midStart} e ${schedule.midEnd} às ${schedule.endTime} (pausa entre ${schedule.midStart} e ${schedule.midEnd})`;
   }
   return `${schedule.startTime} às ${schedule.endTime}`;
+}
+
+// Um "grupo" de horários bloqueados que aparece como UMA linha na
+// lista — normalmente é só um BlockedSchedule (ids.length === 1), mas
+// vira 5 ids juntos quando "Dias úteis (segunda a sexta)" foi usado no
+// cadastro, senão o combo de 5 dias aparecia como 5 linhas idênticas.
+interface ScheduleGroup {
+  ids: string[];
+  label: string;
+  dayLabel: string;
+  startTime: string;
+  endTime: string;
+  midStart: string | null;
+  midEnd: string | null;
+}
+
+function groupSchedules(schedules: BlockedSchedule[]): ScheduleGroup[] {
+  const byKey = new Map<string, BlockedSchedule[]>();
+  schedules.forEach((schedule) => {
+    const key = `${schedule.label}|${schedule.startTime}|${schedule.endTime}|${schedule.midStart ?? ""}|${schedule.midEnd ?? ""}`;
+    byKey.set(key, [...(byKey.get(key) ?? []), schedule]);
+  });
+
+  const groups: ScheduleGroup[] = [];
+  byKey.forEach((group) => {
+    const days = new Set(group.map((schedule) => schedule.dayOfWeek));
+    const isWeekdaysGroup = [1, 2, 3, 4, 5].every((day) => days.has(day)) && days.size === 5;
+    if (isWeekdaysGroup) {
+      const first = group[0];
+      groups.push({
+        ids: group.map((schedule) => schedule.id),
+        label: first.label,
+        dayLabel: "Segunda a Sexta",
+        startTime: first.startTime,
+        endTime: first.endTime,
+        midStart: first.midStart,
+        midEnd: first.midEnd,
+      });
+    } else {
+      group.forEach((schedule) => {
+        groups.push({
+          ids: [schedule.id],
+          label: schedule.label,
+          dayLabel: formatDayOfWeek(schedule.dayOfWeek),
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          midStart: schedule.midStart,
+          midEnd: schedule.midEnd,
+        });
+      });
+    }
+  });
+  return groups;
 }
 
 function timeToMinutes(hhmm: string): number {
@@ -130,6 +183,33 @@ const DAILY_MODE_LABELS: Record<Exclude<DailyMode, null>, string> = {
 };
 
 const DAILY_MODE_STORAGE_KEY = "gestao-tempo-modo-dia";
+
+// Backup local do que já foi logado em "Decisões do motor" hoje — o
+// estado em memória (plannerLogs) sozinho não basta pra evitar duplicar
+// a mesma decisão: se a gravação no Supabase falhar (tabela ainda não
+// migrada) ou a página for recarregada, plannerLogs volta vazio e a
+// mesma decisão seria logada de novo. Isso sobrevive a ambos.
+const LOGGED_DECISIONS_STORAGE_KEY = "gestao-tempo-decisoes-logadas";
+
+function readLoggedDecisionsToday(): string[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LOGGED_DECISIONS_STORAGE_KEY) ?? "{}");
+    return stored[todayISO()] ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function markDecisionLoggedToday(decision: string): void {
+  try {
+    const today = todayISO();
+    // Guarda só o dia de hoje — não precisa acumular histórico aqui,
+    // "Decisões do motor" (plannerLogs) já é o histórico de verdade.
+    localStorage.setItem(LOGGED_DECISIONS_STORAGE_KEY, JSON.stringify({ [today]: [...readLoggedDecisionsToday(), decision] }));
+  } catch {
+    // localStorage indisponível (modo privado etc.) — segue sem persistir
+  }
+}
 
 // Regras do modo Descanso: autocuidado (Saúde/Relacionamento) sempre
 // cabe, sem limite de duração — é o ponto principal do modo. Financeiro
@@ -326,7 +406,7 @@ export function TimeManagementPage() {
   const [editingEntry, setEditingEntry] = useState<ExecutionHistoryEntry | null>(null);
 
   const { categories, reorder } = usePriorities();
-  const { schedules, addSchedule, deleteSchedule } = useBlockedSchedules();
+  const { schedules, addSchedule, deleteSchedule, deleteSchedules } = useBlockedSchedules();
   const { rules, addRule, editRule, deleteRule } = useRules();
   const { routineTasks, addRoutineTask, editRoutineTask, deleteRoutineTask, deleteRoutineTasks } = useRoutineTasks();
   const { entries, addEntry, editEntry, deleteEntry, deleteEntries } = useExecutionHistory();
@@ -463,11 +543,14 @@ export function TimeManagementPage() {
   }
 
   // Evita empilhar a mesma decisão toda vez que "Iniciar Dia" roda de
-  // novo no mesmo dia (parar e reiniciar, por exemplo) — só loga se
-  // ainda não existe um registro idêntico datado de hoje.
+  // novo no mesmo dia (parar e reiniciar, ou recarregar a página, por
+  // exemplo) — só loga se ainda não existe um registro idêntico datado
+  // de hoje, checando tanto plannerLogs (memória/Supabase) quanto o
+  // backup local (sobrevive a recarregar a página ou o Supabase falhar).
   function hasLoggedDecisionToday(decision: string): boolean {
     const today = todayISO();
-    return plannerLogs.some((log) => log.decision === decision && toBrasiliaISODate(log.createdAt) === today);
+    const inMemory = plannerLogs.some((log) => log.decision === decision && toBrasiliaISODate(log.createdAt) === today);
+    return inMemory || readLoggedDecisionsToday().includes(decision);
   }
 
   // Monta a fila do dia (tarefas de hoje + atrasadas + rotinas vencidas,
@@ -497,6 +580,7 @@ export function TimeManagementPage() {
       const decision = `Categoria "${category}" priorizada na fila de hoje`;
       if (hasLoggedDecisionToday(decision)) return;
       logDecision(decision, `Regra(s) ativa(s): ${matchingRules.map((rule) => rule.name).join(", ")}`);
+      markDecisionLoggedToday(decision);
     });
     if (dailyMode) {
       const decision = `Modo "${DAILY_MODE_LABELS[dailyMode]}" ativo`;
@@ -506,6 +590,7 @@ export function TimeManagementPage() {
           "Fila restrita a autocuidado (Saúde/Relacionamento) e tarefas leves de até " +
             `${DESCANSO_LIGHT_TASK_MAX_MINUTES} min (itens críticos continuam aparecendo mesmo fora do modo).`
         );
+        markDecisionLoggedToday(decision);
       }
     }
   }
@@ -584,9 +669,14 @@ export function TimeManagementPage() {
     deleteRule(id);
   }
 
-  function handleDeleteSchedule(id: string) {
-    if (!window.confirm("Excluir este horário bloqueado?")) return;
-    deleteSchedule(id);
+  function handleDeleteScheduleGroup(group: ScheduleGroup) {
+    const message =
+      group.ids.length > 1
+        ? `Excluir este horário bloqueado nos ${group.ids.length} dias (${group.dayLabel})?`
+        : "Excluir este horário bloqueado?";
+    if (!window.confirm(message)) return;
+    if (group.ids.length > 1) deleteSchedules(group.ids);
+    else deleteSchedule(group.ids[0]);
   }
 
   function openCreateRoutineDialog() {
@@ -1112,22 +1202,22 @@ export function TimeManagementPage() {
                 Nenhum horário bloqueado cadastrado (ex: trabalho, faculdade, sono).
               </p>
             ) : (
-              schedules.map((schedule) => (
+              groupSchedules(schedules).map((group) => (
                 <div
-                  key={schedule.id}
+                  key={group.ids.join(",")}
                   className="flex items-center justify-between gap-3 rounded-xl border border-border p-3"
                 >
                   <div className="text-sm">
-                    <p className="font-medium">{schedule.label}</p>
+                    <p className="font-medium">{group.label}</p>
                     <p className="text-muted-foreground">
-                      {formatDayOfWeek(schedule.dayOfWeek)} · {formatScheduleRange(schedule)}
+                      {group.dayLabel} · {formatScheduleRange(group)}
                     </p>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="size-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDeleteSchedule(schedule.id)}
+                    onClick={() => handleDeleteScheduleGroup(group)}
                     aria-label="Excluir horário bloqueado"
                   >
                     <Trash2 className="size-4" />

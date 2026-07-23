@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { createBlockedSchedule, fetchBlockedSchedules, removeBlockedSchedule } from "../services/ruleEngineApi";
 import type { BlockedSchedule } from "../types";
+import { mergeLoaded } from "./mergeLoaded";
 
 // Horários fixos/bloqueados da rotina (trabalho, faculdade, sono etc.).
 // Sem Supabase configurado, fica só em memória (modo mock local).
@@ -12,7 +13,7 @@ export function useBlockedSchedules() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     fetchBlockedSchedules()
-      .then(setSchedules)
+      .then((rows) => setSchedules((prev) => mergeLoaded(rows, prev)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -44,5 +45,19 @@ export function useBlockedSchedules() {
     }
   }
 
-  return { schedules, loading, addSchedule, deleteSchedule };
+  // Exclui vários de uma vez — usado pra apagar um grupo "Dias úteis"
+  // (5 registros, um por dia) como se fosse um item só na tela.
+  async function deleteSchedules(ids: string[]) {
+    const idSet = new Set(ids);
+    setSchedules((prev) => prev.filter((schedule) => !idSet.has(schedule.id)));
+    if (isSupabaseConfigured) {
+      try {
+        await Promise.all(ids.map((id) => removeBlockedSchedule(id)));
+      } catch (error) {
+        console.error("Falha ao excluir horários bloqueados no Supabase:", error);
+      }
+    }
+  }
+
+  return { schedules, loading, addSchedule, deleteSchedule, deleteSchedules };
 }

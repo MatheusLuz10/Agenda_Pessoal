@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { createPlannerLog, fetchPlannerLogs } from "../services/ruleEngineApi";
 import type { PlannerLog } from "../types";
+import { mergeLoaded } from "./mergeLoaded";
 
 // Histórico de decisões do motor (ex: "Categoria Desenvolvimento
 // pessoal priorizada — regra ativa: Nunca sacrificar desenvolvimento
@@ -14,7 +15,9 @@ export function usePlannerLogs() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     fetchPlannerLogs()
-      .then(setLogs)
+      .then((rows) =>
+        setLogs((prev) => mergeLoaded(rows, prev).sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
+      )
       .finally(() => setLoading(false));
   }, []);
 

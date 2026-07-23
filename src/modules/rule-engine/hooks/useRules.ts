@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { createRule, fetchRules, removeRule, updateRule } from "../services/ruleEngineApi";
 import type { Rule } from "../types";
+import { mergeLoaded } from "./mergeLoaded";
 
 // Regras de negócio cadastráveis que o motor de decisão vai usar (motor
 // em si ainda não existe — só o cadastro por enquanto).
@@ -12,7 +13,7 @@ export function useRules() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     fetchRules()
-      .then(setRules)
+      .then((rows) => setRules((prev) => mergeLoaded(rows, prev)))
       .finally(() => setLoading(false));
   }, []);
 
