@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
-import { createPlannerLog, fetchPlannerLogs } from "../services/ruleEngineApi";
+import { createPlannerLog, fetchPlannerLogs, removePlannerLog } from "../services/ruleEngineApi";
 import type { PlannerLog } from "../types";
 import { mergeLoaded } from "./mergeLoaded";
 
@@ -38,5 +38,30 @@ export function usePlannerLogs() {
     }
   }
 
-  return { logs, loading, logDecision };
+  // Apaga um registro — útil pra limpar decisões duplicadas que já
+  // ficaram gravadas (ex: de antes de um bug de duplicação ser corrigido).
+  async function deleteLog(id: string) {
+    setLogs((prev) => prev.filter((log) => log.id !== id));
+    if (isSupabaseConfigured) {
+      try {
+        await removePlannerLog(id);
+      } catch (error) {
+        console.error("Falha ao excluir decisão no Supabase:", error);
+      }
+    }
+  }
+
+  async function deleteLogs(ids: string[]) {
+    const idSet = new Set(ids);
+    setLogs((prev) => prev.filter((log) => !idSet.has(log.id)));
+    if (isSupabaseConfigured) {
+      try {
+        await Promise.all(ids.map((id) => removePlannerLog(id)));
+      } catch (error) {
+        console.error("Falha ao excluir decisões no Supabase:", error);
+      }
+    }
+  }
+
+  return { logs, loading, logDecision, deleteLog, deleteLogs };
 }

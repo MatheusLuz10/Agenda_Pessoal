@@ -410,9 +410,10 @@ export function TimeManagementPage() {
   const { rules, addRule, editRule, deleteRule } = useRules();
   const { routineTasks, addRoutineTask, editRoutineTask, deleteRoutineTask, deleteRoutineTasks } = useRoutineTasks();
   const { entries, addEntry, editEntry, deleteEntry, deleteEntries } = useExecutionHistory();
-  const { logs: plannerLogs, logDecision } = usePlannerLogs();
+  const { logs: plannerLogs, logDecision, deleteLog, deleteLogs } = usePlannerLogs();
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [selectedRoutineIds, setSelectedRoutineIds] = useState<Set<string>>(new Set());
+  const [selectedLogIds, setSelectedLogIds] = useState<Set<string>>(new Set());
   // "Modo do dia" filtra a fila (Padrão = tudo, Descanso = ver
   // fitsDescansoMode) — persistido no localStorage (não é dado do
   // Supabase, só uma preferência local de sessão).
@@ -534,6 +535,33 @@ export function TimeManagementPage() {
     if (!window.confirm(`Excluir ${selectedEntryIds.size} registro(s) selecionado(s)?`)) return;
     deleteEntries([...selectedEntryIds]);
     setSelectedEntryIds(new Set());
+  }
+
+  // Permite limpar decisões antigas/duplicadas registradas antes de um
+  // ajuste no motor (ex: dedup corrigido depois de já existir repetição).
+  function handleDeleteLog(id: string) {
+    if (!window.confirm("Excluir esta decisão?")) return;
+    deleteLog(id);
+  }
+
+  function toggleLogSelection(id: string) {
+    setSelectedLogIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllLogsSelection() {
+    setSelectedLogIds((prev) => (prev.size === plannerLogs.length ? new Set() : new Set(plannerLogs.map((log) => log.id))));
+  }
+
+  function handleDeleteSelectedLogs() {
+    if (selectedLogIds.size === 0) return;
+    if (!window.confirm(`Excluir ${selectedLogIds.size} decisão(ões) selecionada(s)?`)) return;
+    deleteLogs([...selectedLogIds]);
+    setSelectedLogIds(new Set());
   }
 
   function changeDailyMode(mode: DailyMode) {
@@ -1555,14 +1583,28 @@ export function TimeManagementPage() {
 
         <Card>
           <CardHeader
-            className="flex flex-row items-center justify-between gap-3 cursor-pointer select-none"
+            className="flex flex-row flex-wrap items-center justify-between gap-3 cursor-pointer select-none"
             onClick={() => toggleSection("logs")}
           >
             <CardTitle>Decisões do motor ({plannerLogs.length})</CardTitle>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              {selectedLogIds.size > 0 && (
+                <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDeleteSelectedLogs}>
+                  <Trash2 className="size-4" />
+                  Excluir {selectedLogIds.size} selecionada(s)
+                </Button>
+              )}
+            </div>
             {isSectionOpen("logs") ? (
-              <ChevronUp className="size-4 text-muted-foreground" />
+              <ChevronUp
+                className="size-4 cursor-pointer text-muted-foreground"
+                onClick={() => toggleSection("logs")}
+              />
             ) : (
-              <ChevronDown className="size-4 text-muted-foreground" />
+              <ChevronDown
+                className="size-4 cursor-pointer text-muted-foreground"
+                onClick={() => toggleSection("logs")}
+              />
             )}
           </CardHeader>
           {isSectionOpen("logs") && (
@@ -1573,12 +1615,43 @@ export function TimeManagementPage() {
                 influenciar a fila de "Iniciar Dia".
               </p>
             ) : (
-              plannerLogs.map((log) => (
-                <div key={log.id} className="rounded-xl border border-border p-3 text-sm">
-                  <p className="font-medium">{log.decision}</p>
-                  <p className="text-xs text-muted-foreground">{log.reason}</p>
-                </div>
-              ))
+              <>
+                <label className="flex w-fit items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={selectedLogIds.size === plannerLogs.length}
+                    onCheckedChange={toggleAllLogsSelection}
+                  />
+                  Selecionar todas
+                </label>
+                {plannerLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border p-3 text-sm"
+                  >
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        className="mt-1"
+                        checked={selectedLogIds.has(log.id)}
+                        onCheckedChange={() => toggleLogSelection(log.id)}
+                        aria-label={`Selecionar ${log.decision}`}
+                      />
+                      <div>
+                        <p className="font-medium">{log.decision}</p>
+                        <p className="text-xs text-muted-foreground">{log.reason}</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDeleteLog(log.id)}
+                      aria-label="Excluir decisão"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                ))}
+              </>
             )}
           </CardContent>
           )}

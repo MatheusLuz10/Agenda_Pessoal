@@ -356,3 +356,8 @@ export async function createPlannerLog(decision: string, reason: string): Promis
   if (error) throw error;
   return rowToPlannerLog(data as PlannerLogRow);
 }
+
+export async function removePlannerLog(id: string): Promise<void> {
+  const { error } = await supabase!.from("rule_engine_planner_logs").delete().eq("id", id);
+  if (error) throw error;
+}
