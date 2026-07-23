@@ -31,7 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAgenda } from "@/contexts/AgendaContext";
-import { nowInBrasilia, todayISO } from "@/lib/date";
+import { nowInBrasilia, toBrasiliaISODate, todayISO } from "@/lib/date";
 import { useBlockedSchedules } from "@/modules/rule-engine/hooks/useBlockedSchedules";
 import { useExecutionHistory } from "@/modules/rule-engine/hooks/useExecutionHistory";
 import { usePlannerLogs } from "@/modules/rule-engine/hooks/usePlannerLogs";
@@ -467,7 +467,7 @@ export function TimeManagementPage() {
   // ainda não existe um registro idêntico datado de hoje.
   function hasLoggedDecisionToday(decision: string): boolean {
     const today = todayISO();
-    return plannerLogs.some((log) => log.decision === decision && log.createdAt.slice(0, 10) === today);
+    return plannerLogs.some((log) => log.decision === decision && toBrasiliaISODate(log.createdAt) === today);
   }
 
   // Monta a fila do dia (tarefas de hoje + atrasadas + rotinas vencidas,
@@ -646,15 +646,27 @@ export function TimeManagementPage() {
     categoryTotals.set(key, (categoryTotals.get(key) ?? 0) + (entry.durationSeconds ?? 0));
   });
 
+  // Orçamento do dia: 24h menos os horários bloqueados de hoje (pausas
+  // no meio, tipo almoço, não contam como bloqueado). Base tanto pro
+  // relatório de disponibilidade quanto pro Resumo do dia.
+  const todayWeekday = nowInBrasilia().getDay();
+  const blockedMinutesToday = schedules
+    .filter((schedule) => schedule.dayOfWeek === null || schedule.dayOfWeek === todayWeekday)
+    .reduce((sum, schedule) => sum + scheduleBlockedMinutes(schedule), 0);
+  const todayBudget = Math.max(0, 24 * 60 - blockedMinutesToday);
+
+  // Fila de hoje (tarefas + rotinas vencidas), calculada mesmo antes de
+  // clicar "Iniciar Dia" — alimenta tanto o relatório de disponibilidade
+  // (quanto já está comprometido) quanto a sugestão de tempo livre.
+  const previewQueue =
+    dailyQueue === null ? buildDailyQueue(tasks, routineTasks, entries, categories, rules, dailyMode) : [];
+
   // Sugestão de tempo livre: fora do fluxo de "Iniciar Dia", enquanto o
   // horário atual não estiver bloqueado, descreve uma atividade pra
   // fazer agora — mesma fila/pontuação de "Iniciar Dia" (Prioridades +
   // Regras + Modo), usando o tempo estimado calibrado pelo Cronômetro
   // ou definido manualmente.
-  const freeTimeQueue =
-    dailyQueue === null && !isTimeBlockedNow(schedules, nowInBrasilia())
-      ? buildDailyQueue(tasks, routineTasks, entries, categories, rules, dailyMode)
-      : [];
+  const freeTimeQueue = isTimeBlockedNow(schedules, nowInBrasilia()) ? [] : previewQueue;
   const freeTimeSuggestion = freeTimeQueue.length > 0 ? freeTimeQueue[suggestionSkipIndex % freeTimeQueue.length] : null;
 
   function handleStartFreeTimeSuggestion(item: QueueItem) {
@@ -663,19 +675,22 @@ export function TimeManagementPage() {
     setElapsedMs(0);
   }
 
-  // Resumo do dia: quanto do "orçamento" de hoje (24h menos os horários
-  // bloqueados de hoje) já foi usado, quanto ainda falta pros itens
-  // restantes da fila e quanto sobra livre. Só existe com o dia iniciado.
+  // Relatório de disponibilidade: quanto do orçamento do dia já está
+  // comprometido com tarefas/rotinas de hoje e quanto sobra livre pra
+  // adicionar coisa nova — visível antes mesmo de "Iniciar Dia".
+  let timeAvailability: { budget: number; committed: number; free: number } | null = null;
+  if (dailyQueue === null) {
+    const committed = previewQueue.reduce((sum, item) => sum + item.estimatedMinutes, 0);
+    timeAvailability = { budget: todayBudget, committed, free: todayBudget - committed };
+  }
+
+  // Resumo do dia: quanto do orçamento já foi usado, quanto ainda falta
+  // pros itens restantes da fila e quanto sobra livre. Só existe com o
+  // dia iniciado.
   let daySummary: { budget: number; used: number; remaining: number; free: number } | null = null;
   if (dailyQueue) {
-    const todayWeekday = nowInBrasilia().getDay();
-    const blockedMinutesToday = schedules
-      .filter((schedule) => schedule.dayOfWeek === null || schedule.dayOfWeek === todayWeekday)
-      .reduce((sum, schedule) => sum + scheduleBlockedMinutes(schedule), 0);
-    const budget = Math.max(0, 24 * 60 - blockedMinutesToday);
-
     const usedFromHistoryToday = entries
-      .filter((entry) => entry.finishedAt?.slice(0, 10) === todayISO())
+      .filter((entry) => entry.finishedAt && toBrasiliaISODate(entry.finishedAt) === todayISO())
       .reduce((sum, entry) => sum + (entry.durationSeconds ?? 0) / 60, 0);
     const used = usedFromHistoryToday + dailyElapsedMs / 60_000;
 
@@ -684,8 +699,8 @@ export function TimeManagementPage() {
       .reduce((sum, item) => sum + item.estimatedMinutes, 0);
     const remaining = Math.max(0, remainingRaw - dailyElapsedMs / 60_000);
 
-    const free = budget - used - remaining;
-    daySummary = { budget, used, remaining, free };
+    const free = todayBudget - used - remaining;
+    daySummary = { budget: todayBudget, used, remaining, free };
   }
 
   return (
@@ -744,6 +759,43 @@ export function TimeManagementPage() {
                 : "Tarefas diversas, sem filtro."}
             </span>
           </div>
+        )}
+
+        {timeAvailability && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="size-4 text-orange-700 dark:text-orange-300" />
+                Tempo disponível hoje
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div className="grid flex-1 grid-cols-3 gap-3 sm:grid-cols-1">
+                <div className="rounded-xl border border-border p-3">
+                  <p className="text-xs text-muted-foreground">Disponível (fora dos bloqueios)</p>
+                  <p className="text-lg font-semibold">{formatMinutes(timeAvailability.budget)}</p>
+                </div>
+                <div className="rounded-xl border border-border p-3">
+                  <p className="text-xs text-muted-foreground">Comprometido (tarefas/rotinas de hoje)</p>
+                  <p className="text-lg font-semibold">{formatMinutes(timeAvailability.committed)}</p>
+                </div>
+                <div className="rounded-xl border border-border p-3">
+                  <p className="text-xs text-muted-foreground">Livre pra adicionar tarefa</p>
+                  <p className={`text-lg font-semibold ${timeAvailability.free < 0 ? "text-destructive" : ""}`}>
+                    {timeAvailability.free < 0
+                      ? `Sobrecarregado em ${formatMinutes(-timeAvailability.free)}`
+                      : formatMinutes(timeAvailability.free)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex-1">
+                <DaySummaryChart
+                  summary={{ budget: timeAvailability.budget, used: 0, remaining: timeAvailability.committed, free: timeAvailability.free }}
+                  labels={{ used: "", remaining: "Comprometido", free: "Livre" }}
+                />
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {freeTimeSuggestion && (
@@ -1468,18 +1520,23 @@ export function TimeManagementPage() {
 
 const DAY_SUMMARY_COLORS = { used: "#c2410c", remaining: "#fb923c", free: "#e2e8f0" };
 
-// Donut do resumo do dia: Utilizado / Restante (estimado) / Livre. Se o
-// dia estiver sobrecarregado (livre negativo), a fatia "Livre" some e
-// vira só Utilizado + Restante (o texto acima já avisa "sobrecarregado").
+// Donut reutilizado em dois relatórios: Resumo do dia (Utilizado /
+// Restante / Livre) e Tempo disponível hoje (Comprometido / Livre, sem
+// "Utilizado" porque o dia ainda não começou) — `labels` troca os
+// nomes das fatias sem duplicar o gráfico. Se o dia estiver
+// sobrecarregado (livre negativo), a fatia "Livre" some (o texto acima
+// já avisa "sobrecarregado").
 function DaySummaryChart({
   summary,
+  labels = { used: "Utilizado", remaining: "Restante", free: "Livre" },
 }: {
   summary: { budget: number; used: number; remaining: number; free: number };
+  labels?: { used: string; remaining: string; free: string };
 }) {
   const data = [
-    { name: "Utilizado", value: Math.max(0, summary.used), color: DAY_SUMMARY_COLORS.used },
-    { name: "Restante", value: Math.max(0, summary.remaining), color: DAY_SUMMARY_COLORS.remaining },
-    { name: "Livre", value: Math.max(0, summary.free), color: DAY_SUMMARY_COLORS.free },
+    { name: labels.used, value: Math.max(0, summary.used), color: DAY_SUMMARY_COLORS.used },
+    { name: labels.remaining, value: Math.max(0, summary.remaining), color: DAY_SUMMARY_COLORS.remaining },
+    { name: labels.free, value: Math.max(0, summary.free), color: DAY_SUMMARY_COLORS.free },
   ].filter((slice) => slice.value > 0);
 
   if (data.length === 0) {

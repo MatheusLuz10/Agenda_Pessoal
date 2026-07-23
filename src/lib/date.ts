@@ -31,6 +31,17 @@ export function todayISO(): string {
   return makeISODate(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
+// Converte um instante qualquer (ex: um `created_at` do Supabase, em
+// UTC) para a data ISO "yyyy-MM-dd" correspondente em Brasília — mesmo
+// cuidado de todayISO(), mas pra comparar um timestamp já existente em
+// vez de "agora". Sem isso, comparar `isoTimestamp.slice(0, 10)"
+// (UTC) com todayISO() (Brasília) dá falso negativo nas últimas horas
+// do dia em Brasília, quando UTC já virou o dia seguinte.
+export function toBrasiliaISODate(isoTimestamp: string): string {
+  const date = new Date(new Date(isoTimestamp).toLocaleString("en-US", { timeZone: BRASILIA_TIMEZONE }));
+  return makeISODate(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 // Converte uma data ISO ("2026-06-20") para o formato brasileiro
 // ("20/06/2026"), usado em toda a interface.
 export function formatDateBR(iso: string): string {
