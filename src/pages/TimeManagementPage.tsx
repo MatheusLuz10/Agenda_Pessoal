@@ -75,6 +75,35 @@ function formatScheduleRange(schedule: BlockedSchedule): string {
   return `${schedule.startTime} às ${schedule.endTime}`;
 }
 
+function timeToMinutes(hhmm: string): number {
+  const [hours, minutes] = hhmm.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function isMinuteWithinRange(minute: number, startMinute: number, endMinute: number): boolean {
+  return startMinute <= endMinute ? minute >= startMinute && minute < endMinute : minute >= startMinute || minute < endMinute;
+}
+
+// Diz se "agora" cai dentro de algum horário bloqueado de hoje — a
+// pausa no meio (ex: almoço) conta como livre, não como bloqueado.
+function isTimeBlockedNow(schedules: BlockedSchedule[], now: Date): boolean {
+  const weekday = now.getDay();
+  const nowMinute = now.getHours() * 60 + now.getMinutes();
+  return schedules
+    .filter((schedule) => schedule.dayOfWeek === null || schedule.dayOfWeek === weekday)
+    .some((schedule) => {
+      const start = timeToMinutes(schedule.startTime);
+      const end = timeToMinutes(schedule.endTime);
+      if (!isMinuteWithinRange(nowMinute, start, end)) return false;
+      if (schedule.midStart && schedule.midEnd) {
+        const midStart = timeToMinutes(schedule.midStart);
+        const midEnd = timeToMinutes(schedule.midEnd);
+        if (isMinuteWithinRange(nowMinute, midStart, midEnd)) return false;
+      }
+      return true;
+    });
+}
+
 // Tarefas atrasadas vêm primeiro, depois ordena por prioridade (alta >
 // média > baixa) e por horário (com horário antes de sem horário).
 function priorityWeight(priority: Task["priority"]): number {
@@ -91,24 +120,34 @@ const DEFAULT_TASK_ESTIMATE_MINUTES = 30;
 const CRITICAL_TASK_OVERDUE_DAYS = 3;
 const CRITICAL_ROUTINE_INTERVAL_MULTIPLIER = 2;
 
-// "Modo" do dia: um jeito rápido de dizer "só me mostra isso agora",
-// sempre respeitando que Desenvolvimento pessoal nunca deve ficar de
-// fora só porque um modo mais restrito está ativo em outra categoria.
-type DailyMode = "trabalho" | "estudo" | "descanso" | null;
-
-const DAILY_MODE_CATEGORIES: Record<Exclude<DailyMode, null>, string[]> = {
-  estudo: ["Desenvolvimento pessoal"],
-  descanso: ["Saúde", "Relacionamento"],
-  trabalho: ["Casa", "Pets", "Financeiro"],
-};
+// "Modo" do dia: um jeito rápido de dizer "só me mostra isso agora".
+// Padrão (null) = tarefas diversas, sem filtro. Descanso = mais
+// autocuidado e poucas tarefas leves — só existem esses dois.
+type DailyMode = "descanso" | null;
 
 const DAILY_MODE_LABELS: Record<Exclude<DailyMode, null>, string> = {
-  estudo: "Estudo",
   descanso: "Descanso",
-  trabalho: "Casa/afazeres",
 };
 
 const DAILY_MODE_STORAGE_KEY = "gestao-tempo-modo-dia";
+
+// Regras do modo Descanso: autocuidado (Saúde/Relacionamento) sempre
+// cabe, sem limite de duração — é o ponto principal do modo. Financeiro
+// e Desenvolvimento pessoal nunca cabem, mesmo rápidos (não são
+// "leves", são trabalho/estresse). Qualquer outra categoria (Casa,
+// Pets) só entra se for realmente rápida — coisas como aguar plantas
+// ou dobrar roupa, nunca uma faxina grande. Tarefas do Calendário
+// (compromissos/trabalho, sem categoria) ficam de fora do descanso.
+const DESCANSO_SELF_CARE_CATEGORIES = ["Saúde", "Relacionamento"];
+const DESCANSO_EXCLUDED_CATEGORIES = ["Financeiro", "Desenvolvimento pessoal"];
+const DESCANSO_LIGHT_TASK_MAX_MINUTES = 20;
+
+function fitsDescansoMode(item: Pick<QueueItem, "category" | "estimatedMinutes">): boolean {
+  if (item.category === null) return false;
+  if (DESCANSO_EXCLUDED_CATEGORIES.includes(item.category)) return false;
+  if (DESCANSO_SELF_CARE_CATEGORIES.includes(item.category)) return true;
+  return item.estimatedMinutes <= DESCANSO_LIGHT_TASK_MAX_MINUTES;
+}
 
 // Valor sentinela do seletor de tarefa do cronômetro pra "não é nenhuma
 // tarefa de rotina cadastrada, vou digitar o nome" (atividade avulsa).
@@ -160,9 +199,9 @@ function daysOverdue(dateISO: string, todayIso: string): number {
 // Rotinas sem tempo estimado ficam de fora — "só ficam ativas depois de
 // ter um cronograma" (ver RoutineTask.estimatedMinutes).
 //
-// `mode` restringe a fila às categorias daquele modo (ver
-// DAILY_MODE_CATEGORIES) — itens críticos sempre aparecem, mesmo fora
-// do modo, pra nunca esconder algo realmente urgente.
+// `mode` restringe a fila ao modo Descanso (ver fitsDescansoMode) —
+// itens críticos sempre aparecem, mesmo fora do modo, pra nunca
+// esconder algo realmente urgente.
 function buildDailyQueue(
   tasks: Task[],
   routineTasks: RoutineTask[],
@@ -233,12 +272,10 @@ function buildDailyQueue(
     item.priorityWeight -
     (categoryBoosts.get(item.category ?? "") ?? 0) * 5;
 
-  const modeCategories = mode ? DAILY_MODE_CATEGORIES[mode] : null;
-  const filtered = modeCategories
-    ? [...taskItems, ...routineItems].filter(
-        (item) => item.critical || item.category === null || modeCategories.includes(item.category)
-      )
-    : [...taskItems, ...routineItems];
+  const filtered =
+    mode === "descanso"
+      ? [...taskItems, ...routineItems].filter((item) => item.critical || fitsDescansoMode(item))
+      : [...taskItems, ...routineItems];
 
   return filtered.sort((a, b) => {
     const scoreDiff = score(a) - score(b);
@@ -296,13 +333,16 @@ export function TimeManagementPage() {
   const { logs: plannerLogs, logDecision } = usePlannerLogs();
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [selectedRoutineIds, setSelectedRoutineIds] = useState<Set<string>>(new Set());
-  // "Modo do dia" filtra a fila por um grupo de categorias (ver
-  // DAILY_MODE_CATEGORIES) — persistido no localStorage (não é dado do
+  // "Modo do dia" filtra a fila (Padrão = tudo, Descanso = ver
+  // fitsDescansoMode) — persistido no localStorage (não é dado do
   // Supabase, só uma preferência local de sessão).
   const [dailyMode, setDailyMode] = useState<DailyMode>(() => {
     const stored = localStorage.getItem(DAILY_MODE_STORAGE_KEY);
-    return stored === "trabalho" || stored === "estudo" || stored === "descanso" ? stored : null;
+    return stored === "descanso" ? stored : null;
   });
+  // "Ver outra sugestão" na sugestão de tempo livre — cicla pela fila
+  // sem precisar de estado persistido, só troca qual item aparece.
+  const [suggestionSkipIndex, setSuggestionSkipIndex] = useState(0);
   const { tasks, toggleTaskStatus } = useAgenda();
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [isRuleDialogOpen, setIsRuleDialogOpen] = useState(false);
@@ -422,6 +462,14 @@ export function TimeManagementPage() {
     else localStorage.removeItem(DAILY_MODE_STORAGE_KEY);
   }
 
+  // Evita empilhar a mesma decisão toda vez que "Iniciar Dia" roda de
+  // novo no mesmo dia (parar e reiniciar, por exemplo) — só loga se
+  // ainda não existe um registro idêntico datado de hoje.
+  function hasLoggedDecisionToday(decision: string): boolean {
+    const today = todayISO();
+    return plannerLogs.some((log) => log.decision === decision && log.createdAt.slice(0, 10) === today);
+  }
+
   // Monta a fila do dia (tarefas de hoje + atrasadas + rotinas vencidas,
   // atrasadas primeiro, depois por posição em Prioridades) e começa a
   // cronometrar o primeiro item.
@@ -434,7 +482,8 @@ export function TimeManagementPage() {
     // Registra no histórico de decisões toda categoria que apareceu na
     // fila de hoje e foi puxada pra frente por alguma regra ativa, e
     // também qual Modo estava filtrando a fila — assim dá pra consultar
-    // depois por que o dia ficou organizado daquele jeito.
+    // depois por que o dia ficou organizado daquele jeito. Uma vez por
+    // dia por decisão: reiniciar o dia não deve duplicar o mesmo bloco.
     const categoryBoosts = buildCategoryBoosts(rules, categories);
     const categoriesInQueue = new Set(
       queue.map((item) => item.category).filter((category): category is string => category !== null)
@@ -445,16 +494,19 @@ export function TimeManagementPage() {
         (rule) => rule.enabled && `${rule.name} ${rule.description}`.toLowerCase().includes(category.toLowerCase())
       );
       if (matchingRules.length === 0) return;
-      logDecision(
-        `Categoria "${category}" priorizada na fila de hoje`,
-        `Regra(s) ativa(s): ${matchingRules.map((rule) => rule.name).join(", ")}`
-      );
+      const decision = `Categoria "${category}" priorizada na fila de hoje`;
+      if (hasLoggedDecisionToday(decision)) return;
+      logDecision(decision, `Regra(s) ativa(s): ${matchingRules.map((rule) => rule.name).join(", ")}`);
     });
     if (dailyMode) {
-      logDecision(
-        `Modo "${DAILY_MODE_LABELS[dailyMode]}" ativo`,
-        `Fila restrita a ${DAILY_MODE_CATEGORIES[dailyMode].join(", ")} (itens críticos continuam aparecendo mesmo fora do modo).`
-      );
+      const decision = `Modo "${DAILY_MODE_LABELS[dailyMode]}" ativo`;
+      if (!hasLoggedDecisionToday(decision)) {
+        logDecision(
+          decision,
+          "Fila restrita a autocuidado (Saúde/Relacionamento) e tarefas leves de até " +
+            `${DESCANSO_LIGHT_TASK_MAX_MINUTES} min (itens críticos continuam aparecendo mesmo fora do modo).`
+        );
+      }
     }
   }
 
@@ -594,6 +646,23 @@ export function TimeManagementPage() {
     categoryTotals.set(key, (categoryTotals.get(key) ?? 0) + (entry.durationSeconds ?? 0));
   });
 
+  // Sugestão de tempo livre: fora do fluxo de "Iniciar Dia", enquanto o
+  // horário atual não estiver bloqueado, descreve uma atividade pra
+  // fazer agora — mesma fila/pontuação de "Iniciar Dia" (Prioridades +
+  // Regras + Modo), usando o tempo estimado calibrado pelo Cronômetro
+  // ou definido manualmente.
+  const freeTimeQueue =
+    dailyQueue === null && !isTimeBlockedNow(schedules, nowInBrasilia())
+      ? buildDailyQueue(tasks, routineTasks, entries, categories, rules, dailyMode)
+      : [];
+  const freeTimeSuggestion = freeTimeQueue.length > 0 ? freeTimeQueue[suggestionSkipIndex % freeTimeQueue.length] : null;
+
+  function handleStartFreeTimeSuggestion(item: QueueItem) {
+    setSelectedRoutineId(item.id);
+    setCallStart(nowInBrasilia());
+    setElapsedMs(0);
+  }
+
   // Resumo do dia: quanto do "orçamento" de hoje (24h menos os horários
   // bloqueados de hoje) já foi usado, quanto ainda falta pros itens
   // restantes da fila e quanto sobra livre. Só existe com o dia iniciado.
@@ -671,10 +740,58 @@ export function TimeManagementPage() {
             ))}
             <span className="text-xs text-muted-foreground">
               {dailyMode
-                ? `Só ${DAILY_MODE_CATEGORIES[dailyMode].join(", ")} (críticos aparecem sempre).`
-                : "Todas as categorias."}
+                ? `Autocuidado e tarefas leves (até ${DESCANSO_LIGHT_TASK_MAX_MINUTES} min) — críticos aparecem sempre.`
+                : "Tarefas diversas, sem filtro."}
             </span>
           </div>
+        )}
+
+        {freeTimeSuggestion && (
+          <Card className="border-orange-200 dark:border-orange-900">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="size-4 text-orange-700 dark:text-orange-300" />
+                Tempo livre agora
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div>
+                <p className="text-lg font-semibold">{freeTimeSuggestion.title}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  {freeTimeSuggestion.category && <Badge variant="secondary">{freeTimeSuggestion.category}</Badge>}
+                  <span className="text-xs text-muted-foreground">
+                    ~{formatMinutes(freeTimeSuggestion.estimatedMinutes)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {freeTimeSuggestion.source === "routine" ? (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-orange-700 text-white hover:opacity-90"
+                    onClick={() => handleStartFreeTimeSuggestion(freeTimeSuggestion)}
+                  >
+                    <Clock className="size-4" />
+                    Cronometrar agora
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-orange-700 text-white hover:opacity-90"
+                    onClick={() => toggleTaskStatus(freeTimeSuggestion.id)}
+                  >
+                    <Check className="size-4" />
+                    Marcar como feita
+                  </Button>
+                )}
+                {freeTimeQueue.length > 1 && (
+                  <Button size="sm" variant="outline" onClick={() => setSuggestionSkipIndex((i) => i + 1)}>
+                    Ver outra sugestão
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {dailyQueue !== null && (
