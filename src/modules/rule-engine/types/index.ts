@@ -74,6 +74,18 @@ export interface RoutineTask {
   enabled: boolean;
 }
 
+// "Leitura atual": tema/título + link externo (ex: um arquivo do
+// usuário hospedado no Mega, ou qualquer outro link) — sugestão de
+// fallback em "Iniciar Dia"/"Off Work" quando nenhuma tarefa cabe no
+// tempo livre restante. Registro único (singleton): salvar sempre
+// substitui o anterior.
+export interface CurrentReading {
+  id: string;
+  theme: string;
+  link: string;
+  updatedAt: string;
+}
+
 export type DailyPlanStatus = "nao_iniciado" | "em_andamento" | "concluido";
 
 export interface DailyPlan {

@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
   BarChart3,
+  BookOpen,
   Check,
   ChevronDown,
   ChevronUp,
   Clock,
   History,
   MoreVertical,
+  Moon,
   Pencil,
   Play,
   Plus,
@@ -33,6 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAgenda } from "@/contexts/AgendaContext";
 import { nowInBrasilia, toBrasiliaISODate, todayISO } from "@/lib/date";
 import { useBlockedSchedules } from "@/modules/rule-engine/hooks/useBlockedSchedules";
+import { useCurrentReading } from "@/modules/rule-engine/hooks/useCurrentReading";
 import { useExecutionHistory } from "@/modules/rule-engine/hooks/useExecutionHistory";
 import { usePlannerLogs } from "@/modules/rule-engine/hooks/usePlannerLogs";
 import { usePriorities } from "@/modules/rule-engine/hooks/usePriorities";
@@ -155,6 +158,80 @@ function isTimeBlockedNow(schedules: BlockedSchedule[], now: Date): boolean {
       }
       return true;
     });
+}
+
+// Teto de segurança pra quando não há bloqueio à vista (ex: usuário
+// ainda não cadastrou Horários bloqueados) — evita tratar a janela como
+// "infinita" e virar uma sessão gigante de uma vez só.
+const NO_BLOCK_FOUND_CAP_MINUTES = 12 * 60;
+
+// Quantos minutos faltam a partir de "from" até o próximo horário
+// bloqueado começar — 0 se já está bloqueado agora. Usado pra saber o
+// tamanho da janela livre atual (base de "Iniciar Dia"/"Off Work").
+function minutesUntilNextBlock(schedules: BlockedSchedule[], from: Date): number {
+  for (let minute = 0; minute <= NO_BLOCK_FOUND_CAP_MINUTES; minute++) {
+    if (isTimeBlockedNow(schedules, new Date(from.getTime() + minute * 60_000))) return minute;
+  }
+  return NO_BLOCK_FOUND_CAP_MINUTES;
+}
+
+// Simétrico ao de cima: quantos minutos faltam até ficar livre de novo,
+// usado só pra avisar "bloqueado até tal hora" enquanto dura o bloqueio.
+function minutesUntilFree(schedules: BlockedSchedule[], from: Date): number {
+  const capMinutes = 24 * 60;
+  for (let minute = 0; minute <= capMinutes; minute++) {
+    if (!isTimeBlockedNow(schedules, new Date(from.getTime() + minute * 60_000))) return minute;
+  }
+  return capMinutes;
+}
+
+// Categorias de "tarefa" (afazeres) vs "estudo e autocuidado" — usadas
+// só pra dividir o orçamento de tempo de uma janela (Iniciar Dia/Off
+// Work): 30% pras primeiras, 70% pras segundas, sempre priorizando
+// desenvolvimento pessoal e bem-estar sobre afazeres domésticos.
+const WINDOW_TAREFAS_CATEGORIES = ["Casa", "Pets", "Financeiro"];
+const WINDOW_ESTUDO_CATEGORIES = ["Desenvolvimento pessoal", "Saúde", "Relacionamento"];
+const WINDOW_TAREFAS_RATIO = 0.3;
+const WINDOW_ESTUDO_RATIO = 0.7;
+
+// Recorta a fila (já ordenada por score) pra caber numa janela de
+// tempo: itens críticos e tarefas do Calendário (sem categoria, são
+// compromissos reais) sempre entram, sem consumir orçamento. O resto
+// entra em dois "baldes" por categoria, cada um com seu próprio
+// orçamento de minutos — pula (não corta a fila) qualquer item que não
+// caiba mais no orçamento do próprio balde, deixando os menores/mais
+// baratos ainda entrarem depois. Preserva a ordem original (já vem
+// ordenada por score) porque só decide incluir ou pular, nunca reordena.
+function buildWindowedQueue(fullQueue: QueueItem[], windowMinutes: number): QueueItem[] {
+  let tarefasRemaining = windowMinutes * WINDOW_TAREFAS_RATIO;
+  let estudoRemaining = windowMinutes * WINDOW_ESTUDO_RATIO;
+  const result: QueueItem[] = [];
+
+  for (const item of fullQueue) {
+    if (item.critical || item.category === null) {
+      result.push(item);
+      continue;
+    }
+    if (WINDOW_TAREFAS_CATEGORIES.includes(item.category)) {
+      if (item.estimatedMinutes <= tarefasRemaining) {
+        result.push(item);
+        tarefasRemaining -= item.estimatedMinutes;
+      }
+      continue;
+    }
+    if (WINDOW_ESTUDO_CATEGORIES.includes(item.category)) {
+      if (item.estimatedMinutes <= estudoRemaining) {
+        result.push(item);
+        estudoRemaining -= item.estimatedMinutes;
+      }
+      continue;
+    }
+    // Categoria fora dos dois baldes (não deveria acontecer com as 6
+    // categorias padrão) — deixa passar sem orçamento por segurança.
+    result.push(item);
+  }
+
+  return result;
 }
 
 // Tarefas atrasadas vêm primeiro, depois ordena por prioridade (alta >
@@ -411,6 +488,8 @@ export function TimeManagementPage() {
   const { routineTasks, addRoutineTask, editRoutineTask, deleteRoutineTask, deleteRoutineTasks } = useRoutineTasks();
   const { entries, addEntry, editEntry, deleteEntry, deleteEntries } = useExecutionHistory();
   const { logs: plannerLogs, logDecision, deleteLog, deleteLogs } = usePlannerLogs();
+  const { reading: currentReading, setCurrentReading } = useCurrentReading();
+  const [isReadingDialogOpen, setIsReadingDialogOpen] = useState(false);
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [selectedRoutineIds, setSelectedRoutineIds] = useState<Set<string>>(new Set());
   const [selectedLogIds, setSelectedLogIds] = useState<Set<string>>(new Set());
@@ -581,11 +660,17 @@ export function TimeManagementPage() {
     return inMemory || readLoggedDecisionsToday().includes(decision);
   }
 
-  // Monta a fila do dia (tarefas de hoje + atrasadas + rotinas vencidas,
-  // atrasadas primeiro, depois por posição em Prioridades) e começa a
-  // cronometrar o primeiro item.
-  function handleStartDay() {
-    const queue = buildDailyQueue(tasks, routineTasks, entries, categories, rules, dailyMode);
+  // Monta a fila de uma janela livre (tarefas de hoje + atrasadas +
+  // rotinas vencidas, por posição em Prioridades) e recorta pra caber
+  // no tempo até o próximo horário bloqueado, reservando 30% pra
+  // tarefas e 70% pra estudo/autocuidado (ver buildWindowedQueue). Usada
+  // tanto por "Iniciar Dia" (janela da manhã) quanto por "Off Work"
+  // (janela depois do trabalho) — o mecanismo é o mesmo, só muda quando
+  // é chamado.
+  function handleStartSession() {
+    const fullQueue = buildDailyQueue(tasks, routineTasks, entries, categories, rules, dailyMode);
+    const windowMinutes = minutesUntilNextBlock(schedules, nowInBrasilia());
+    const queue = buildWindowedQueue(fullQueue, windowMinutes);
     setDailyQueue(queue);
     setQueueIndex(0);
     setCurrentTaskStartedAt(queue.length > 0 ? nowInBrasilia() : null);
@@ -773,6 +858,12 @@ export function TimeManagementPage() {
     .reduce((sum, schedule) => sum + scheduleBlockedMinutes(schedule), 0);
   const todayBudget = Math.max(0, 24 * 60 - blockedMinutesToday);
 
+  // Enquanto durar um horário bloqueado (ex: trabalho), "Iniciar
+  // Dia"/"Off Work" ficam escondidos e a sugestão de tempo livre some —
+  // o resto da aba (editar Prioridades, Regras, Rotina etc.) continua
+  // liberado normalmente.
+  const isCurrentlyBlocked = isTimeBlockedNow(schedules, nowInBrasilia());
+
   // Fila de hoje (tarefas + rotinas vencidas), calculada mesmo antes de
   // clicar "Iniciar Dia" — alimenta tanto o relatório de disponibilidade
   // (quanto já está comprometido) quanto a sugestão de tempo livre.
@@ -784,7 +875,7 @@ export function TimeManagementPage() {
   // fazer agora — mesma fila/pontuação de "Iniciar Dia" (Prioridades +
   // Regras + Modo), usando o tempo estimado calibrado pelo Cronômetro
   // ou definido manualmente.
-  const freeTimeQueue = isTimeBlockedNow(schedules, nowInBrasilia()) ? [] : previewQueue;
+  const freeTimeQueue = isCurrentlyBlocked ? [] : previewQueue;
   const freeTimeSuggestion = freeTimeQueue.length > 0 ? freeTimeQueue[suggestionSkipIndex % freeTimeQueue.length] : null;
 
   function handleStartFreeTimeSuggestion(item: QueueItem) {
@@ -853,10 +944,22 @@ export function TimeManagementPage() {
             </div>
           </div>
           {dailyQueue === null ? (
-            <Button className="gap-2 bg-orange-700 text-white hover:opacity-90" onClick={handleStartDay}>
-              <Play className="size-4" />
-              Iniciar Dia
-            </Button>
+            isCurrentlyBlocked ? (
+              <p className="text-sm text-muted-foreground">
+                Bloqueado agora — livre em {formatMinutes(minutesUntilFree(schedules, nowInBrasilia()))}.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button className="gap-2 bg-orange-700 text-white hover:opacity-90" onClick={handleStartSession}>
+                  <Play className="size-4" />
+                  Iniciar Dia
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={handleStartSession}>
+                  <Moon className="size-4" />
+                  Off Work
+                </Button>
+              </div>
+            )
           ) : (
             <Button variant="outline" className="gap-2" onClick={handleStopDay}>
               <Square className="size-4" />
@@ -1019,6 +1122,26 @@ export function TimeManagementPage() {
                     Concluir
                   </Button>
                 </>
+              ) : currentReading ? (
+                <>
+                  <BookOpen className="size-8 text-orange-700 dark:text-orange-300" />
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma tarefa cabe no tempo livre agora — que tal
+                  </p>
+                  <h2 className="text-2xl font-semibold tracking-tight">Leia um pouco</h2>
+                  <p className="text-sm text-muted-foreground">{currentReading.theme}</p>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button asChild size="lg" className="gap-2 bg-orange-700 text-white hover:opacity-90">
+                      <a href={currentReading.link} target="_blank" rel="noopener noreferrer">
+                        <BookOpen className="size-4" />
+                        Abrir leitura
+                      </a>
+                    </Button>
+                    <Button size="lg" variant="outline" onClick={handleStopDay}>
+                      Concluir
+                    </Button>
+                  </div>
+                </>
               ) : (
                 <>
                   <p className="text-2xl font-semibold tracking-tight">Dia concluído! 🎉</p>
@@ -1160,6 +1283,57 @@ export function TimeManagementPage() {
                 </p>
               )}
           </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader
+            className="flex flex-row items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => toggleSection("reading")}
+          >
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="size-4 text-orange-700 dark:text-orange-300" />
+              Leitura atual
+            </CardTitle>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setIsReadingDialogOpen(true)}>
+                <Pencil className="size-4" />
+                {currentReading ? "Editar" : "Definir"}
+              </Button>
+              {isSectionOpen("reading") ? (
+                <ChevronUp
+                  className="size-4 cursor-pointer text-muted-foreground"
+                  onClick={() => toggleSection("reading")}
+                />
+              ) : (
+                <ChevronDown
+                  className="size-4 cursor-pointer text-muted-foreground"
+                  onClick={() => toggleSection("reading")}
+                />
+              )}
+            </div>
+          </CardHeader>
+          {isSectionOpen("reading") && (
+          <CardContent className="flex flex-col gap-2">
+            {currentReading ? (
+              <>
+                <p className="font-medium">{currentReading.theme}</p>
+                <a
+                  href={currentReading.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="truncate text-sm text-orange-700 underline-offset-4 hover:underline dark:text-orange-300"
+                >
+                  {currentReading.link}
+                </a>
+              </>
+            ) : (
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                Sem leitura definida — aparece como sugestão ("Leia um pouco") quando nenhuma tarefa cabe no
+                tempo livre restante de uma janela.
+              </p>
+            )}
+          </CardContent>
+          )}
         </Card>
 
         <Card>
@@ -1696,6 +1870,16 @@ export function TimeManagementPage() {
             if (!open) setEditingRoutine(null);
           }}
           onSave={handleSaveRoutine}
+        />
+
+        <ReadingDialog
+          open={isReadingDialogOpen}
+          currentReading={currentReading}
+          onOpenChange={setIsReadingDialogOpen}
+          onSave={(theme, link) => {
+            setCurrentReading(theme, link);
+            setIsReadingDialogOpen(false);
+          }}
         />
       </div>
     </div>
@@ -2304,6 +2488,77 @@ function RoutineDialog({
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={!name.trim() || !category}>
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReadingDialog({
+  open,
+  currentReading,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean;
+  currentReading: { theme: string; link: string } | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (theme: string, link: string) => void;
+}) {
+  const [theme, setTheme] = useState(currentReading?.theme ?? "");
+  const [link, setLink] = useState(currentReading?.link ?? "");
+
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setTheme(currentReading?.theme ?? "");
+      setLink(currentReading?.link ?? "");
+    }
+  }
+
+  function handleSave() {
+    if (!theme.trim() || !link.trim()) return;
+    onSave(theme.trim(), link.trim());
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Leitura atual</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="reading-theme">Tema / título</Label>
+            <Input
+              id="reading-theme"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+              placeholder="Ex: Clean Code, capítulo 3"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="reading-link">Link</Label>
+            <Input
+              id="reading-link"
+              type="url"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              placeholder="https://mega.nz/..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Qualquer link direto pro material (ex: um arquivo compartilhado no Mega).
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} disabled={!theme.trim() || !link.trim()}>
             Salvar
           </Button>
         </DialogFooter>

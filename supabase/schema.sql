@@ -253,6 +253,18 @@ create table if not exists public.rule_engine_planner_logs (
   created_at timestamptz not null default now()
 );
 
+-- "Leitura atual": tema/título + link externo (ex: um arquivo do
+-- usuário hospedado no Mega) mostrado como sugestão de fallback em
+-- "Iniciar Dia"/"Off Work" quando nenhuma tarefa cabe no tempo livre
+-- restante. É um registro só (singleton) — salvar sempre apaga o
+-- anterior e insere um novo, então nunca acumula histórico aqui.
+create table if not exists public.rule_engine_current_reading (
+  id uuid primary key default gen_random_uuid(),
+  theme text not null,
+  link text not null,
+  updated_at timestamptz not null default now()
+);
+
 -- Registro de execução de cada atividade da vida diária (não é do
 -- trabalho) medido pelo cronômetro de "Gestão de tempo", vinculado a
 -- uma categoria de prioridade — usado internamente pelo motor pra
@@ -392,6 +404,7 @@ alter table public.rule_engine_planner_logs enable row level security;
 alter table public.rule_engine_execution_history enable row level security;
 alter table public.rule_engine_daily_plan enable row level security;
 alter table public.rule_engine_routine_tasks enable row level security;
+alter table public.rule_engine_current_reading enable row level security;
 
 -- Este é um calendário PESSOAL: qualquer usuário autenticado (logado via
 -- a tela de login do app, ver src/pages/LoginPage.tsx) tem acesso total.
@@ -421,6 +434,7 @@ drop policy if exists "authenticated full access rule_engine_planner_logs" on pu
 drop policy if exists "authenticated full access rule_engine_execution_history" on public.rule_engine_execution_history;
 drop policy if exists "authenticated full access rule_engine_daily_plan" on public.rule_engine_daily_plan;
 drop policy if exists "authenticated full access rule_engine_routine_tasks" on public.rule_engine_routine_tasks;
+drop policy if exists "authenticated full access rule_engine_current_reading" on public.rule_engine_current_reading;
 
 create policy "authenticated full access calendars" on public.calendars
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
@@ -477,4 +491,7 @@ create policy "authenticated full access rule_engine_daily_plan" on public.rule_
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access rule_engine_routine_tasks" on public.rule_engine_routine_tasks
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access rule_engine_current_reading" on public.rule_engine_current_reading
   for all using (auth.uid() is not null) with check (auth.uid() is not null);

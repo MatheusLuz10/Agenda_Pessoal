@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type {
   BlockedSchedule,
+  CurrentReading,
   ExecutionHistoryEntry,
   PlannerLog,
   PriorityCategory,
@@ -360,4 +361,43 @@ export async function createPlannerLog(decision: string, reason: string): Promis
 export async function removePlannerLog(id: string): Promise<void> {
   const { error } = await supabase!.from("rule_engine_planner_logs").delete().eq("id", id);
   if (error) throw error;
+}
+
+// --- Leitura atual (fallback de "Iniciar Dia"/"Off Work") ---
+
+interface CurrentReadingRow {
+  id: string;
+  theme: string;
+  link: string;
+  updated_at: string;
+}
+
+function rowToCurrentReading(row: CurrentReadingRow): CurrentReading {
+  return { id: row.id, theme: row.theme, link: row.link, updatedAt: row.updated_at };
+}
+
+export async function fetchCurrentReading(): Promise<CurrentReading | null> {
+  const { data, error } = await supabase!
+    .from("rule_engine_current_reading")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const rows = data as CurrentReadingRow[];
+  return rows.length > 0 ? rowToCurrentReading(rows[0]) : null;
+}
+
+// Registro único: apaga qualquer leitura anterior antes de salvar a
+// nova, pra nunca acumular mais de uma "leitura atual" na tabela.
+export async function saveCurrentReading(theme: string, link: string): Promise<CurrentReading> {
+  const { error: deleteError } = await supabase!.from("rule_engine_current_reading").delete().not("id", "is", null);
+  if (deleteError) throw deleteError;
+
+  const { data, error } = await supabase!
+    .from("rule_engine_current_reading")
+    .insert({ theme, link })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToCurrentReading(data as CurrentReadingRow);
 }
