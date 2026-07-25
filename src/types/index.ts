@@ -171,3 +171,59 @@ export interface OperationSettings {
   weeklyHours: number; // jornada semanal contratada, usada p/ valor da hora
   effectivenessPercent: number; // efetividade (%), informada manualmente
 }
+
+// --- Solicitações de Serviços (única parte pública do app) ---
+
+export const SERVICE_REQUEST_TYPES = [
+  "Instalação de Câmeras",
+  "Manutenção de Câmeras",
+  "Manutenção em Computador",
+  "Manutenção no Wi-Fi",
+  "Instalação de Roteador",
+  "Instalação de Repetidor",
+  "Passagem de Cabo",
+  "Viabilidade para Instalação",
+  "Outro",
+] as const;
+
+export type ServiceRequestType = (typeof SERVICE_REQUEST_TYPES)[number];
+
+export type ServiceRequestStatus =
+  | "nova"
+  | "em_analise"
+  | "agendada"
+  | "em_atendimento"
+  | "concluida"
+  | "cancelada";
+
+export const SERVICE_REQUEST_STATUS_LABELS: Record<ServiceRequestStatus, string> = {
+  nova: "Nova Solicitação",
+  em_analise: "Em Análise",
+  agendada: "Agendada",
+  em_atendimento: "Em Atendimento",
+  concluida: "Concluída",
+  cancelada: "Cancelada",
+};
+
+export interface ServiceRequestPhoto {
+  id: string;
+  url: string;
+}
+
+// Um chamado aberto pelo cliente na página pública. `requestNumber` vem
+// pronto do banco (trigger set_service_request_number, formato
+// "MM/AAAA-NNN") — o cliente nunca calcula isso.
+export interface ServiceRequest {
+  id: string;
+  requestNumber: string;
+  clientName: string;
+  company: string | null;
+  phone: string;
+  address: string;
+  serviceType: string;
+  description: string;
+  status: ServiceRequestStatus;
+  observations: string | null;
+  photos: ServiceRequestPhoto[];
+  createdAt: string;
+}

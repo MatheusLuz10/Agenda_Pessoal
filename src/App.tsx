@@ -5,6 +5,7 @@ import { AgendaProvider } from "@/contexts/AgendaContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FinanceProvider } from "@/contexts/FinanceContext";
 import { OperationProvider } from "@/contexts/OperationContext";
+import { ServiceRequestsProvider } from "@/contexts/ServiceRequestsContext";
 import { WorkProvider } from "@/contexts/WorkContext";
 import { AppGridPage } from "@/pages/AppGridPage";
 import { AssistantPage } from "@/pages/AssistantPage";
@@ -15,6 +16,8 @@ import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/LoginPage";
 import { OperationsPage } from "@/pages/OperationsPage";
 import { ReportsPage } from "@/pages/ReportsPage";
+import { ServiceRequestPublicPage } from "@/pages/ServiceRequestPublicPage";
+import { ServiceRequestsPage } from "@/pages/ServiceRequestsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { TimeManagementPage } from "@/pages/TimeManagementPage";
 import { TtkPage } from "@/pages/TtkPage";
@@ -27,6 +30,10 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
+          {/* Única rota pública do app: sem RequireAuth, sem AppLayout,
+              acessível por QR Code ou link direto, sem login. */}
+          <Route path="/solicitar-servico" element={<ServiceRequestPublicPage />} />
+
           <Route element={<RequireAuth />}>
             <Route
               element={
@@ -34,7 +41,9 @@ function App() {
                   <FinanceProvider>
                     <WorkProvider>
                       <OperationProvider>
-                        <AppLayout />
+                        <ServiceRequestsProvider>
+                          <AppLayout />
+                        </ServiceRequestsProvider>
                       </OperationProvider>
                     </WorkProvider>
                   </FinanceProvider>
@@ -50,6 +59,7 @@ function App() {
               <Route path="/meu-trabalho/relatorios" element={<ReportsPage />} />
               <Route path="/operacao" element={<OperationsPage />} />
               <Route path="/gestao-de-tempo" element={<TimeManagementPage />} />
+              <Route path="/solicitacoes" element={<ServiceRequestsPage />} />
               <Route path="/assistente" element={<AssistantPage />} />
               <Route path="/financas" element={<FinancesPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />

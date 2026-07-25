@@ -495,3 +495,126 @@ create policy "authenticated full access rule_engine_routine_tasks" on public.ru
 
 create policy "authenticated full access rule_engine_current_reading" on public.rule_engine_current_reading
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- ==========================================================================
+-- Módulo "Solicitações de Serviços" — a única parte pública do app: um
+-- cliente abre um chamado pela página "/solicitar-servico" (QR Code ou
+-- link, sem login) e a solicitação some na aba privada "Solicitações"
+-- (autenticada, como o resto do app) pra o técnico gerenciar.
+-- ==========================================================================
+
+create table if not exists public.service_requests (
+  id uuid primary key default gen_random_uuid(),
+  -- Preenchido sozinho por trigger (ver set_service_request_number
+  -- abaixo) no formato "MM/AAAA-NNN", reiniciando a cada mês — nunca
+  -- calculado pelo cliente (que pode ser um visitante sem login).
+  request_number text unique,
+  client_name text not null,
+  company text,
+  phone text not null,
+  address text not null,
+  service_type text not null,
+  description text not null,
+  status text not null default 'nova' check (
+    status in ('nova', 'em_analise', 'agendada', 'em_atendimento', 'concluida', 'cancelada')
+  ),
+  -- Só o técnico preenche (área privada) — anotações internas, não
+  -- vistas pelo cliente em lugar nenhum.
+  observations text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.service_request_photos (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.service_requests (id) on delete cascade,
+  photo_url text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists service_request_photos_request_id_idx
+  on public.service_request_photos (request_id);
+
+-- Calcula "MM/AAAA-NNN" (ex: 07/2026-001) sozinho a cada nova
+-- solicitação. security definer: roda com o privilégio de quem criou a
+-- função (não do visitante anônimo que está inserindo), então consegue
+-- contar as solicitações do mês mesmo sem ter permissão de leitura —
+-- um visitante público nunca precisa (nem consegue) ler a tabela.
+create or replace function public.set_service_request_number()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  month_prefix text := to_char(now(), 'MM/YYYY');
+  next_seq integer;
+begin
+  select coalesce(max(substring(request_number from '-(\d+)$')::integer), 0) + 1
+    into next_seq
+    from public.service_requests
+    where request_number like month_prefix || '-%';
+
+  new.request_number := month_prefix || '-' || lpad(next_seq::text, 3, '0');
+  return new;
+end;
+$$;
+
+drop trigger if exists set_service_request_number_trigger on public.service_requests;
+create trigger set_service_request_number_trigger
+  before insert on public.service_requests
+  for each row
+  execute function public.set_service_request_number();
+
+-- Bucket público (mesmo padrão do bucket "avatars"): as fotos precisam
+-- ser lidas sem token, tanto na hora da pré-visualização quanto depois
+-- na aba privada.
+insert into storage.buckets (id, name, public)
+values ('service-request-photos', 'service-request-photos', true)
+on conflict (id) do nothing;
+
+alter table public.service_requests enable row level security;
+alter table public.service_request_photos enable row level security;
+
+drop policy if exists "public insert service_requests" on public.service_requests;
+drop policy if exists "authenticated select service_requests" on public.service_requests;
+drop policy if exists "authenticated update service_requests" on public.service_requests;
+drop policy if exists "authenticated delete service_requests" on public.service_requests;
+drop policy if exists "public insert service_request_photos" on public.service_request_photos;
+drop policy if exists "authenticated select service_request_photos" on public.service_request_photos;
+drop policy if exists "authenticated delete service_request_photos" on public.service_request_photos;
+drop policy if exists "public upload service-request-photos" on storage.objects;
+
+-- Diferente de TODO o resto do app: qualquer pessoa (mesmo sem login)
+-- pode CRIAR uma solicitação — é a própria página pública de abertura
+-- de chamado. Mas só quem está autenticado consegue LER/ATUALIZAR/
+-- EXCLUIR (gerenciar na aba "Solicitações") — um visitante não
+-- consegue ver os chamados de ninguém, só enviar o próprio.
+create policy "public insert service_requests" on public.service_requests
+  for insert
+  with check (true);
+
+create policy "authenticated select service_requests" on public.service_requests
+  for select using (auth.uid() is not null);
+
+create policy "authenticated update service_requests" on public.service_requests
+  for update using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated delete service_requests" on public.service_requests
+  for delete using (auth.uid() is not null);
+
+create policy "public insert service_request_photos" on public.service_request_photos
+  for insert
+  with check (true);
+
+create policy "authenticated select service_request_photos" on public.service_request_photos
+  for select using (auth.uid() is not null);
+
+create policy "authenticated delete service_request_photos" on public.service_request_photos
+  for delete using (auth.uid() is not null);
+
+-- Upload público só neste bucket específico — os demais buckets (ex:
+-- "avatars") continuam exigindo login pelas próprias políticas, que não
+-- são alteradas aqui.
+create policy "public upload service-request-photos" on storage.objects
+  for insert
+  with check (bucket_id = 'service-request-photos');
