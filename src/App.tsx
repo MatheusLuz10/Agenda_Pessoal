@@ -6,6 +6,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { FinanceProvider } from "@/contexts/FinanceContext";
 import { OperationProvider } from "@/contexts/OperationContext";
 import { WorkProvider } from "@/contexts/WorkContext";
+import { AppGridPage } from "@/pages/AppGridPage";
 import { AssistantPage } from "@/pages/AssistantPage";
 import { CalendarViewPage } from "@/pages/CalendarViewPage";
 import { CalendarsPage } from "@/pages/CalendarsPage";
@@ -40,7 +41,8 @@ function App() {
                 </AgendaProvider>
               }
             >
-              <Route index element={<HomePage />} />
+              <Route index element={<AppGridPage />} />
+              <Route path="/inicio" element={<HomePage />} />
               <Route path="/calendarios" element={<CalendarsPage />} />
               <Route path="/calendarios/:calendarId" element={<CalendarViewPage />} />
               <Route path="/meu-trabalho" element={<WorkPage />} />
