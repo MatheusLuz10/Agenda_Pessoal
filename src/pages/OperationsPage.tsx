@@ -43,7 +43,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { fetchFinancialOverrides, saveFinancialOverrides } from "@/data/operationApi";
 import { useOperation } from "@/contexts/OperationContext";
-import { formatDateBR, MONTH_NAMES_PT, todayISO } from "@/lib/date";
+import { formatDateBR, todayISO } from "@/lib/date";
 import { extractPunchFromImage } from "@/lib/ocr";
 import {
   CATEGORY_LABEL,
@@ -56,6 +56,7 @@ import {
   computePunchDay,
   formatMinutesAsHM,
   getCurrentCycleRange,
+  getCycleForDate,
   getPreviousCycleRange,
   isWithinRange,
 } from "@/lib/operation";
@@ -170,42 +171,37 @@ export function OperationsPage() {
   const prizeAmount = useMemo(() => computePrizeAmount(category), [category]);
 
   // Lista completa (não só do ciclo atual) — dá pra editar/excluir BA/BD
-  // de qualquer ciclo, não só o corrente. Enquanto a atividade é do mês
-  // corrente, fica solta na lista; mês fechado (mês anterior ao atual)
-  // agrupa tudo num bloco recolhível "Mês Ano" pra não virar uma lista
-  // infinita.
-  const currentMonthKey = todayISO().slice(0, 7); // "yyyy-MM"
-  const { currentMonthActivities, pastMonthGroups } = useMemo(() => {
+  // de qualquer ciclo, não só o corrente. Agrupada por CICLO (janela de
+  // 10 dias, ver getCycleForDate), não por mês: o ciclo aberto (o mesmo
+  // que os cards de resumo usam) fica solto na lista; todo ciclo já
+  // encerrado entra na categoria "Ciclos encerrados", cada um com seu
+  // próprio bloco recolhível — assim não vira uma lista infinita.
+  const { currentCycleActivities, closedCycleGroups } = useMemo(() => {
     const sorted = [...activities].sort((a, b) => b.date.localeCompare(a.date));
     const current: OperationActivity[] = [];
-    const pastByMonth = new Map<string, OperationActivity[]>();
+    const closedByCycle = new Map<string, { start: string; end: string; items: OperationActivity[] }>();
 
     for (const activity of sorted) {
-      const monthKey = activity.date.slice(0, 7);
-      if (monthKey === currentMonthKey) {
+      const activityCycle = getCycleForDate(new Date(`${activity.date}T00:00:00`));
+      if (activityCycle.start === cycle.start) {
         current.push(activity);
       } else {
-        const list = pastByMonth.get(monthKey) ?? [];
-        list.push(activity);
-        pastByMonth.set(monthKey, list);
+        const group = closedByCycle.get(activityCycle.start) ?? { ...activityCycle, items: [] };
+        group.items.push(activity);
+        closedByCycle.set(activityCycle.start, group);
       }
     }
 
-    const groups = [...pastByMonth.entries()]
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([key, items]) => {
-        const [year, month] = key.split("-").map(Number);
-        return { key, label: `${MONTH_NAMES_PT[month - 1]} ${year}`, items };
-      });
-
-    return { currentMonthActivities: current, pastMonthGroups: groups };
-  }, [activities, currentMonthKey]);
+    const groups = [...closedByCycle.values()].sort((a, b) => b.start.localeCompare(a.start));
+    return { currentCycleActivities: current, closedCycleGroups: groups };
+  }, [activities, cycle]);
 
   const [isActivitiesListOpen, setIsActivitiesListOpen] = useState(false);
-  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
+  const [isClosedCyclesOpen, setIsClosedCyclesOpen] = useState(false);
+  const [openCycleGroups, setOpenCycleGroups] = useState<Set<string>>(new Set());
 
-  function toggleMonth(key: string) {
-    setOpenMonths((prev) => {
+  function toggleCycleGroup(key: string) {
+    setOpenCycleGroups((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -494,9 +490,10 @@ export function OperationsPage() {
 
       {/* Todas as atividades (de qualquer ciclo): fica recolhida, só com a
           contagem — clique expande pra ver/editar/excluir qualquer uma, não
-          só as do ciclo atual. Enquanto está dentro do mês corrente, cada
-          atividade aparece solta na lista; mês fechado agrupa num bloco
-          "Mês Ano" recolhível. */}
+          só as do ciclo atual. Enquanto o ciclo (janela de 10 dias) está
+          aberto, cada atividade aparece solta na lista; todo ciclo já
+          encerrado entra na categoria "Ciclos encerrados", agrupado por
+          ciclo (não por mês — um mês tem 3 ciclos). */}
       <Card>
         <button
           type="button"
@@ -525,11 +522,11 @@ export function OperationsPage() {
               </p>
             ) : (
               <>
-                {currentMonthActivities.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhuma atividade lançada este mês ainda.</p>
+                {currentCycleActivities.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma atividade lançada neste ciclo ainda.</p>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {currentMonthActivities.map((activity) => (
+                    {currentCycleActivities.map((activity) => (
                       <ActivityRow
                         key={activity.id}
                         activity={activity}
@@ -541,38 +538,58 @@ export function OperationsPage() {
                   </div>
                 )}
 
-                {pastMonthGroups.map((group) => {
-                  const isOpen = openMonths.has(group.key);
-                  return (
-                    <div key={group.key} className="flex flex-col gap-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleMonth(group.key)}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm font-medium capitalize"
-                        aria-expanded={isOpen}
-                      >
-                        {group.label}
-                        <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
-                          {group.items.length}
-                          {isOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                        </span>
-                      </button>
-                      {isOpen && (
-                        <div className="flex flex-col gap-2 pl-1">
-                          {group.items.map((activity) => (
-                            <ActivityRow
-                              key={activity.id}
-                              activity={activity}
-                              cycle={cycle}
-                              onEdit={() => openEditDialog(activity)}
-                              onDelete={() => handleDelete(activity.id)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {closedCycleGroups.length > 0 && (
+                  <div className="mt-1 flex flex-col gap-2 border-t border-border pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsClosedCyclesOpen((prev) => !prev)}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm font-medium"
+                      aria-expanded={isClosedCyclesOpen}
+                    >
+                      Ciclos encerrados
+                      <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                        {closedCycleGroups.reduce((sum, group) => sum + group.items.length, 0)}
+                        {isClosedCyclesOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                      </span>
+                    </button>
+                    {isClosedCyclesOpen && (
+                      <div className="flex flex-col gap-2 pl-1">
+                        {closedCycleGroups.map((group) => {
+                          const isOpen = openCycleGroups.has(group.start);
+                          return (
+                            <div key={group.start} className="flex flex-col gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleCycleGroup(group.start)}
+                                className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm font-medium"
+                                aria-expanded={isOpen}
+                              >
+                                {formatDateBR(group.start)} – {formatDateBR(group.end)}
+                                <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                                  {group.items.length}
+                                  {isOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                                </span>
+                              </button>
+                              {isOpen && (
+                                <div className="flex flex-col gap-2 pl-1">
+                                  {group.items.map((activity) => (
+                                    <ActivityRow
+                                      key={activity.id}
+                                      activity={activity}
+                                      cycle={cycle}
+                                      onEdit={() => openEditDialog(activity)}
+                                      onDelete={() => handleDelete(activity.id)}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </CardContent>
