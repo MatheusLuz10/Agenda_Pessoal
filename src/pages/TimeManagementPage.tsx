@@ -853,9 +853,10 @@ export function TimeManagementPage() {
   // no meio, tipo almoço, não contam como bloqueado). Base tanto pro
   // relatório de disponibilidade quanto pro Resumo do dia.
   const todayWeekday = nowInBrasilia().getDay();
-  const blockedMinutesToday = schedules
-    .filter((schedule) => schedule.dayOfWeek === null || schedule.dayOfWeek === todayWeekday)
-    .reduce((sum, schedule) => sum + scheduleBlockedMinutes(schedule), 0);
+  const todaySchedules = schedules.filter(
+    (schedule) => schedule.dayOfWeek === null || schedule.dayOfWeek === todayWeekday
+  );
+  const blockedMinutesToday = todaySchedules.reduce((sum, schedule) => sum + scheduleBlockedMinutes(schedule), 0);
   const todayBudget = Math.max(0, 24 * 60 - blockedMinutesToday);
 
   // Enquanto durar um horário bloqueado (ex: trabalho), "Iniciar
@@ -888,25 +889,9 @@ export function TimeManagementPage() {
   // comprometido com tarefas/rotinas de hoje e quanto sobra livre pra
   // adicionar coisa nova — visível antes mesmo de "Iniciar Dia".
   let timeAvailability: { budget: number; committed: number; free: number } | null = null;
-  // Mesmo comprometido, mas quebrado por categoria (cor fixa cada uma)
-  // pra mostrar de relance pra onde o tempo de hoje está indo.
-  let categorySegments: { name: string; minutes: number; color: string }[] = [];
   if (dailyQueue === null) {
     const committed = previewQueue.reduce((sum, item) => sum + item.estimatedMinutes, 0);
-    const free = todayBudget - committed;
-    timeAvailability = { budget: todayBudget, committed, free };
-
-    const minutesByCategory = new Map<string, number>();
-    previewQueue.forEach((item) => {
-      const key = item.category ?? UNCATEGORIZED_LABEL;
-      minutesByCategory.set(key, (minutesByCategory.get(key) ?? 0) + item.estimatedMinutes);
-    });
-    categorySegments = [...minutesByCategory.entries()].map(([name, minutes]) => ({
-      name,
-      minutes,
-      color: CATEGORY_COLORS[name] ?? UNCATEGORIZED_COLOR,
-    }));
-    if (free > 0) categorySegments.push({ name: "Livre", minutes: free, color: FREE_TIME_COLOR });
+    timeAvailability = { budget: todayBudget, committed, free: todayBudget - committed };
   }
 
   // Resumo do dia: quanto do orçamento já foi usado, quanto ainda falta
@@ -1026,14 +1011,16 @@ export function TimeManagementPage() {
                 </div>
               </div>
               <div className="flex-1">
-                <CategoryTimeChart segments={categorySegments} />
+                <BlockedTimeClock schedules={todaySchedules} />
                 <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
-                  {categorySegments.map((segment) => (
-                    <span key={segment.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="size-2.5 rounded-full" style={{ backgroundColor: segment.color }} />
-                      {segment.name}
-                    </span>
-                  ))}
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="size-2.5 rounded-full" style={{ backgroundColor: CLOCK_BLOCKED_COLOR }} />
+                    Bloqueado ({formatMinutes(blockedMinutesToday)})
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="size-2.5 rounded-full" style={{ backgroundColor: CLOCK_FREE_COLOR }} />
+                    Livre ({formatMinutes(todayBudget)})
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -1939,57 +1926,109 @@ function DaySummaryChart({
   );
 }
 
-// Cor fixa por categoria de prioridade — usada no gráfico de Tempo
-// disponível hoje pra mostrar de relance pra onde o tempo comprometido
-// está indo, em vez de um bloco genérico "Comprometido".
-const CATEGORY_COLORS: Record<string, string> = {
-  "Desenvolvimento pessoal": "#7c3aed",
-  Saúde: "#16a34a",
-  Relacionamento: "#db2777",
-  Casa: "#d97706",
-  Pets: "#2563eb",
-  Financeiro: "#64748b",
-};
-// Tarefas do Calendário não têm categoria (category: null) — aparecem
-// com esse rótulo/cor neutra em vez de sumir do gráfico.
-const UNCATEGORIZED_LABEL = "Compromissos";
-const UNCATEGORIZED_COLOR = "#78716c";
-const FREE_TIME_COLOR = "#cbd5e1";
+// Relógio de 24h do "Tempo disponível hoje": cada Horário bloqueado de
+// hoje vira um arco na hora real em que acontece (ex: trabalho das 8h
+// às 17h30 aparece exatamente nessa faixa do mostrador), com a pausa
+// (ex: almoço) recortada do meio — o resto do círculo é tempo livre.
+// Mostra QUANDO o dia está ocupado, não só QUANTO (como um donut de
+// proporções faria).
+const CLOCK_SIZE = 200;
+const CLOCK_CENTER = CLOCK_SIZE / 2;
+const CLOCK_RADIUS = 78;
+const CLOCK_STROKE_WIDTH = 22;
+const CLOCK_BLOCKED_COLOR = "#c2410c";
+const CLOCK_FREE_COLOR = "#cbd5e1";
+const CLOCK_HOUR_LABELS = [0, 6, 12, 18];
 
-// Donut do Tempo disponível hoje: uma fatia colorida por categoria de
-// prioridade (tempo comprometido) + uma fatia cinza "Livre".
-function CategoryTimeChart({ segments }: { segments: { name: string; minutes: number; color: string }[] }) {
-  const data = segments.filter((slice) => slice.minutes > 0);
+// Minuto do dia (0-1440) -> ponto no aro do relógio. 0min aponta pra
+// cima (posição das 12h de um relógio comum), andando no sentido horário.
+function minuteToClockPoint(minute: number, radius: number): { x: number; y: number } {
+  const angle = (minute / 1440) * 2 * Math.PI - Math.PI / 2;
+  return { x: CLOCK_CENTER + radius * Math.cos(angle), y: CLOCK_CENTER + radius * Math.sin(angle) };
+}
 
-  if (data.length === 0) {
-    return (
-      <p className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-        Sem dados suficientes ainda.
-      </p>
-    );
+// Um horário bloqueado vira 1 ou 2 intervalos de minuto: 2 quando cruza
+// a meia-noite (ex: sono 23h-06h) OU tem pausa no meio (ex: almoço,
+// tratada como um recorte simples — não combina os dois casos, já que
+// pausa é sempre um horário do dia, tipo trabalho, não algo que cruza
+// a virada como o sono).
+function scheduleIntervals(schedule: BlockedSchedule): [number, number][] {
+  const start = timeToMinutes(schedule.startTime);
+  const end = timeToMinutes(schedule.endTime);
+
+  if (schedule.midStart && schedule.midEnd) {
+    const midStart = timeToMinutes(schedule.midStart);
+    const midEnd = timeToMinutes(schedule.midEnd);
+    return ([[start, midStart], [midEnd, end]] as [number, number][]).filter(([s, e]) => e > s);
   }
 
+  return start <= end ? [[start, end]] : [[start, 1440], [0, end]];
+}
+
+function ClockArc({ minuteStart, minuteEnd }: { minuteStart: number; minuteEnd: number }) {
+  if (minuteEnd <= minuteStart) return null;
+  const start = minuteToClockPoint(minuteStart, CLOCK_RADIUS);
+  // 1439.99 em vez de 1440: um bloqueio de meia-noite a meia-noite (24h
+  // inteiras) precisa de início ≠ fim, senão o arco em SVG não desenha.
+  const end = minuteToClockPoint(Math.min(minuteEnd, 1439.99), CLOCK_RADIUS);
+  const largeArcFlag = minuteEnd - minuteStart > 720 ? 1 : 0;
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <PieChart>
-        <Pie
-          data={data}
-          dataKey="minutes"
-          nameKey="name"
-          cx="50%"
-          cy="50%"
-          innerRadius={50}
-          outerRadius={80}
-          paddingAngle={2}
-          label={({ name, value }) => `${name}: ${formatMinutes(Number(value))}`}
-        >
-          {data.map((slice) => (
-            <Cell key={slice.name} fill={slice.color} stroke="#ffffff" strokeWidth={1} />
-          ))}
-        </Pie>
-        <Tooltip formatter={(value) => formatMinutes(Number(value))} />
-      </PieChart>
-    </ResponsiveContainer>
+    <path
+      d={`M ${start.x} ${start.y} A ${CLOCK_RADIUS} ${CLOCK_RADIUS} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`}
+      fill="none"
+      stroke={CLOCK_BLOCKED_COLOR}
+      strokeWidth={CLOCK_STROKE_WIDTH}
+    />
+  );
+}
+
+function BlockedTimeClock({ schedules }: { schedules: BlockedSchedule[] }) {
+  const now = nowInBrasilia();
+  const nowMinute = now.getHours() * 60 + now.getMinutes();
+  const nowInner = minuteToClockPoint(nowMinute, CLOCK_RADIUS - CLOCK_STROKE_WIDTH / 2 - 5);
+  const nowOuter = minuteToClockPoint(nowMinute, CLOCK_RADIUS + CLOCK_STROKE_WIDTH / 2 + 5);
+
+  return (
+    <svg viewBox={`0 0 ${CLOCK_SIZE} ${CLOCK_SIZE}`} className="mx-auto w-full max-w-[220px]">
+      <circle
+        cx={CLOCK_CENTER}
+        cy={CLOCK_CENTER}
+        r={CLOCK_RADIUS}
+        fill="none"
+        stroke={CLOCK_FREE_COLOR}
+        strokeWidth={CLOCK_STROKE_WIDTH}
+      />
+      {schedules.flatMap((schedule) =>
+        scheduleIntervals(schedule).map(([minuteStart, minuteEnd], index) => (
+          <ClockArc key={`${schedule.id}-${index}`} minuteStart={minuteStart} minuteEnd={minuteEnd} />
+        ))
+      )}
+      <line
+        x1={nowInner.x}
+        y1={nowInner.y}
+        x2={nowOuter.x}
+        y2={nowOuter.y}
+        stroke="currentColor"
+        strokeWidth={2}
+        className="text-foreground"
+      />
+      {CLOCK_HOUR_LABELS.map((hour) => {
+        const point = minuteToClockPoint(hour * 60, CLOCK_RADIUS + CLOCK_STROKE_WIDTH / 2 + 12);
+        return (
+          <text
+            key={hour}
+            x={point.x}
+            y={point.y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="currentColor"
+            className="text-[9px] text-muted-foreground"
+          >
+            {String(hour).padStart(2, "0")}h
+          </text>
+        );
+      })}
+    </svg>
   );
 }
 
