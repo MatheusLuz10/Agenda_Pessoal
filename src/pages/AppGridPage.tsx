@@ -1,31 +1,19 @@
-import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { ProfileCard } from "@/components/profile/ProfileCard";
+import { LayoutGrid } from "lucide-react";
 import { GRID_ITEMS } from "@/config/navigation";
-import { todayISO } from "@/lib/date";
-import { getDisplayName } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
 
-// Tela "/" — grade de ícones (estilo launcher), a nova tela inicial do
-// app. A barra de perfil (foto + saudação) só existe aqui; as demais
-// telas (incluindo o antigo dashboard, agora em "/inicio") não a têm.
+// Tela "/menu" — grade de ícones (estilo launcher) com atalho pra todo
+// canto do app. Acessível pelo item "Menu" do menu lateral/inferior.
 export function AppGridPage() {
-  const [displayName] = useState(getDisplayName);
-
   return (
     <div className="flex flex-col gap-6">
-      <ProfileCard>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Olá{displayName ? `, ${displayName}` : ""}!
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {new Date(todayISO() + "T00:00:00").toLocaleDateString("pt-BR", {
-            weekday: "long",
-            day: "2-digit",
-            month: "long",
-          })}
-        </p>
-      </ProfileCard>
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <LayoutGrid className="size-5" />
+        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Menu</h1>
+      </div>
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {GRID_ITEMS.map(({ to, label, icon: Icon }) => (

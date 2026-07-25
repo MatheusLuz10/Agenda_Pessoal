@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
-import { Globe, LogOut, Moon, Sun } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, Globe, LogOut, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 // Cabeçalho fixo no topo, presente em todas as páginas (renderizado pelo
-// AppLayout). Contém a logo e o alternador de tema claro/escuro.
+// AppLayout). Contém o botão "Voltar" (exceto na grade "/menu", que é o
+// destino do próprio botão), a logo e o alternador de tema claro/escuro.
 export function Header() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const showBackButton = location.pathname !== "/menu";
+
   // Tema inicial: usa o que foi salvo antes no localStorage ou, na
   // primeira visita, segue a preferência do sistema operacional do
   // usuário (prefers-color-scheme).
@@ -29,6 +35,16 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur-md sm:px-6">
       <div className="flex items-center gap-2">
+        {showBackButton && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/menu")}
+            aria-label="Voltar ao menu"
+          >
+            <ArrowLeft className="size-4.5" />
+          </Button>
+        )}
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Globe className="size-4.5" />
         </div>

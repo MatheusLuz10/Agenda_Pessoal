@@ -41,8 +41,8 @@ function App() {
                 </AgendaProvider>
               }
             >
-              <Route index element={<AppGridPage />} />
-              <Route path="/inicio" element={<HomePage />} />
+              <Route index element={<HomePage />} />
+              <Route path="/menu" element={<AppGridPage />} />
               <Route path="/calendarios" element={<CalendarsPage />} />
               <Route path="/calendarios/:calendarId" element={<CalendarViewPage />} />
               <Route path="/meu-trabalho" element={<WorkPage />} />
