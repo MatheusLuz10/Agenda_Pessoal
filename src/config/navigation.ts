@@ -21,10 +21,29 @@ export const NAV_ITEMS = [
   { to: "/assistente", label: "Assistente", icon: MessageCircle, end: false },
   { to: "/financas", label: "Finanças", icon: PiggyBank, end: false },
   { to: "/configuracoes", label: "Configurações", icon: Settings, end: false },
-  { to: "/menu", label: "Menu", icon: LayoutGrid, end: true },
+  { to: "/menu", label: "Painel Principal", icon: LayoutGrid, end: true },
 ] as const;
 
-// Usada só pela grade de ícones ("/menu", ver AppGridPage) — mesma lista
-// do menu lateral, exceto o próprio item "Menu" (não faz sentido um
-// ícone dentro da grade que leva pra própria grade).
-export const GRID_ITEMS = NAV_ITEMS.filter((item) => item.to !== "/menu");
+// Grade de ícones ("/menu", ver AppGridPage) organizada por categoria —
+// cada `to` referencia um item de NAV_ITEMS (mesmo ícone/rótulo usados
+// no menu lateral). "Início" fica de fora de propósito: só existe na
+// barra de atalhos do celular (ver MOBILE_SHORTCUTS), não repete aqui.
+export const GRID_CATEGORIES = [
+  { label: "Trabalho", items: ["/meu-trabalho", "/operacao", "/solicitacoes"] },
+  { label: "Produtividade", items: ["/calendarios", "/gestao-de-tempo"] },
+  { label: "Pessoal", items: ["/financas", "/assistente"] },
+  { label: "Sistema", items: ["/configuracoes"] },
+] as const;
+
+// Barra inferior fixa do celular: 5 atalhos diretos pros destinos mais
+// usados, em vez de só um botão genérico pro Painel Principal (que
+// continua acessível pela logo no cabeçalho, ver Header.tsx). Rótulos
+// próprios (ex: "Agenda" em vez de "Calendários") — cabem melhor no
+// espaço apertado da barra.
+export const MOBILE_SHORTCUTS = [
+  { to: "/", label: "Início", icon: Home, end: true },
+  { to: "/calendarios", label: "Agenda", icon: CalendarDays, end: false },
+  { to: "/operacao", label: "Operação", icon: ClipboardList, end: false },
+  { to: "/assistente", label: "Assistente", icon: MessageCircle, end: false },
+  { to: "/configuracoes", label: "Config.", icon: Settings, end: false },
+] as const;

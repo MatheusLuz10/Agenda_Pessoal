@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS } from "@/config/navigation";
+import { MOBILE_SHORTCUTS, NAV_ITEMS } from "@/config/navigation";
 
 // Menu lateral fixo (desktop), visível apenas em telas >= sm. Mostra
 // todos os itens — no desktop há espaço vertical de sobra.
@@ -29,30 +29,28 @@ export function Sidebar() {
   );
 }
 
-// Item usado só pela barra inferior (mobile) — leva direto pra grade de
-// ícones em "/menu", que já reúne o atalho pra todo o resto do app.
-const MOBILE_MENU_ITEM = NAV_ITEMS.find((item) => item.to === "/menu")!;
-
-// Menu inferior (mobile), visível apenas em telas < sm. Em vez de
-// espremer todos os itens lado a lado, mostra só o atalho pra grade de
-// ícones ("/menu") — a lista completa de destinos mora lá.
+// Menu inferior (mobile), visível apenas em telas < sm. 5 atalhos
+// diretos (ver MOBILE_SHORTCUTS) pros destinos mais usados — o Painel
+// Principal (grade completa) fica acessível pela logo no cabeçalho.
 export function BottomNav() {
-  const { to, label, icon: Icon, end } = MOBILE_MENU_ITEM;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card/95 backdrop-blur-md sm:hidden">
-      <NavLink
-        to={to}
-        end={end}
-        className={({ isActive }) =>
-          cn(
-            "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-center text-[10px] font-medium uppercase leading-tight transition-colors",
-            isActive ? "text-primary" : "text-muted-foreground"
-          )
-        }
-      >
-        <Icon className="size-5 shrink-0" />
-        <span>{label}</span>
-      </NavLink>
+      {MOBILE_SHORTCUTS.map(({ to, label, icon: Icon, end }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={end}
+          className={({ isActive }) =>
+            cn(
+              "flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2.5 text-center text-[10px] font-medium uppercase leading-tight transition-colors",
+              isActive ? "text-primary" : "text-muted-foreground"
+            )
+          }
+        >
+          <Icon className="size-5 shrink-0" />
+          <span className="w-full break-words px-0.5">{label}</span>
+        </NavLink>
+      ))}
     </nav>
   );
 }

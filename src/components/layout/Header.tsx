@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Globe, LogOut, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,7 +7,10 @@ import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 // Cabeçalho fixo no topo, presente em todas as páginas (renderizado pelo
 // AppLayout). Contém o botão "Voltar" (exceto na grade "/menu", que é o
-// destino do próprio botão), a logo e o alternador de tema claro/escuro.
+// destino do próprio botão), a logo (que também leva pro Painel
+// Principal — no celular a barra inferior virou atalhos diretos, sem
+// botão de grade, então a logo é o jeito de chegar lá) e o alternador
+// de tema claro/escuro.
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -45,15 +48,17 @@ export function Header() {
             <ArrowLeft className="size-4.5" />
           </Button>
         )}
-        <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Globe className="size-4.5" />
-        </div>
-        <span
-          className="text-lg font-bold tracking-tight"
-          style={{ fontFamily: "'Quicksand', sans-serif" }}
-        >
-          Otimizza Vida
-        </span>
+        <Link to="/menu" className="flex items-center gap-2">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Globe className="size-4.5" />
+          </div>
+          <span
+            className="text-lg font-bold tracking-tight"
+            style={{ fontFamily: "'Quicksand', sans-serif" }}
+          >
+            Otimizza Central
+          </span>
+        </Link>
       </div>
 
       <div className="flex items-center gap-2">
