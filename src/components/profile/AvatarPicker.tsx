@@ -1,18 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useRef, useState } from "react";
 import { Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { fetchUserProfile, saveUserProfile, uploadAvatarPhoto } from "@/data/userProfileApi";
-import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import type { UserProfile } from "@/types";
 
 const AVATAR_SIZE = 64;
 const EDITOR_SIZE = 220;
 
-const DEFAULT_PROFILE: UserProfile = { photoUrl: null, photoPositionX: 50, photoPositionY: 50, photoZoom: 1 };
+type PhotoFields = Pick<UserProfile, "photoUrl" | "photoPositionX" | "photoPositionY" | "photoZoom">;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -51,73 +47,44 @@ function AvatarPhoto({
   );
 }
 
-// Card do topo da tela Início: foto de perfil (clicável para trocar/
-// reposicionar) + nome + o que for passado em `children` (ex: a data de
-// hoje, que continua sendo formatada pela HomePage).
-export function ProfileCard({ children }: { children?: ReactNode }) {
-  const [profileId, setProfileId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+// Botão redondo com a foto de perfil (clicável para trocar/reposicionar),
+// usado no card "Perfil" de Configurações. `profile`/`onSave` são
+// controlados por quem usa este componente — a leitura/gravação real no
+// Supabase (mesma linha do nome de perfil) fica a cargo do chamador.
+export function AvatarPicker({
+  profile,
+  onSave,
+}: {
+  profile: PhotoFields;
+  onSave: (next: PhotoFields, file: File | null) => Promise<void>;
+}) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    fetchUserProfile().then((row) => {
-      if (!row) return;
-      const { id, ...rest } = row;
-      setProfileId(id);
-      setProfile(rest);
-    });
-  }, []);
-
-  async function handleSave(next: UserProfile, file: File | null) {
-    let photoUrl = next.photoUrl;
-    if (file) photoUrl = await uploadAvatarPhoto(file);
-    const finalProfile = { ...next, photoUrl };
-    if (isSupabaseConfigured) {
-      const saved = await saveUserProfile(profileId, finalProfile);
-      const { id, ...rest } = saved;
-      setProfileId(id);
-      setProfile(rest);
-    } else {
-      setProfile(finalProfile);
-    }
-  }
 
   return (
     <>
-      <Card>
-        <CardContent className="flex items-center gap-4 pt-5">
-          <button
-            type="button"
-            onClick={() => setIsDialogOpen(true)}
-            className="relative shrink-0 overflow-hidden rounded-full border border-border bg-muted"
-            style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
-            aria-label="Editar foto de perfil"
-          >
-            {profile.photoUrl ? (
-              <AvatarPhoto
-                src={profile.photoUrl}
-                positionX={profile.photoPositionX}
-                positionY={profile.photoPositionY}
-                zoom={profile.photoZoom}
-                size={AVATAR_SIZE}
-              />
-            ) : (
-              <div className="flex size-full items-center justify-center text-muted-foreground">
-                <Camera className="size-5" />
-              </div>
-            )}
-          </button>
-          <div>{children}</div>
-        </CardContent>
-      </Card>
+      <button
+        type="button"
+        onClick={() => setIsDialogOpen(true)}
+        className="relative shrink-0 overflow-hidden rounded-full border border-border bg-muted"
+        style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
+        aria-label="Editar foto de perfil"
+      >
+        {profile.photoUrl ? (
+          <AvatarPhoto
+            src={profile.photoUrl}
+            positionX={profile.photoPositionX}
+            positionY={profile.photoPositionY}
+            zoom={profile.photoZoom}
+            size={AVATAR_SIZE}
+          />
+        ) : (
+          <div className="flex size-full items-center justify-center text-muted-foreground">
+            <Camera className="size-5" />
+          </div>
+        )}
+      </button>
 
-      <AvatarEditorDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        profile={profile}
-        onSave={handleSave}
-      />
+      <AvatarEditorDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} profile={profile} onSave={onSave} />
     </>
   );
 }
@@ -130,8 +97,8 @@ function AvatarEditorDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  profile: UserProfile;
-  onSave: (next: UserProfile, file: File | null) => Promise<void>;
+  profile: PhotoFields;
+  onSave: (next: PhotoFields, file: File | null) => Promise<void>;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(profile.photoUrl);
   const [pendingFile, setPendingFile] = useState<File | null>(null);

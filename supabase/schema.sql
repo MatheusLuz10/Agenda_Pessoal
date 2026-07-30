@@ -87,9 +87,10 @@ create table if not exists public.service_orders (
 
 create index if not exists service_orders_date_idx on public.service_orders (date);
 
--- Foto de perfil da tela Início: linha única com a posição/zoom
--- escolhidos no editor (ver src/data/userProfileApi.ts). A foto em si
--- fica no Storage (bucket "avatars" abaixo), aqui só a URL pública.
+-- Perfil (nome + foto) editado na tela Configurações: linha única com a
+-- posição/zoom escolhidos no editor (ver src/data/userProfileApi.ts). A
+-- foto em si fica no Storage (bucket "avatars" abaixo), aqui só a URL
+-- pública.
 create table if not exists public.user_profile (
   id uuid primary key default gen_random_uuid(),
   photo_url text,
@@ -98,6 +99,10 @@ create table if not exists public.user_profile (
   photo_zoom numeric(5, 2) not null default 1,
   updated_at timestamptz not null default now()
 );
+
+-- "add column if not exists" garante que quem já rodou este schema antes
+-- também ganhe a coluna nova sem precisar recriar a tabela.
+alter table public.user_profile add column if not exists name text not null default '';
 
 -- Bucket público (leitura livre da foto, sem precisar de token) onde a
 -- foto de perfil é enviada. "on conflict do nothing" torna seguro rodar
@@ -618,3 +623,41 @@ create policy "authenticated delete service_request_photos" on public.service_re
 create policy "public upload service-request-photos" on storage.objects
   for insert
   with check (bucket_id = 'service-request-photos');
+
+-- Código de acompanhamento: o próprio request_number ("MM/AAAA-NNN", já
+-- gerado pelo trigger acima) serve de código — o cliente não tem
+-- permissão de SELECT na tabela, então usa estas duas funções
+-- security definer (rodam com privilégio de quem criou, não do
+-- visitante) pra (1) ver o código da solicitação que acabou de criar e
+-- (2) consultar o andamento depois, só com os campos relevantes pro
+-- status — nunca telefone/endereço/nome de outros clientes.
+create or replace function public.get_service_request_number(p_id uuid)
+returns text
+language sql
+security definer
+set search_path = public
+as $$
+  select request_number from public.service_requests where id = p_id;
+$$;
+
+create or replace function public.lookup_service_request(p_request_number text)
+returns table (
+  request_number text,
+  service_type text,
+  status text,
+  description text,
+  observations text,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select request_number, service_type, status, description, observations, created_at
+  from public.service_requests
+  where request_number = p_request_number
+  limit 1;
+$$;
+
+grant execute on function public.get_service_request_number(uuid) to anon, authenticated;
+grant execute on function public.lookup_service_request(text) to anon, authenticated;

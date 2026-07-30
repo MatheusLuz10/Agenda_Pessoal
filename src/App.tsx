@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RequireAuth } from "@/components/layout/RequireAuth";
 import { AgendaProvider } from "@/contexts/AgendaContext";
@@ -12,7 +12,6 @@ import { AssistantPage } from "@/pages/AssistantPage";
 import { CalendarViewPage } from "@/pages/CalendarViewPage";
 import { CalendarsPage } from "@/pages/CalendarsPage";
 import { FinancesPage } from "@/pages/FinancesPage";
-import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/LoginPage";
 import { OperationsPage } from "@/pages/OperationsPage";
 import { ReportsPage } from "@/pages/ReportsPage";
@@ -50,7 +49,7 @@ function App() {
                 </AgendaProvider>
               }
             >
-              <Route index element={<HomePage />} />
+              <Route index element={<Navigate to="/menu" replace />} />
               <Route path="/menu" element={<AppGridPage />} />
               <Route path="/calendarios" element={<CalendarsPage />} />
               <Route path="/calendarios/:calendarId" element={<CalendarViewPage />} />

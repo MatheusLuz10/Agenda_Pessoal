@@ -54,8 +54,7 @@ export const TRANSACTION_CATEGORIES = [
 export type TransactionCategory = (typeof TRANSACTION_CATEGORIES)[number];
 
 // Um lançamento financeiro (entrada ou saída). Independente dos
-// calendários de tarefas, mas aparece junto na visão geral da agenda
-// (ver markedDates em HomePage) porque também tem uma data associada.
+// calendários de tarefas, mas também tem uma data associada.
 export interface Transaction {
   id: string;
   type: TransactionType;
@@ -148,10 +147,11 @@ export interface FinancialOverrides {
   prizeAmount: number | null;
 }
 
-// Foto de perfil exibida na tela Início, com posição/zoom escolhidos
-// pelo usuário no editor. Linha única (mesmo padrão de OperationSettings).
-// photoPositionX/Y ficam em 0-100 (50 = centralizado); photoZoom em 1-3.
+// Perfil do usuário (nome + foto), editado na tela Configurações. Linha
+// única (mesmo padrão de OperationSettings). photoPositionX/Y ficam em
+// 0-100 (50 = centralizado); photoZoom em 1-3.
 export interface UserProfile {
+  name: string;
   photoUrl: string | null;
   photoPositionX: number;
   photoPositionY: number;
@@ -208,6 +208,20 @@ export const SERVICE_REQUEST_STATUS_LABELS: Record<ServiceRequestStatus, string>
 export interface ServiceRequestPhoto {
   id: string;
   url: string;
+}
+
+// Resultado da consulta pública de andamento (página "/solicitar-servico",
+// aba "Consultar andamento"): o cliente informa o código (requestNumber,
+// ex: "07/2026-013") e recebe só o essencial pra acompanhar o chamado —
+// sem dados de contato de ninguém, ver função lookup_service_request no
+// schema.sql.
+export interface ServiceRequestLookup {
+  requestNumber: string;
+  serviceType: string;
+  status: ServiceRequestStatus;
+  description: string;
+  observations: string | null;
+  createdAt: string;
 }
 
 // Um chamado aberto pelo cliente na página pública. `requestNumber` vem

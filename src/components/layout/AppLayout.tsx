@@ -6,10 +6,9 @@ import { Sidebar, BottomNav } from "@/components/layout/Sidebar";
 // componente é o elemento da rota "pai", e cada página entra no lugar
 // do <Outlet />, que é onde o react-router injeta a rota filha ativa.
 //
-// A barra inferior fixa (mobile) fica sempre visível — é só o ícone
-// "Menu" (atalho pra grade em "/menu"), não a lista antiga de destinos.
-// O botão "Voltar" do Header (ver Header.tsx) é um atalho adicional, não
-// um substituto dela.
+// A barra inferior fixa (mobile) fica sempre visível, com os 4 atalhos
+// de MOBILE_SHORTCUTS (ver navigation.ts). O botão "Voltar" do Header
+// (ver Header.tsx) é um atalho adicional, não um substituto dela.
 export function AppLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-background">

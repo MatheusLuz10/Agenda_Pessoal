@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { compressImage } from "@/lib/imageCompression";
-import type { ServiceRequest, ServiceRequestStatus } from "@/types";
+import type { ServiceRequest, ServiceRequestLookup, ServiceRequestStatus } from "@/types";
 
 // Camada de acesso ao Supabase de Solicitações de Serviços — mesmo
 // padrão de src/data/*Api.ts, mas com um detalhe único no app inteiro:
@@ -122,6 +122,47 @@ export async function createServiceRequest(input: NewServiceRequestInput): Promi
   });
   if (error) throw error;
   return id;
+}
+
+// Devolve o código de acompanhamento (request_number, gerado pelo
+// trigger no insert) pra mostrar ao cliente logo após enviar — via RPC
+// security definer, porque o visitante anônimo não tem permissão de
+// SELECT direto na tabela (ver get_service_request_number no schema.sql).
+export async function getServiceRequestNumber(id: string): Promise<string | null> {
+  const { data, error } = await supabase!.rpc("get_service_request_number", { p_id: id });
+  if (error) throw error;
+  return (data as string | null) ?? null;
+}
+
+// Consulta pública de andamento: o cliente informa o código
+// (request_number) e recebe só os campos relevantes pro status, via RPC
+// security definer (ver lookup_service_request no schema.sql) — não
+// existe policy de SELECT pra anon na tabela, então isso nunca expõe as
+// solicitações de outros clientes.
+export async function lookupServiceRequest(requestNumber: string): Promise<ServiceRequestLookup | null> {
+  const { data, error } = await supabase!.rpc("lookup_service_request", {
+    p_request_number: requestNumber.trim(),
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | {
+        request_number: string;
+        service_type: string;
+        status: ServiceRequestStatus;
+        description: string;
+        observations: string | null;
+        created_at: string;
+      }
+    | undefined;
+  if (!row) return null;
+  return {
+    requestNumber: row.request_number,
+    serviceType: row.service_type,
+    status: row.status,
+    description: row.description,
+    observations: row.observations,
+    createdAt: row.created_at,
+  };
 }
 
 // Comprime a imagem no navegador antes de subir (ver lib/imageCompression)

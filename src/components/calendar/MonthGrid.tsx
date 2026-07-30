@@ -23,9 +23,9 @@ interface MonthGridProps {
 }
 
 // Grade de calendário mensal reutilizável. É "controlada": quem usa este
-// componente (HomePage, CalendarViewPage) guarda o ano/mês/dia selecionado
-// em seu próprio estado e passa para baixo via props — o MonthGrid não
-// guarda nada sozinho, só dispara os callbacks onMonthChange/onSelectDate.
+// componente (CalendarViewPage) guarda o ano/mês/dia selecionado em seu
+// próprio estado e passa para baixo via props — o MonthGrid não guarda
+// nada sozinho, só dispara os callbacks onMonthChange/onSelectDate.
 export function MonthGrid({
   year,
   month,

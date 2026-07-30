@@ -7,10 +7,8 @@ import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 // Cabeçalho fixo no topo, presente em todas as páginas (renderizado pelo
 // AppLayout). Contém o botão "Voltar" (exceto na grade "/menu", que é o
-// destino do próprio botão), a logo (que também leva pro Painel
-// Principal — no celular a barra inferior virou atalhos diretos, sem
-// botão de grade, então a logo é o jeito de chegar lá) e o alternador
-// de tema claro/escuro.
+// destino do próprio botão), a logo (mais um atalho pro Painel Principal,
+// além do botão "Início" do menu) e o alternador de tema claro/escuro.
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();

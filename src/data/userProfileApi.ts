@@ -1,11 +1,13 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { UserProfile } from "@/types";
 
-// Foto de perfil da tela Início: linha única (mesmo padrão de
-// operation_settings) + um arquivo no Storage (bucket "avatars").
+// Perfil (nome + foto) do usuário: linha única (mesmo padrão de
+// operation_settings) + a foto em si num arquivo no Storage (bucket
+// "avatars").
 
 interface UserProfileRow {
   id: string;
+  name: string;
   photo_url: string | null;
   photo_position_x: number;
   photo_position_y: number;
@@ -15,6 +17,7 @@ interface UserProfileRow {
 function rowToProfile(row: UserProfileRow): UserProfile & { id: string } {
   return {
     id: row.id,
+    name: row.name,
     photoUrl: row.photo_url,
     photoPositionX: Number(row.photo_position_x),
     photoPositionY: Number(row.photo_position_y),
@@ -33,6 +36,7 @@ export async function saveUserProfile(
   profile: UserProfile
 ): Promise<UserProfile & { id: string }> {
   const payload = {
+    name: profile.name,
     photo_url: profile.photoUrl,
     photo_position_x: profile.photoPositionX,
     photo_position_y: profile.photoPositionY,

@@ -2,12 +2,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, Moon, Database, Gauge, User } from "lucide-react";
+import { AvatarPicker } from "@/components/profile/AvatarPicker";
+import { fetchUserProfile, saveUserProfile, uploadAvatarPhoto } from "@/data/userProfileApi";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { getDisplayName, setDisplayName } from "@/lib/userProfile";
 import { useOperation } from "@/contexts/OperationContext";
-import type { OperationSettings } from "@/types";
+import type { OperationSettings, UserProfile } from "@/types";
+
+const DEFAULT_PROFILE: UserProfile = { name: "", photoUrl: null, photoPositionX: 50, photoPositionY: 50, photoZoom: 1 };
 
 // Tela "/configuracoes" — preferências do app. Os toggles aqui ainda são
 // "decorativos": guardam estado local mas não plugam em nenhuma lógica
@@ -16,16 +20,61 @@ export function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [overdueAlerts, setOverdueAlerts] = useState(true);
   const [todayAlerts, setTodayAlerts] = useState(true);
-  const [name, setName] = useState(getDisplayName);
   const { settings: operationSettings, updateSettings: updateOperationSettings } = useOperation();
 
   function patchOperationSettings(patch: Partial<OperationSettings>) {
     updateOperationSettings({ ...operationSettings, ...patch });
   }
 
+  // Perfil (nome + foto): sem Supabase configurado, o nome vive só no
+  // localStorage (ver lib/userProfile.ts) — mesma limitação de sempre,
+  // não sincroniza entre dispositivos/navegadores. Com Supabase, nome e
+  // foto ficam na mesma linha da tabela user_profile.
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile>(() => ({ ...DEFAULT_PROFILE, name: getDisplayName() }));
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    fetchUserProfile().then((row) => {
+      if (!row) return;
+      const { id, ...rest } = row;
+      setProfileId(id);
+      setProfile(rest);
+      setDisplayName(rest.name);
+    });
+  }, []);
+
   function handleNameChange(value: string) {
-    setName(value);
+    setProfile((prev) => ({ ...prev, name: value }));
     setDisplayName(value);
+  }
+
+  function persistName() {
+    if (!isSupabaseConfigured) return;
+    saveUserProfile(profileId, profile)
+      .then((saved) => {
+        const { id, ...rest } = saved;
+        setProfileId(id);
+        setProfile(rest);
+      })
+      .catch((error) => console.error("Falha ao salvar nome de perfil:", error));
+  }
+
+  async function handleAvatarSave(
+    next: Pick<UserProfile, "photoUrl" | "photoPositionX" | "photoPositionY" | "photoZoom">,
+    file: File | null
+  ) {
+    let photoUrl = next.photoUrl;
+    if (file) photoUrl = await uploadAvatarPhoto(file);
+    const finalProfile = { ...profile, ...next, photoUrl };
+    if (isSupabaseConfigured) {
+      const saved = await saveUserProfile(profileId, finalProfile);
+      const { id, ...rest } = saved;
+      setProfileId(id);
+      setProfile(rest);
+    } else {
+      setProfile(finalProfile);
+    }
   }
 
   return (
@@ -40,15 +89,18 @@ export function SettingsPage() {
           <User className="size-4.5 text-muted-foreground" />
           <CardTitle>Perfil</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-1.5">
-          <Label htmlFor="profile-name">Seu nome</Label>
-          <Input
-            id="profile-name"
-            value={name}
-            onChange={(e) => handleNameChange(e.target.value)}
-            placeholder="Ex: Matheus"
-          />
-          <p className="text-xs text-muted-foreground">Usado no cumprimento da tela Início.</p>
+        <CardContent className="flex items-center gap-4">
+          <AvatarPicker profile={profile} onSave={handleAvatarSave} />
+          <div className="flex flex-1 flex-col gap-1.5">
+            <Label htmlFor="profile-name">Seu nome</Label>
+            <Input
+              id="profile-name"
+              value={profile.name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              onBlur={persistName}
+              placeholder="Ex: Matheus"
+            />
+          </div>
         </CardContent>
       </Card>
 
