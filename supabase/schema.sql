@@ -121,11 +121,19 @@ create table if not exists public.user_profile (
 alter table public.user_profile add column if not exists name text not null default '';
 
 -- Bucket público (leitura livre da foto, sem precisar de token) onde a
--- foto de perfil é enviada. "on conflict do nothing" torna seguro rodar
--- este script mais de uma vez.
-insert into storage.buckets (id, name, public)
-values ('avatars', 'avatars', true)
-on conflict (id) do nothing;
+-- foto de perfil é enviada. file_size_limit/allowed_mime_types travam no
+-- próprio Storage (não só na validação do navegador, que dá pra burlar
+-- chamando a API direto) — sem isso, qualquer arquivo de qualquer
+-- tamanho poderia ser enviado por quem estiver autenticado. SVG fica de
+-- fora de propósito: pode conter script embutido.
+-- "on conflict do update" (em vez de "do nothing") garante que quem já
+-- tinha rodado este script antes também ganhe os limites novos.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 15728640, array['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "authenticated manage avatars" on storage.objects;
 create policy "authenticated manage avatars" on storage.objects
@@ -533,7 +541,9 @@ create table if not exists public.service_requests (
   id uuid primary key default gen_random_uuid(),
   -- Preenchido sozinho por trigger (ver set_service_request_number
   -- abaixo) no formato "MM/AAAA-NNN", reiniciando a cada mês — nunca
-  -- calculado pelo cliente (que pode ser um visitante sem login).
+  -- calculado pelo cliente (que pode ser um visitante sem login). Uso
+  -- interno/administrativo (aba privada) — não serve mais de código de
+  -- consulta pro cliente, ver tracking_code abaixo.
   request_number text unique,
   client_name text not null,
   company text,
@@ -549,6 +559,18 @@ create table if not exists public.service_requests (
   observations text,
   created_at timestamptz not null default now()
 );
+
+-- Código de acompanhamento mostrado ao cliente (ver TrackRequestCard em
+-- src/pages/ServiceRequestPublicPage.tsx): gerado no navegador (8
+-- caracteres aleatórios de um alfabeto de 33 símbolos, ~1,2 trilhão de
+-- combinações) — diferente do request_number, que é sequencial e curto
+-- demais pra resistir a força bruta. Nullable (linhas antigas não têm)
+-- e único só entre os valores preenchidos.
+alter table public.service_requests add column if not exists tracking_code text;
+
+create unique index if not exists service_requests_tracking_code_idx
+  on public.service_requests (tracking_code)
+  where tracking_code is not null;
 
 create table if not exists public.service_request_photos (
   id uuid primary key default gen_random_uuid(),
@@ -615,10 +637,19 @@ create trigger set_service_request_number_trigger
 
 -- Bucket público (mesmo padrão do bucket "avatars"): as fotos precisam
 -- ser lidas sem token, tanto na hora da pré-visualização quanto depois
--- na aba privada.
-insert into storage.buckets (id, name, public)
-values ('service-request-photos', 'service-request-photos', true)
-on conflict (id) do nothing;
+-- na aba privada. file_size_limit/allowed_mime_types importam ainda mais
+-- aqui do que no bucket "avatars": upload de foto é liberado pra
+-- QUALQUER visitante sem login (ver policy "public upload
+-- service-request-photos" abaixo), então sem esse limite no próprio
+-- Storage, qualquer pessoa poderia enviar arquivo de qualquer tipo/
+-- tamanho contornando a validação do navegador. 8 MB é folga generosa —
+-- o app já comprime a foto pra poucas centenas de KB antes de enviar.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('service-request-photos', 'service-request-photos', true, 8388608, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 alter table public.service_requests enable row level security;
 alter table public.service_request_photos enable row level security;
@@ -667,32 +698,23 @@ create policy "public upload service-request-photos" on storage.objects
   for insert
   with check (bucket_id = 'service-request-photos');
 
--- Código de acompanhamento: o próprio request_number ("MM/AAAA-NNN", já
--- gerado pelo trigger acima) serve de código — o cliente não tem
--- permissão de SELECT na tabela, então usa estas duas funções
--- security definer (rodam com privilégio de quem criou, não do
--- visitante) pra (1) ver o código da solicitação que acabou de criar e
--- (2) consultar o andamento depois, só com os campos relevantes pro
--- status — nunca telefone/endereço/nome de outros clientes.
-create or replace function public.get_service_request_number(p_id uuid)
-returns text
-language sql
-security definer
-set search_path = public
-as $$
-  select request_number from public.service_requests where id = p_id;
-$$;
+-- get_service_request_number ficou obsoleta: o código de acompanhamento
+-- não é mais o request_number (sequencial, curto demais pra resistir a
+-- força bruta — ver tracking_code acima). O cliente já sabe o
+-- tracking_code assim que envia o formulário (gerado no navegador antes
+-- do insert), não precisa mais pedir de volta ao banco. Removida aqui
+-- pra não deixar uma função pública sem uso exposta.
+drop function if exists public.get_service_request_number(uuid);
 
--- Nunca devolve "observations": são anotações internas do técnico (área
+-- Consulta pública de andamento: busca por tracking_code (não mais
+-- request_number — esse era curto e sequencial demais, dava pra tentar
+-- força bruta em todas as combinações "MM/AAAA-NNN" de um mês; o
+-- tracking_code tem ~1,2 trilhão de combinações possíveis). Nunca
+-- devolve "observations": são anotações internas do técnico (área
 -- privada, ver comentário na coluna em service_requests), o cliente não
 -- pode ver isso em lugar nenhum — aqui ele só recebe o que precisa pra
 -- acompanhar o andamento do próprio pedido.
--- "drop function" primeiro porque o Postgres não deixa um "create or
--- replace" trocar o formato de retorno de uma função existente (só o
--- código da função é descartado aqui, nenhuma linha de tabela é afetada).
-drop function if exists public.lookup_service_request(text);
-
-create or replace function public.lookup_service_request(p_request_number text)
+create or replace function public.lookup_service_request(p_code text)
 returns table (
   request_number text,
   service_type text,
@@ -706,9 +728,8 @@ set search_path = public
 as $$
   select request_number, service_type, status, description, created_at
   from public.service_requests
-  where request_number = p_request_number
+  where tracking_code = p_code
   limit 1;
 $$;
 
-grant execute on function public.get_service_request_number(uuid) to anon, authenticated;
 grant execute on function public.lookup_service_request(text) to anon, authenticated;

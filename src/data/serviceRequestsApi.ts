@@ -104,14 +104,35 @@ export interface NewServiceRequestInput {
   description: string;
 }
 
-// Gera o id no cliente (em vez de deixar o banco gerar e devolver via
-// `.select()`) porque o visitante anônimo não tem permissão de leitura
-// — só de inserir. Assim o fluxo de anexar fotos na sequência já sabe
-// o request_id sem precisar de nenhuma resposta de volta do insert.
-export async function createServiceRequest(input: NewServiceRequestInput): Promise<string> {
+// Alfabeto sem caracteres ambíguos (sem 0/O, 1/I/L) — o código é lido e
+// digitado por gente, então evita confusão visual na hora de conferir.
+const TRACKING_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const TRACKING_CODE_LENGTH = 8;
+
+// Código de acompanhamento do cliente: gerado no navegador (não é mais o
+// request_number, sequencial e curto demais pra resistir a tentativas de
+// força bruta — ver comentário em lookup_service_request no schema.sql).
+// 8 caracteres de um alfabeto de 32 símbolos ≈ 1,2 trilhão de
+// combinações possíveis.
+function generateTrackingCode(): string {
+  const bytes = new Uint8Array(TRACKING_CODE_LENGTH);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => TRACKING_CODE_ALPHABET[b % TRACKING_CODE_ALPHABET.length]).join("");
+}
+
+// Gera id e tracking_code no cliente (em vez de deixar o banco gerar e
+// devolver via `.select()`) porque o visitante anônimo não tem permissão
+// de leitura — só de inserir. Assim o fluxo de anexar fotos e mostrar o
+// código de acompanhamento na sequência já tem tudo que precisa, sem
+// nenhuma resposta de volta do insert.
+export async function createServiceRequest(
+  input: NewServiceRequestInput
+): Promise<{ id: string; trackingCode: string }> {
   const id = crypto.randomUUID();
+  const trackingCode = generateTrackingCode();
   const { error } = await supabase!.from("service_requests").insert({
     id,
+    tracking_code: trackingCode,
     client_name: input.clientName.trim(),
     company: input.company.trim() || null,
     phone: input.phone.trim(),
@@ -121,27 +142,17 @@ export async function createServiceRequest(input: NewServiceRequestInput): Promi
     status: "nova",
   });
   if (error) throw error;
-  return id;
+  return { id, trackingCode };
 }
 
-// Devolve o código de acompanhamento (request_number, gerado pelo
-// trigger no insert) pra mostrar ao cliente logo após enviar — via RPC
-// security definer, porque o visitante anônimo não tem permissão de
-// SELECT direto na tabela (ver get_service_request_number no schema.sql).
-export async function getServiceRequestNumber(id: string): Promise<string | null> {
-  const { data, error } = await supabase!.rpc("get_service_request_number", { p_id: id });
-  if (error) throw error;
-  return (data as string | null) ?? null;
-}
-
-// Consulta pública de andamento: o cliente informa o código
-// (request_number) e recebe só os campos relevantes pro status, via RPC
-// security definer (ver lookup_service_request no schema.sql) — não
-// existe policy de SELECT pra anon na tabela, então isso nunca expõe as
-// solicitações de outros clientes.
-export async function lookupServiceRequest(requestNumber: string): Promise<ServiceRequestLookup | null> {
+// Consulta pública de andamento: o cliente informa o código de
+// acompanhamento (tracking_code) e recebe só os campos relevantes pro
+// status, via RPC security definer (ver lookup_service_request no
+// schema.sql) — não existe policy de SELECT pra anon na tabela, então
+// isso nunca expõe as solicitações de outros clientes.
+export async function lookupServiceRequest(code: string): Promise<ServiceRequestLookup | null> {
   const { data, error } = await supabase!.rpc("lookup_service_request", {
-    p_request_number: requestNumber.trim(),
+    p_code: code.trim().toUpperCase(),
   });
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as

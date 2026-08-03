@@ -1,17 +1,12 @@
-import { useState, type ChangeEvent } from "react";
-import { CheckCircle2, Globe, ImagePlus, Phone, Search, User, X } from "lucide-react";
+import { useState, type ChangeEvent, type CSSProperties } from "react";
+import { CheckCircle2, ImagePlus, Phone, Search, User, Wifi, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  createServiceRequest,
-  getServiceRequestNumber,
-  lookupServiceRequest,
-  uploadServiceRequestPhoto,
-} from "@/data/serviceRequestsApi";
+import { createServiceRequest, lookupServiceRequest, uploadServiceRequestPhoto } from "@/data/serviceRequestsApi";
 import { isAcceptedImageType } from "@/lib/imageCompression";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { SERVICE_REQUEST_STATUS_LABELS, SERVICE_REQUEST_TYPES } from "@/types";
@@ -20,6 +15,36 @@ import type { ServiceRequestLookup } from "@/types";
 const COMPANY_NAME = "CONECTA WIFI";
 const TECHNICIAN_NAME = "Matheus Luz";
 const CONTACT_PHONE = "(91) 98645-6795";
+
+// Paleta extraída do material de marca (public/designerSolicitacao.png:
+// fundo azul-marinho quase preto + azul vibrante de destaque). Aplicada
+// via variáveis CSS no container raiz — os componentes (Card, Input,
+// Button etc.) já leem essas mesmas variáveis, então todo o resto da
+// página se re-temiza sozinho, sem precisar mexer em cada um.
+const BRAND_THEME_STYLE: CSSProperties = {
+  ["--background" as string]: "#000b1f",
+  ["--foreground" as string]: "#f2f8ff",
+  ["--card" as string]: "#0a1b36",
+  ["--card-foreground" as string]: "#f2f8ff",
+  ["--popover" as string]: "#0a1b36",
+  ["--popover-foreground" as string]: "#f2f8ff",
+  ["--primary" as string]: "#0d8afd",
+  ["--primary-foreground" as string]: "#ffffff",
+  ["--secondary" as string]: "#0f2242",
+  ["--secondary-foreground" as string]: "#f2f8ff",
+  ["--muted" as string]: "#0f2242",
+  ["--muted-foreground" as string]: "#9fc4f0",
+  ["--accent" as string]: "#123262",
+  ["--accent-foreground" as string]: "#f2f8ff",
+  ["--border" as string]: "rgba(13, 138, 253, 0.35)",
+  ["--input" as string]: "rgba(13, 138, 253, 0.35)",
+  ["--ring" as string]: "#0d8afd",
+  colorScheme: "dark",
+  background:
+    "radial-gradient(circle at 12% 8%, rgba(13, 138, 253, 0.28), transparent 40%), " +
+    "radial-gradient(circle at 88% 92%, rgba(2, 115, 246, 0.25), transparent 45%), " +
+    "#000b1f",
+};
 
 interface PendingPhoto {
   file: File;
@@ -44,7 +69,7 @@ export function ServiceRequestPublicPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const [trackingNumber, setTrackingNumber] = useState<string | null>(null);
+  const [trackingCode, setTrackingCode] = useState<string | null>(null);
 
   const isValid = Boolean(
     clientName.trim() && phone.trim() && address.trim() && serviceType && description.trim()
@@ -78,7 +103,14 @@ export function ServiceRequestPublicPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const requestId = await createServiceRequest({ clientName, company, phone, address, serviceType, description });
+      const { id: requestId, trackingCode: newTrackingCode } = await createServiceRequest({
+        clientName,
+        company,
+        phone,
+        address,
+        serviceType,
+        description,
+      });
       for (const photo of photos) {
         try {
           await uploadServiceRequestPhoto(requestId, photo.file);
@@ -89,11 +121,7 @@ export function ServiceRequestPublicPage() {
         }
       }
       photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
-      const number = await getServiceRequestNumber(requestId).catch((error) => {
-        console.error("Falha ao obter o código de acompanhamento:", error);
-        return null;
-      });
-      setTrackingNumber(number);
+      setTrackingCode(newTrackingCode);
       setSubmitted(true);
     } catch (error) {
       console.error("Falha ao enviar solicitação:", error);
@@ -104,11 +132,14 @@ export function ServiceRequestPublicPage() {
   }
 
   return (
-    <div className="flex min-h-screen justify-center bg-background px-4 py-8 sm:px-6">
+    <div
+      className="flex min-h-screen justify-center px-4 py-8 text-foreground sm:px-6"
+      style={BRAND_THEME_STYLE}
+    >
       <div className="flex w-full max-w-lg flex-col gap-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Globe className="size-6" />
+          <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_20px_rgba(13,138,253,0.5)]">
+            <Wifi className="size-6" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">{COMPANY_NAME}</h1>
           <p className="text-sm text-muted-foreground">
@@ -157,10 +188,10 @@ export function ServiceRequestPublicPage() {
               <p className="text-sm text-muted-foreground">
                 Nossa equipe da {COMPANY_NAME} analisará sua solicitação e entrará em contato o mais breve possível.
               </p>
-              {trackingNumber && (
+              {trackingCode && (
                 <div className="mt-1 w-full rounded-xl bg-primary/10 p-3">
                   <p className="text-xs text-muted-foreground">Código de acompanhamento</p>
-                  <p className="text-lg font-semibold text-primary">{trackingNumber}</p>
+                  <p className="text-lg font-semibold tracking-wide text-primary">{trackingCode}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Guarde esse código para consultar o andamento na aba "Consultar andamento".
                   </p>
@@ -312,10 +343,11 @@ export function ServiceRequestPublicPage() {
   );
 }
 
-// Aba "Consultar andamento": o cliente digita o código recebido na tela
-// de sucesso (o próprio request_number, ex: "07/2026-013") e vê o status
-// atual, sem precisar ligar. Consulta feita via RPC pública que só
-// devolve os campos relevantes (ver lookupServiceRequest).
+// Aba "Consultar andamento": o cliente digita o código de acompanhamento
+// recebido na tela de sucesso (8 caracteres aleatórios, ex: "K7XPQ2RM" —
+// não é o request_number, curto/sequencial demais pra resistir a força
+// bruta) e vê o status atual, sem precisar ligar. Consulta feita via RPC
+// pública que só devolve os campos relevantes (ver lookupServiceRequest).
 function TrackRequestCard() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -354,7 +386,8 @@ function TrackRequestCard() {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleLookup();
             }}
-            placeholder="Ex: 07/2026-013"
+            placeholder="Ex: K7XPQ2RM"
+            className="uppercase tracking-wide"
           />
         </div>
 
