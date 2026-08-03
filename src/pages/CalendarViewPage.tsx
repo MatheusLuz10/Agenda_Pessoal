@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
@@ -29,6 +29,7 @@ export function CalendarViewPage() {
   const [month, setMonth] = useState(Number(initialDate.slice(5, 7)) - 1);
   const [selectedDate, setSelectedDate] = useState<string | null>(initialDate);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [isCompletedOpen, setIsCompletedOpen] = useState(false);
 
   // Marca no calendário apenas os dias com tarefas DESTE calendário
   // (diferente do markedDates da Home, que olha todos os calendários).
@@ -53,6 +54,17 @@ export function CalendarViewPage() {
             .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""))
         : [],
     [allTasks, selectedDate]
+  );
+
+  // Concluídas ficam escondidas por padrão (ver isCompletedOpen) — só
+  // pendentes aparecem direto na lista.
+  const pendingTasksForSelectedDate = useMemo(
+    () => tasksForSelectedDate.filter((t) => t.status !== "concluida"),
+    [tasksForSelectedDate]
+  );
+  const completedTasksForSelectedDate = useMemo(
+    () => tasksForSelectedDate.filter((t) => t.status === "concluida"),
+    [tasksForSelectedDate]
   );
 
   // Guarda contra um :calendarId inválido/inexistente na URL.
@@ -127,9 +139,34 @@ export function CalendarViewPage() {
                   Nenhuma tarefa para este dia.
                 </p>
               ) : (
-                tasksForSelectedDate.map((task) => (
-                  <TaskListItem key={task.id} task={task} />
-                ))
+                <>
+                  {pendingTasksForSelectedDate.length === 0 ? (
+                    <p className="py-2 text-center text-sm text-muted-foreground">
+                      Nenhuma tarefa pendente para este dia.
+                    </p>
+                  ) : (
+                    pendingTasksForSelectedDate.map((task) => <TaskListItem key={task.id} task={task} />)
+                  )}
+
+                  {completedTasksForSelectedDate.length > 0 && (
+                    <div className="mt-1 flex flex-col gap-2 border-t border-border pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsCompletedOpen((prev) => !prev)}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm font-medium"
+                        aria-expanded={isCompletedOpen}
+                      >
+                        Tarefas concluídas
+                        <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                          {completedTasksForSelectedDate.length}
+                          {isCompletedOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                        </span>
+                      </button>
+                      {isCompletedOpen &&
+                        completedTasksForSelectedDate.map((task) => <TaskListItem key={task.id} task={task} />)}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </CardContent>

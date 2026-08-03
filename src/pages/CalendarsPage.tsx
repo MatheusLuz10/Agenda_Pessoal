@@ -20,6 +20,7 @@ export function CalendarsPage() {
   const navigate = useNavigate();
   const [calendarFilter, setCalendarFilter] = useState<string>("todos");
   const [isCalendarsOpen, setIsCalendarsOpen] = useState(false);
+  const [isCompletedTasksOpen, setIsCompletedTasksOpen] = useState(false);
 
   const visibleTasks = useMemo(
     () => tasks.filter((task) => task.calendarId !== "work-private"),
@@ -40,6 +41,17 @@ export function CalendarsPage() {
       return a.date.localeCompare(b.date);
     });
   }, [visibleTasks, calendarFilter]);
+
+  // Concluídas ficam escondidas por padrão (ver isCompletedTasksOpen) —
+  // só pendentes aparecem direto na lista.
+  const pendingFilteredTasks = useMemo(
+    () => filteredTasks.filter((t) => t.status !== "concluida"),
+    [filteredTasks]
+  );
+  const completedFilteredTasks = useMemo(
+    () => filteredTasks.filter((t) => t.status === "concluida"),
+    [filteredTasks]
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -155,9 +167,40 @@ export function CalendarsPage() {
                   <p className="text-sm">Nenhuma tarefa encontrada.</p>
                 </div>
               ) : (
-                filteredTasks.map((task) => (
-                  <TaskListItem key={task.id} task={task} showCalendarName />
-                ))
+                <>
+                  {pendingFilteredTasks.length === 0 ? (
+                    <p className="py-2 text-center text-sm text-muted-foreground">Nenhuma tarefa pendente.</p>
+                  ) : (
+                    pendingFilteredTasks.map((task) => (
+                      <TaskListItem key={task.id} task={task} showCalendarName />
+                    ))
+                  )}
+
+                  {completedFilteredTasks.length > 0 && (
+                    <div className="mt-1 flex flex-col gap-2 border-t border-border pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsCompletedTasksOpen((prev) => !prev)}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm font-medium"
+                        aria-expanded={isCompletedTasksOpen}
+                      >
+                        Tarefas concluídas
+                        <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                          {completedFilteredTasks.length}
+                          {isCompletedTasksOpen ? (
+                            <ChevronUp className="size-3.5" />
+                          ) : (
+                            <ChevronDown className="size-3.5" />
+                          )}
+                        </span>
+                      </button>
+                      {isCompletedTasksOpen &&
+                        completedFilteredTasks.map((task) => (
+                          <TaskListItem key={task.id} task={task} showCalendarName />
+                        ))}
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

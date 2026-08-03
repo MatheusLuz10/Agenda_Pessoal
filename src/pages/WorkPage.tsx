@@ -55,19 +55,14 @@ function categoryLabel(category: "manutencao" | "epis"): string {
   return category === "epis" ? "EPIs" : "Manutenção do carro";
 }
 
-const sectionConfig: Record<
-  Exclude<EquipmentSection, "controle">,
-  { label: string; icon: typeof CarFront; helper: string }
-> = {
+const sectionConfig: Record<Exclude<EquipmentSection, "controle">, { label: string; icon: typeof CarFront }> = {
   manutencao: {
     label: "Manutenção do carro",
     icon: CarFront,
-    helper: "Itens usados na manutenção preventiva e corretiva do veículo.",
   },
   epis: {
     label: "Ferramentas (EPIs)",
     icon: ShieldCheck,
-    helper: "Equipamentos de proteção e itens essenciais para segurança.",
   },
 };
 
@@ -455,15 +450,19 @@ export function WorkPage() {
             )}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {/* Bloco informativo: explica o que esta seção mostra (somente leitura). */}
-            <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-              <Info className="mt-0.5 size-4 shrink-0" />
-              <span>
-                {activeSection === "controle"
-                  ? "Itens marcados como \"Defeituoso\" aparecem aqui automaticamente — não é preciso adicionar nada nesta tela."
-                  : sectionConfig[activeSection].helper}
-              </span>
-            </div>
+            {/* Bloco informativo: só aparece no Controle, onde explica um
+                comportamento não óbvio (itens entram sozinhos aqui). Nas
+                seções Manutenção/EPIs não há nada de fato necessário a
+                explicar, então não tem esse bloco. */}
+            {activeSection === "controle" && (
+              <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <Info className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  Itens marcados como "Defeituoso" aparecem aqui automaticamente — não é preciso adicionar nada
+                  nesta tela.
+                </span>
+              </div>
+            )}
 
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
