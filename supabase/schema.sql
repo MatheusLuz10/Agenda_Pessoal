@@ -565,6 +565,12 @@ create index if not exists service_request_photos_request_id_idx
 -- função (não do visitante anônimo que está inserindo), então consegue
 -- contar as solicitações do mês mesmo sem ter permissão de leitura —
 -- um visitante público nunca precisa (nem consegue) ler a tabela.
+--
+-- Os 100 primeiros números de cada mês (001-100) são sorteados em ordem
+-- aleatória (não em sequência), pra não expor o volume/ritmo de chamados
+-- por quem só olha os códigos. A partir do 101º chamado do mês, já não
+-- sobra número sorteável no intervalo 1-100, então volta a ser sequencial
+-- (101, 102, 103...) normalmente.
 create or replace function public.set_service_request_number()
 returns trigger
 language plpgsql
@@ -573,12 +579,28 @@ set search_path = public
 as $$
 declare
   month_prefix text := to_char(now(), 'MM/YYYY');
+  used_count integer;
   next_seq integer;
 begin
-  select coalesce(max(substring(request_number from '-(\d+)$')::integer), 0) + 1
-    into next_seq
+  select count(*) into used_count
     from public.service_requests
     where request_number like month_prefix || '-%';
+
+  if used_count < 100 then
+    select n into next_seq
+      from generate_series(1, 100) as n
+      where not exists (
+        select 1 from public.service_requests
+        where request_number = month_prefix || '-' || lpad(n::text, 3, '0')
+      )
+      order by random()
+      limit 1;
+  else
+    select coalesce(max(substring(request_number from '-(\d+)$')::integer), 100) + 1
+      into next_seq
+      from public.service_requests
+      where request_number like month_prefix || '-%';
+  end if;
 
   new.request_number := month_prefix || '-' || lpad(next_seq::text, 3, '0');
   return new;
@@ -665,6 +687,11 @@ $$;
 -- privada, ver comentário na coluna em service_requests), o cliente não
 -- pode ver isso em lugar nenhum — aqui ele só recebe o que precisa pra
 -- acompanhar o andamento do próprio pedido.
+-- "drop function" primeiro porque o Postgres não deixa um "create or
+-- replace" trocar o formato de retorno de uma função existente (só o
+-- código da função é descartado aqui, nenhuma linha de tabela é afetada).
+drop function if exists public.lookup_service_request(text);
+
 create or replace function public.lookup_service_request(p_request_number text)
 returns table (
   request_number text,

@@ -23,6 +23,23 @@ import type { ServiceRequest, ServiceRequestStatus } from "@/types";
 
 const PUBLIC_REQUEST_PATH = "/solicitar-servico";
 
+// Template de marca (public/designerSolicitacao.png) usado como moldura do
+// QR Code baixável — o QR gerado dinamicamente é desenhado por cima, no
+// quadrado branco reservado pra ele. Posição/tamanho medidos em pixels
+// reais do arquivo (1681x936), com uma margem de segurança pra não
+// invadir os cantos arredondados do quadrado.
+const CARD_TEMPLATE_SRC = "/designerSolicitacao.png";
+const QR_BOX = { x: 176, y: 280, size: 366 };
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Falha ao carregar imagem: ${src}`));
+    img.src = src;
+  });
+}
+
 const STATUS_OPTIONS = Object.keys(SERVICE_REQUEST_STATUS_LABELS) as ServiceRequestStatus[];
 
 const STATUS_BADGE_VARIANT: Record<
@@ -270,9 +287,33 @@ function QrCodeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 
   useEffect(() => {
     if (!open) return;
-    QRCode.toDataURL(publicUrl, { width: 320, margin: 2 })
-      .then(setDataUrl)
-      .catch((error) => console.error("Falha ao gerar QR Code:", error));
+    let cancelled = false;
+
+    // Gera só o QR (sem moldura própria) e compõe sobre o template de
+    // marca "Conecta Wifi" — o resultado final é uma imagem só, pronta
+    // pra imprimir/compartilhar com a identidade visual da empresa.
+    async function buildBrandedCard() {
+      const [qrDataUrl, template] = await Promise.all([
+        QRCode.toDataURL(publicUrl, { width: QR_BOX.size, margin: 1 }),
+        loadImage(CARD_TEMPLATE_SRC),
+      ]);
+      const qrImage = await loadImage(qrDataUrl);
+      if (cancelled) return;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = template.width;
+      canvas.height = template.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas 2D indisponível neste navegador");
+      ctx.drawImage(template, 0, 0);
+      ctx.drawImage(qrImage, QR_BOX.x, QR_BOX.y, QR_BOX.size, QR_BOX.size);
+      if (!cancelled) setDataUrl(canvas.toDataURL("image/png"));
+    }
+
+    buildBrandedCard().catch((error) => console.error("Falha ao gerar cartão com QR Code:", error));
+    return () => {
+      cancelled = true;
+    };
   }, [open, publicUrl]);
 
   function handleCopyLink() {
@@ -290,9 +331,15 @@ function QrCodeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
         </DialogHeader>
         <div className="flex flex-col items-center gap-4">
           {dataUrl ? (
-            <img src={dataUrl} alt="QR Code para a página de solicitação de serviços" className="size-64 rounded-lg border border-border" />
+            <img
+              src={dataUrl}
+              alt="Cartão Conecta Wifi com QR Code para a página de solicitação de serviços"
+              className="w-full rounded-lg border border-border"
+            />
           ) : (
-            <div className="flex size-64 items-center justify-center text-sm text-muted-foreground">Gerando...</div>
+            <div className="flex aspect-[1681/936] w-full items-center justify-center text-sm text-muted-foreground">
+              Gerando...
+            </div>
           )}
           <p className="break-all text-center text-xs text-muted-foreground">{publicUrl}</p>
         </div>
@@ -303,7 +350,7 @@ function QrCodeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           </Button>
           {dataUrl && (
             <Button asChild className="gap-1.5">
-              <a href={dataUrl} download="solicitar-servico-qrcode.png">
+              <a href={dataUrl} download="conecta-wifi-qrcode.png">
                 <Download className="size-4" />
                 Baixar QR Code
               </a>
