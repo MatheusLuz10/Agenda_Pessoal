@@ -12,13 +12,15 @@ import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { SERVICE_REQUEST_STATUS_LABELS, SERVICE_REQUEST_TYPES } from "@/types";
 import type { ServiceRequestLookup } from "@/types";
 
-const COMPANY_NAME = "CONECTA WIFI";
+const COMPANY_NAME = "CONECTA REDE";
 // Sem nome de técnico específico: o app é usado em parceria por mais de
 // um técnico, então nenhum nome pessoal aparece — só a marca (mesmo
 // texto do material oficial, ver public/designerSolicitacao.png) e o
 // contato da empresa.
-const TAGLINE = "Redes & Informática";
-const CONTACT_PHONE = "(91) 98645-6795";
+const TAGLINE = "Sua rede conectada";
+// WhatsApp só aparece quando o formulário não é uma opção (fora do ar).
+// Em qualquer outra tela o foco fica todo no formulário de orçamento,
+// sem competir com o WhatsApp.
 const WHATSAPP_LINK = "https://wa.me/5591986456795";
 const LOCATION = "Belém – PA";
 
@@ -187,8 +189,14 @@ export function ServiceRequestPublicPage() {
 
         {!isSupabaseConfigured ? (
           <Card>
-            <CardContent className="pt-5 text-center text-sm text-muted-foreground">
-              Formulário indisponível no momento. Fale com a gente pelo WhatsApp no rodapé abaixo.
+            <CardContent className="flex flex-col items-center gap-3 pt-5 text-center text-sm text-muted-foreground">
+              <p>Formulário indisponível no momento.</p>
+              <Button asChild variant="outline" className="gap-2">
+                <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle className="size-4" />
+                  Falar no WhatsApp
+                </a>
+              </Button>
             </CardContent>
           </Card>
         ) : mode === "consultar" ? (
@@ -224,12 +232,6 @@ export function ServiceRequestPublicPage() {
                   </p>
                 </div>
               )}
-              <Button asChild variant="outline" className="mt-2 gap-2">
-                <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
-                  <MessageCircle className="size-4" />
-                  Falar no WhatsApp
-                </a>
-              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -360,16 +362,6 @@ export function ServiceRequestPublicPage() {
             </CardContent>
           </Card>
         )}
-
-        <a
-          href={WHATSAPP_LINK}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground hover:text-foreground"
-        >
-          <MessageCircle className="size-3.5" />
-          Dúvidas? Fale no WhatsApp: {CONTACT_PHONE}
-        </a>
       </div>
     </div>
   );
