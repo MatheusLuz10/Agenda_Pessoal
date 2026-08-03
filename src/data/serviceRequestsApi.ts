@@ -150,7 +150,6 @@ export async function lookupServiceRequest(requestNumber: string): Promise<Servi
         service_type: string;
         status: ServiceRequestStatus;
         description: string;
-        observations: string | null;
         created_at: string;
       }
     | undefined;
@@ -160,7 +159,6 @@ export async function lookupServiceRequest(requestNumber: string): Promise<Servi
     serviceType: row.service_type,
     status: row.status,
     description: row.description,
-    observations: row.observations,
     createdAt: row.created_at,
   };
 }

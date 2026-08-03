@@ -227,14 +227,14 @@ export interface ServiceRequestPhoto {
 // Resultado da consulta pública de andamento (página "/solicitar-servico",
 // aba "Consultar andamento"): o cliente informa o código (requestNumber,
 // ex: "07/2026-013") e recebe só o essencial pra acompanhar o chamado —
-// sem dados de contato de ninguém, ver função lookup_service_request no
-// schema.sql.
+// sem dados de contato de ninguém e sem as observações internas do
+// técnico (essas nunca saem da área privada), ver função
+// lookup_service_request no schema.sql.
 export interface ServiceRequestLookup {
   requestNumber: string;
   serviceType: string;
   status: ServiceRequestStatus;
   description: string;
-  observations: string | null;
   createdAt: string;
 }
 

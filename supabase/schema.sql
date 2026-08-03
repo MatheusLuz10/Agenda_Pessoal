@@ -661,20 +661,23 @@ as $$
   select request_number from public.service_requests where id = p_id;
 $$;
 
+-- Nunca devolve "observations": são anotações internas do técnico (área
+-- privada, ver comentário na coluna em service_requests), o cliente não
+-- pode ver isso em lugar nenhum — aqui ele só recebe o que precisa pra
+-- acompanhar o andamento do próprio pedido.
 create or replace function public.lookup_service_request(p_request_number text)
 returns table (
   request_number text,
   service_type text,
   status text,
   description text,
-  observations text,
   created_at timestamptz
 )
 language sql
 security definer
 set search_path = public
 as $$
-  select request_number, service_type, status, description, observations, created_at
+  select request_number, service_type, status, description, created_at
   from public.service_requests
   where request_number = p_request_number
   limit 1;

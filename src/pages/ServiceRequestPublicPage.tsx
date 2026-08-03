@@ -375,12 +375,6 @@ function TrackRequestCard() {
             </div>
             <p className="text-xs text-muted-foreground">{result.serviceType}</p>
             <p className="text-sm">{result.description}</p>
-            {result.observations && (
-              <div className="mt-1 rounded-lg bg-muted/40 p-2.5">
-                <p className="text-xs text-muted-foreground">Observação do técnico</p>
-                <p className="text-sm">{result.observations}</p>
-              </div>
-            )}
             <p className="text-xs text-muted-foreground">
               Aberta em {new Date(result.createdAt).toLocaleDateString("pt-BR")}
             </p>
