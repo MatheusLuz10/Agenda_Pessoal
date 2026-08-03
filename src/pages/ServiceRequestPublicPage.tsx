@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent, type CSSProperties } from "react";
-import { CheckCircle2, ImagePlus, Phone, Search, User, Wifi, X } from "lucide-react";
+import { Check, CheckCircle2, Copy, ImagePlus, Phone, Search, User, Wifi, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,13 @@ import { SERVICE_REQUEST_STATUS_LABELS, SERVICE_REQUEST_TYPES } from "@/types";
 import type { ServiceRequestLookup } from "@/types";
 
 const COMPANY_NAME = "CONECTA WIFI";
-const TECHNICIAN_NAME = "Matheus Luz";
+// Sem nome de técnico específico: o app é usado em parceria por mais de
+// um técnico, então nenhum nome pessoal aparece — só a marca (mesmo
+// texto do material oficial, ver public/designerSolicitacao.png) e o
+// contato da empresa.
+const TAGLINE = "Redes & Informática";
 const CONTACT_PHONE = "(91) 98645-6795";
+const LOCATION = "Belém – PA";
 
 // Paleta extraída do material de marca (public/designerSolicitacao.png:
 // fundo azul-marinho quase preto + azul vibrante de destaque). Aplicada
@@ -70,6 +75,7 @@ export function ServiceRequestPublicPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [trackingCode, setTrackingCode] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const isValid = Boolean(
     clientName.trim() && phone.trim() && address.trim() && serviceType && description.trim()
@@ -95,6 +101,14 @@ export function ServiceRequestPublicPage() {
       URL.revokeObjectURL(next[index].previewUrl);
       next.splice(index, 1);
       return next;
+    });
+  }
+
+  function handleCopyTrackingCode() {
+    if (!trackingCode) return;
+    navigator.clipboard.writeText(trackingCode).then(() => {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
     });
   }
 
@@ -143,9 +157,9 @@ export function ServiceRequestPublicPage() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight">{COMPANY_NAME}</h1>
           <p className="text-sm text-muted-foreground">
-            Técnico responsável: {TECHNICIAN_NAME}
+            {TAGLINE}
             <br />
-            Telefone: {CONTACT_PHONE}
+            WhatsApp: {CONTACT_PHONE} · {LOCATION}
           </p>
         </div>
 
@@ -191,17 +205,30 @@ export function ServiceRequestPublicPage() {
               {trackingCode && (
                 <div className="mt-1 w-full rounded-xl bg-primary/10 p-3">
                   <p className="text-xs text-muted-foreground">Código de acompanhamento</p>
-                  <p className="text-lg font-semibold tracking-wide text-primary">{trackingCode}</p>
+                  <div className="mt-0.5 flex items-center justify-center gap-2">
+                    <p className="text-lg font-semibold tracking-wide text-primary">{trackingCode}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      onClick={handleCopyTrackingCode}
+                      aria-label="Copiar código de acompanhamento"
+                    >
+                      {codeCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                    </Button>
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Guarde esse código para consultar o andamento na aba "Consultar andamento".
+                    {codeCopied
+                      ? "Código copiado!"
+                      : 'Guarde esse código para consultar o andamento na aba "Consultar andamento".'}
                   </p>
                 </div>
               )}
               <div className="mt-2 rounded-xl bg-muted/40 p-3 text-sm">
-                <p className="font-medium">Técnico responsável:</p>
-                <p>{TECHNICIAN_NAME}</p>
-                <p className="mt-2 font-medium">Telefone:</p>
-                <p>{CONTACT_PHONE}</p>
+                <p className="font-medium">Dúvidas? Fale com a gente:</p>
+                <p>WhatsApp: {CONTACT_PHONE}</p>
+                <p>{LOCATION}</p>
               </div>
             </CardContent>
           </Card>

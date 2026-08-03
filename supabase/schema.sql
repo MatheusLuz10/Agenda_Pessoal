@@ -714,6 +714,12 @@ drop function if exists public.get_service_request_number(uuid);
 -- privada, ver comentário na coluna em service_requests), o cliente não
 -- pode ver isso em lugar nenhum — aqui ele só recebe o que precisa pra
 -- acompanhar o andamento do próprio pedido.
+-- "drop function" primeiro porque o Postgres não deixa um "create or
+-- replace" trocar a assinatura/formato de retorno de uma função
+-- existente (só o código da função é descartado aqui, nenhuma linha de
+-- tabela é afetada).
+drop function if exists public.lookup_service_request(text);
+
 create or replace function public.lookup_service_request(p_code text)
 returns table (
   request_number text,
