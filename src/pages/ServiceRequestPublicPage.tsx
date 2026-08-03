@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent, type CSSProperties } from "react";
-import { Check, CheckCircle2, Copy, ImagePlus, Phone, Search, User, Wifi, X } from "lucide-react";
+import { Check, CheckCircle2, Copy, ImagePlus, MessageCircle, Search, User, Wifi, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ const COMPANY_NAME = "CONECTA WIFI";
 // contato da empresa.
 const TAGLINE = "Redes & Informática";
 const CONTACT_PHONE = "(91) 98645-6795";
+const WHATSAPP_LINK = "https://wa.me/5591986456795";
 const LOCATION = "Belém – PA";
 
 // Paleta extraída do material de marca (public/designerSolicitacao.png:
@@ -157,9 +158,7 @@ export function ServiceRequestPublicPage() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight">{COMPANY_NAME}</h1>
           <p className="text-sm text-muted-foreground">
-            {TAGLINE}
-            <br />
-            WhatsApp: {CONTACT_PHONE} · {LOCATION}
+            {TAGLINE} · {LOCATION}
           </p>
         </div>
 
@@ -189,7 +188,7 @@ export function ServiceRequestPublicPage() {
         {!isSupabaseConfigured ? (
           <Card>
             <CardContent className="pt-5 text-center text-sm text-muted-foreground">
-              Formulário indisponível no momento. Entre em contato pelo telefone {CONTACT_PHONE}.
+              Formulário indisponível no momento. Fale com a gente pelo WhatsApp no rodapé abaixo.
             </CardContent>
           </Card>
         ) : mode === "consultar" ? (
@@ -225,11 +224,12 @@ export function ServiceRequestPublicPage() {
                   </p>
                 </div>
               )}
-              <div className="mt-2 rounded-xl bg-muted/40 p-3 text-sm">
-                <p className="font-medium">Dúvidas? Fale com a gente:</p>
-                <p>WhatsApp: {CONTACT_PHONE}</p>
-                <p>{LOCATION}</p>
-              </div>
+              <Button asChild variant="outline" className="mt-2 gap-2">
+                <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle className="size-4" />
+                  Falar no WhatsApp
+                </a>
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -361,10 +361,15 @@ export function ServiceRequestPublicPage() {
           </Card>
         )}
 
-        <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
-          <Phone className="size-3.5" />
-          Dúvidas? Ligue para {CONTACT_PHONE}
-        </p>
+        <a
+          href={WHATSAPP_LINK}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground hover:text-foreground"
+        >
+          <MessageCircle className="size-3.5" />
+          Dúvidas? Fale no WhatsApp: {CONTACT_PHONE}
+        </a>
       </div>
     </div>
   );
