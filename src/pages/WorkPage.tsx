@@ -17,6 +17,7 @@ import {
   Inbox,
   PackageCheck,
   Plus,
+  RefreshCcw,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -42,7 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { nowInBrasilia } from "@/lib/date";
+import { formatDateBR, nowInBrasilia, todayISO } from "@/lib/date";
 import { useWork } from "@/contexts/WorkContext";
 import type { EquipmentCondition, EquipmentItem } from "@/types";
 import { jsPDF } from "jspdf";
@@ -82,9 +83,12 @@ export function WorkPage() {
   const navigate = useNavigate();
   const {
     equipmentItems: items,
+    equipmentReplacements,
     addEquipmentItem,
     updateEquipmentItem,
     deleteEquipmentItem,
+    addEquipmentReplacement,
+    deleteEquipmentReplacement,
   } = useWork();
   const [activeSection, setActiveSection] = useState<EquipmentSection>("manutencao");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -100,6 +104,10 @@ export function WorkPage() {
   const [textReportContent, setTextReportContent] = useState("");
   const [textReportCopied, setTextReportCopied] = useState(false);
   const [isItemsListOpen, setIsItemsListOpen] = useState(false);
+  const [isReplacementsListOpen, setIsReplacementsListOpen] = useState(false);
+  const [isReplaceDialogOpen, setIsReplaceDialogOpen] = useState(false);
+  const [replacingItem, setReplacingItem] = useState<EquipmentItem | null>(null);
+  const [replaceObservation, setReplaceObservation] = useState("");
   const VISIBLE_ITEMS_LIMIT = 3;
 
   const defectiveItems = items.filter((item) => item.condition === "Defeituoso");
@@ -157,6 +165,38 @@ export function WorkPage() {
   function handleDeleteItem(itemId: string) {
     if (!window.confirm("Excluir este item?")) return;
     deleteEquipmentItem(itemId);
+  }
+
+  function openReplaceDialog(item: EquipmentItem) {
+    setReplacingItem(item);
+    setReplaceObservation("");
+    setIsReplaceDialogOpen(true);
+  }
+
+  // Registra a troca (entra no relatório de defeitos) e já volta a
+  // condição do item pra "Bom" — a peça defeituosa saiu de circulação.
+  function handleConfirmReplace() {
+    if (!replacingItem) return;
+    addEquipmentReplacement({
+      itemId: replacingItem.id,
+      itemName: replacingItem.name,
+      category: replacingItem.category,
+      observation: replaceObservation.trim(),
+      replacedAt: todayISO(),
+    });
+    updateEquipmentItem(replacingItem.id, {
+      name: replacingItem.name,
+      category: replacingItem.category,
+      condition: "Bom",
+      observation: replacingItem.observation,
+    });
+    setIsReplaceDialogOpen(false);
+    setReplacingItem(null);
+  }
+
+  function handleDeleteReplacement(replacementId: string) {
+    if (!window.confirm("Excluir este registro de troca?")) return;
+    deleteEquipmentReplacement(replacementId);
   }
 
   function handleDownloadCategoryReportPdf(category: "manutencao" | "epis") {
@@ -285,6 +325,37 @@ export function WorkPage() {
         cursorY += 6;
         doc.setFont("helvetica", "normal");
         const observationLines = doc.splitTextToSize(item.observation || "Sem observação adicional.", 180);
+        doc.text(observationLines, marginX, cursorY);
+        cursorY += observationLines.length * 6 + 4;
+      });
+    }
+
+    if (equipmentReplacements.length > 0) {
+      if (cursorY > 260) {
+        doc.addPage();
+        cursorY = 18;
+      }
+      cursorY += 4;
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.text("Itens substituídos", marginX, cursorY);
+      cursorY += 8;
+
+      doc.setFontSize(11);
+      equipmentReplacements.forEach((replacement) => {
+        if (cursorY > 280) {
+          doc.addPage();
+          cursorY = 18;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.text(
+          `${replacement.itemName} (${categoryLabel(replacement.category === "epis" ? "epis" : "manutencao")}) — trocado em ${formatDateBR(replacement.replacedAt)}`,
+          marginX,
+          cursorY
+        );
+        cursorY += 6;
+        doc.setFont("helvetica", "normal");
+        const observationLines = doc.splitTextToSize(replacement.observation || "Sem observação adicional.", 180);
         doc.text(observationLines, marginX, cursorY);
         cursorY += observationLines.length * 6 + 4;
       });
@@ -425,8 +496,62 @@ export function WorkPage() {
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">{item.observation}</p>
+                      <div className="mt-2 flex justify-end">
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openReplaceDialog(item)}>
+                          <RefreshCcw className="size-3.5" />
+                          Registrar troca
+                        </Button>
+                      </div>
                     </div>
                   ))
+                )}
+
+                {equipmentReplacements.length > 0 && (
+                  <div className="flex flex-col gap-2 border-t border-border pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsReplacementsListOpen((prev) => !prev)}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm font-medium"
+                      aria-expanded={isReplacementsListOpen}
+                    >
+                      Itens substituídos
+                      <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                        {equipmentReplacements.length}
+                        {isReplacementsListOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                      </span>
+                    </button>
+                    {isReplacementsListOpen && (
+                      <div className="flex flex-col gap-2">
+                        {equipmentReplacements.map((replacement) => (
+                          <div
+                            key={replacement.id}
+                            className="flex items-start justify-between gap-3 rounded-xl border border-border p-3"
+                          >
+                            <div className="flex flex-col gap-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-medium">{replacement.itemName}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  trocado em {formatDateBR(replacement.replacedAt)}
+                                </span>
+                              </div>
+                              {replacement.observation && (
+                                <p className="text-sm text-muted-foreground">{replacement.observation}</p>
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteReplacement(replacement.id)}
+                              aria-label="Excluir registro de troca"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <div className="flex items-center gap-2 border-t border-border pt-3">
@@ -713,6 +838,41 @@ export function WorkPage() {
               {textReportCopied ? "Copiado!" : "Copiar texto"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isReplaceDialogOpen}
+        onOpenChange={(open) => {
+          setIsReplaceDialogOpen(open);
+          if (!open) setReplacingItem(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar troca</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Confirma a troca de <strong>{replacingItem?.name}</strong>? A condição volta para "Bom" e a troca
+              passa a aparecer no relatório de defeitos.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="replace-observation">Observação (opcional)</Label>
+              <Textarea
+                id="replace-observation"
+                value={replaceObservation}
+                onChange={(e) => setReplaceObservation(e.target.value)}
+                placeholder="Ex: número de série do novo item"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReplaceDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmReplace}>Confirmar troca</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

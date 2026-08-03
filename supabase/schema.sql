@@ -73,6 +73,22 @@ create table if not exists public.equipment_items (
   created_at timestamptz not null default now()
 );
 
+-- Histórico de trocas de itens que estavam "Defeituoso" (botão "Registrar
+-- troca" no Card "Controle" da aba Meu trabalho, ver src/pages/WorkPage.tsx).
+-- Guarda o nome do item na hora da troca (não só a referência) pra
+-- continuar aparecendo no relatório de defeitos mesmo que o item original
+-- seja excluído depois — por isso "on delete set null" em item_id, em vez
+-- de cascade.
+create table if not exists public.equipment_replacements (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid references public.equipment_items (id) on delete set null,
+  item_name text not null,
+  category text not null check (category in ('manutencao', 'epis', 'conectores')),
+  observation text,
+  replaced_at date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
 -- Ordens de serviço (OS) da aba "Meu trabalho", cada uma com sua própria
 -- data para permitir calcular "OSs da semana".
 create table if not exists public.service_orders (
@@ -395,6 +411,7 @@ alter table public.tasks enable row level security;
 alter table public.transactions enable row level security;
 alter table public.goals enable row level security;
 alter table public.equipment_items enable row level security;
+alter table public.equipment_replacements enable row level security;
 alter table public.service_orders enable row level security;
 alter table public.operation_activities enable row level security;
 alter table public.operation_punches enable row level security;
@@ -425,6 +442,7 @@ drop policy if exists "authenticated full access tasks" on public.tasks;
 drop policy if exists "authenticated full access transactions" on public.transactions;
 drop policy if exists "authenticated full access goals" on public.goals;
 drop policy if exists "authenticated full access equipment_items" on public.equipment_items;
+drop policy if exists "authenticated full access equipment_replacements" on public.equipment_replacements;
 drop policy if exists "authenticated full access service_orders" on public.service_orders;
 drop policy if exists "authenticated full access operation_activities" on public.operation_activities;
 drop policy if exists "authenticated full access operation_punches" on public.operation_punches;
@@ -454,6 +472,9 @@ create policy "authenticated full access goals" on public.goals
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access equipment_items" on public.equipment_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access equipment_replacements" on public.equipment_replacements
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access service_orders" on public.service_orders

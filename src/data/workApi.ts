@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { EquipmentItem, ServiceOrder } from "@/types";
+import type { EquipmentItem, EquipmentReplacement, ServiceOrder } from "@/types";
 
 // Mesma ideia de src/data/supabaseApi.ts e src/data/financeApi.ts: isola
 // o formato das tabelas do Postgres (snake_case) do formato usado no app
@@ -11,6 +11,16 @@ interface EquipmentItemRow {
   category: EquipmentItem["category"];
   condition: EquipmentItem["condition"];
   observation: string | null;
+  created_at: string;
+}
+
+interface EquipmentReplacementRow {
+  id: string;
+  item_id: string | null;
+  item_name: string;
+  category: EquipmentItem["category"];
+  observation: string | null;
+  replaced_at: string;
   created_at: string;
 }
 
@@ -31,6 +41,18 @@ function rowToEquipmentItem(row: EquipmentItemRow): EquipmentItem {
     category: row.category,
     condition: row.condition,
     observation: row.observation ?? "",
+    createdAt: row.created_at,
+  };
+}
+
+function rowToEquipmentReplacement(row: EquipmentReplacementRow): EquipmentReplacement {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    itemName: row.item_name,
+    category: row.category,
+    observation: row.observation ?? "",
+    replacedAt: row.replaced_at,
     createdAt: row.created_at,
   };
 }
@@ -103,6 +125,38 @@ export async function updateEquipmentItem(
 
 export async function removeEquipmentItem(itemId: string) {
   const { error } = await supabase!.from("equipment_items").delete().eq("id", itemId);
+  if (error) throw error;
+}
+
+export async function fetchEquipmentReplacements(): Promise<EquipmentReplacement[]> {
+  const { data, error } = await supabase!
+    .from("equipment_replacements")
+    .select("*")
+    .order("replaced_at", { ascending: false });
+  if (error) throw error;
+  return (data as EquipmentReplacementRow[]).map(rowToEquipmentReplacement);
+}
+
+export async function createEquipmentReplacement(
+  replacement: Omit<EquipmentReplacement, "id" | "createdAt">
+): Promise<EquipmentReplacement> {
+  const { data, error } = await supabase!
+    .from("equipment_replacements")
+    .insert({
+      item_id: replacement.itemId,
+      item_name: replacement.itemName,
+      category: replacement.category,
+      observation: replacement.observation || null,
+      replaced_at: replacement.replacedAt,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToEquipmentReplacement(data as EquipmentReplacementRow);
+}
+
+export async function removeEquipmentReplacement(replacementId: string) {
+  const { error } = await supabase!.from("equipment_replacements").delete().eq("id", replacementId);
   if (error) throw error;
 }
 

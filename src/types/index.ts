@@ -93,6 +93,20 @@ export interface EquipmentItem {
   createdAt: string;
 }
 
+// Registro de troca de um item que estava "Defeituoso" (botão "Registrar
+// troca" no Card "Controle" da aba Meu trabalho). Guarda o nome do item
+// na hora da troca (não só a referência) pra continuar aparecendo no
+// relatório de defeitos mesmo que o item original seja excluído depois.
+export interface EquipmentReplacement {
+  id: string;
+  itemId: string | null;
+  itemName: string;
+  category: EquipmentCategory;
+  observation: string;
+  replacedAt: string; // ISO date string (yyyy-MM-dd)
+  createdAt: string;
+}
+
 export type ServiceOrderStatus = "pendente" | "em_andamento" | "concluida";
 
 // Uma OS (Ordem de Serviço): o atendimento feito num cliente/local em

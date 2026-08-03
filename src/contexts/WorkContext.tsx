@@ -1,15 +1,18 @@
 import * as React from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { EquipmentItem, ServiceOrder } from "@/types";
+import type { EquipmentItem, EquipmentReplacement, ServiceOrder } from "@/types";
 import { mockEquipmentItems, mockServiceOrders } from "@/data/mockData";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { todayISO } from "@/lib/date";
 import {
   createEquipmentItem,
+  createEquipmentReplacement,
   createServiceOrder,
   fetchEquipmentItems,
+  fetchEquipmentReplacements,
   fetchServiceOrders,
   removeEquipmentItem,
+  removeEquipmentReplacement,
   removeServiceOrder,
   updateEquipmentItem,
   updateServiceOrder,
@@ -17,11 +20,14 @@ import {
 
 interface WorkContextValue {
   equipmentItems: EquipmentItem[];
+  equipmentReplacements: EquipmentReplacement[];
   serviceOrders: ServiceOrder[];
   loading: boolean;
   addEquipmentItem: (item: Omit<EquipmentItem, "id" | "createdAt">) => void;
   updateEquipmentItem: (itemId: string, item: Omit<EquipmentItem, "id" | "createdAt">) => void;
   deleteEquipmentItem: (itemId: string) => void;
+  addEquipmentReplacement: (replacement: Omit<EquipmentReplacement, "id" | "createdAt">) => void;
+  deleteEquipmentReplacement: (replacementId: string) => void;
   addServiceOrder: (order: Omit<ServiceOrder, "id" | "createdAt">) => void;
   updateServiceOrder: (orderId: string, order: Omit<ServiceOrder, "id" | "createdAt">) => void;
   deleteServiceOrder: (orderId: string) => void;
@@ -37,6 +43,9 @@ export function WorkProvider({ children }: { children: React.ReactNode }) {
   const [equipmentItems, setEquipmentItems] = useState<EquipmentItem[]>(
     isSupabaseConfigured ? [] : mockEquipmentItems
   );
+  // Sem exemplo mockado: é um histórico que começa vazio de verdade, tanto
+  // em modo demo quanto num banco novo.
+  const [equipmentReplacements, setEquipmentReplacements] = useState<EquipmentReplacement[]>([]);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(
     isSupabaseConfigured ? [] : mockServiceOrders
   );
@@ -46,10 +55,11 @@ export function WorkProvider({ children }: { children: React.ReactNode }) {
     if (!isSupabaseConfigured) return;
 
     let isMounted = true;
-    Promise.all([fetchEquipmentItems(), fetchServiceOrders()])
-      .then(([equipmentData, ordersData]) => {
+    Promise.all([fetchEquipmentItems(), fetchEquipmentReplacements(), fetchServiceOrders()])
+      .then(([equipmentData, replacementsData, ordersData]) => {
         if (!isMounted) return;
         setEquipmentItems(equipmentData);
+        setEquipmentReplacements(replacementsData);
         setServiceOrders(ordersData);
       })
       .catch((error) => console.error("Falha ao carregar dados de trabalho:", error))
@@ -99,6 +109,33 @@ export function WorkProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addEquipmentReplacement: WorkContextValue["addEquipmentReplacement"] = (replacement) => {
+    const optimistic: EquipmentReplacement = {
+      ...replacement,
+      id: `rep-${Date.now()}`,
+      createdAt: todayISO(),
+    };
+    setEquipmentReplacements((prev) => [optimistic, ...prev]);
+
+    if (isSupabaseConfigured) {
+      createEquipmentReplacement(replacement)
+        .then((saved) => {
+          setEquipmentReplacements((prev) => prev.map((r) => (r.id === optimistic.id ? saved : r)));
+        })
+        .catch((error) => console.error("Falha ao registrar troca de equipamento:", error));
+    }
+  };
+
+  const deleteEquipmentReplacement = (replacementId: string) => {
+    setEquipmentReplacements((prev) => prev.filter((r) => r.id !== replacementId));
+
+    if (isSupabaseConfigured) {
+      removeEquipmentReplacement(replacementId).catch((error) =>
+        console.error("Falha ao excluir registro de troca:", error)
+      );
+    }
+  };
+
   const addServiceOrder: WorkContextValue["addServiceOrder"] = (order) => {
     const optimistic: ServiceOrder = {
       ...order,
@@ -137,16 +174,19 @@ export function WorkProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       equipmentItems,
+      equipmentReplacements,
       serviceOrders,
       loading,
       addEquipmentItem,
       updateEquipmentItem: updateEquipmentItemFn,
       deleteEquipmentItem,
+      addEquipmentReplacement,
+      deleteEquipmentReplacement,
       addServiceOrder,
       updateServiceOrder: updateServiceOrderFn,
       deleteServiceOrder,
     }),
-    [equipmentItems, serviceOrders, loading]
+    [equipmentItems, equipmentReplacements, serviceOrders, loading]
   );
 
   return <WorkContext.Provider value={value}>{children}</WorkContext.Provider>;
