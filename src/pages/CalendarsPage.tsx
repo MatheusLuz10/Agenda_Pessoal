@@ -56,11 +56,20 @@ export function CalendarsPage() {
     return map;
   }, [filteredTasks, getCalendarById]);
 
+  // Aniversário não aparece na lista de "Tarefas" (só no calendário
+  // acima, como marcador do dia) — é um lembrete à parte, não uma tarefa
+  // pra acompanhar nessa lista. Continua tendo sua própria lista dentro
+  // do calendário "Aniversário" (ver CalendarViewPage).
+  const taskListTasks = useMemo(
+    () => filteredTasks.filter((t) => getCalendarById(t.calendarId)?.name !== BIRTHDAY_CALENDAR_NAME),
+    [filteredTasks, getCalendarById]
+  );
+
   // Clicar num dia da grade estreita a lista pra só aquela data; clicar
   // de novo no mesmo dia (ou no botão de limpar) volta a mostrar todas.
   const dateFilteredTasks = useMemo(
-    () => (selectedDate ? filteredTasks.filter((t) => t.date === selectedDate) : filteredTasks),
-    [filteredTasks, selectedDate]
+    () => (selectedDate ? taskListTasks.filter((t) => t.date === selectedDate) : taskListTasks),
+    [taskListTasks, selectedDate]
   );
 
   // Concluídas ficam escondidas por padrão (ver isCompletedTasksOpen) —
@@ -116,6 +125,15 @@ export function CalendarsPage() {
           {calendars.map((calendar) => {
             const calendarTasks = getTasksByCalendar(calendar.id);
             const pending = calendarTasks.filter((t) => t.status === "pendente").length;
+            // O calendário "Aniversário" pré-gera décadas de ocorrências
+            // futuras (ver AddTaskDialog) — "pend." contaria todas elas e
+            // mostraria um número gigante sem sentido. Aqui mostra quantos
+            // aniversariantes têm ocorrência neste ano especificamente
+            // (cada pessoa só aparece 1x por ano).
+            const isBirthdayCalendarCard = calendar.name === BIRTHDAY_CALENDAR_NAME;
+            const birthdaysThisYear = isBirthdayCalendarCard
+              ? calendarTasks.filter((t) => t.date.slice(0, 4) === todayISO().slice(0, 4)).length
+              : 0;
 
             return (
               <Card
@@ -137,7 +155,9 @@ export function CalendarsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="text-foreground">
-                      {pending} pend.
+                      {isBirthdayCalendarCard
+                        ? `${birthdaysThisYear} aniversariante${birthdaysThisYear === 1 ? "" : "s"}`
+                        : `${pending} pend.`}
                     </Badge>
                     {/* O calendário "Aniversário" é fixo — nunca pode ser
                         excluído pela UI (ver BIRTHDAY_CALENDAR_NAME em
