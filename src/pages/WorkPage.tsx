@@ -409,11 +409,6 @@ export function WorkPage() {
   // que o técnico acabou de procurar seria confuso.
   const shouldShowItemsList = isItemsListOpen || normalizedQuery.length > 0;
 
-  const createActionLabel =
-    activeSection === "manutencao" ? "Adicionar informações" : "Adicionar equipamento";
-
-  const formActionLabel =
-    formCategory === "manutencao" ? "Adicionar informações" : "Adicionar equipamento";
 
   return (
     <div className="flex flex-col gap-6">
@@ -485,7 +480,7 @@ export function WorkPage() {
               {activeSection !== "controle" && (
                 <Button size="sm" onClick={() => openCreateDialog()} className="gap-1.5">
                   <Plus className="size-4" />
-                  {createActionLabel}
+                  Adicionar
                 </Button>
               )}
             </div>
@@ -623,7 +618,7 @@ export function WorkPage() {
                       <p className="text-sm">Nenhum item cadastrado nesta categoria ainda.</p>
                       <Button size="sm" variant="outline" onClick={() => openCreateDialog()} className="gap-1.5">
                         <Plus className="size-4" />
-                        {createActionLabel}
+                        Adicionar
                       </Button>
                     </div>
                   ) : filteredItems.length === 0 ? (
@@ -740,7 +735,7 @@ export function WorkPage() {
           <CardContent className="flex flex-col gap-3">
             <Button
               variant="outline"
-              className="justify-start gap-2"
+              className="h-auto min-h-10 justify-start gap-2 whitespace-normal text-left"
               onClick={() => selectSection("controle")}
             >
               <AlertTriangle className="size-4" />
@@ -748,7 +743,7 @@ export function WorkPage() {
             </Button>
             <Button
               variant="outline"
-              className="justify-start gap-2"
+              className="h-auto min-h-10 justify-start gap-2 whitespace-normal text-left"
               onClick={() => window.open("https://otimizza.vercel.app/", "_blank", "noopener,noreferrer")}
             >
               <Building2 className="size-4" />
@@ -756,7 +751,7 @@ export function WorkPage() {
             </Button>
             <Button
               variant="outline"
-              className="justify-start gap-2"
+              className="h-auto min-h-10 justify-start gap-2 whitespace-normal text-left"
               onClick={() => window.open("https://fast.com/pt/", "_blank", "noopener,noreferrer")}
             >
               <Gauge className="size-4" />
@@ -764,7 +759,7 @@ export function WorkPage() {
             </Button>
             <Button
               variant="outline"
-              className="justify-start gap-2"
+              className="h-auto min-h-10 justify-start gap-2 whitespace-normal text-left"
               onClick={() =>
                 window.open(
                   "https://unic.comfica.com.br/pages/geral/analise_preliminar_risco/",
@@ -786,7 +781,7 @@ export function WorkPage() {
             </Button>
             <Button
               variant="outline"
-              className="justify-start gap-2"
+              className="h-auto min-h-10 justify-start gap-2 whitespace-normal text-left"
               onClick={() => navigate("/meu-trabalho/ttk")}
             >
               <Wrench className="size-4" />
@@ -794,7 +789,7 @@ export function WorkPage() {
             </Button>
             <Button
               variant="outline"
-              className="justify-start gap-2"
+              className="h-auto min-h-10 justify-start gap-2 whitespace-normal text-left"
               onClick={() => navigate("/meu-trabalho/relatorios")}
             >
               <FileStack className="size-4" />
@@ -807,7 +802,7 @@ export function WorkPage() {
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingId ? "Editar equipamento" : formActionLabel}</DialogTitle>
+            <DialogTitle>{editingId ? "Editar equipamento" : "Adicionar"}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
