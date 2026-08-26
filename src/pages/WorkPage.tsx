@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Trash2,
   Wrench,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,6 +110,7 @@ export function WorkPage() {
   const [formObservation, setFormObservation] = useState("");
   const [reportConditionFilter, setReportConditionFilter] = useState<ReportConditionFilter>("todos");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showAllItems, setShowAllItems] = useState(false);
   const [isTextReportOpen, setIsTextReportOpen] = useState(false);
   const [textReportContent, setTextReportContent] = useState("");
@@ -168,6 +170,7 @@ export function WorkPage() {
   function selectSection(section: EquipmentSection) {
     setActiveSection(section);
     setSearchQuery("");
+    setIsSearchOpen(false);
     setShowAllItems(false);
     setIsItemsListOpen(false);
   }
@@ -465,12 +468,27 @@ export function WorkPage() {
               )}
               {sectionTitle}
             </CardTitle>
-            {activeSection !== "controle" && (
-              <Button size="sm" onClick={() => openCreateDialog()} className="gap-1.5">
-                <Plus className="size-4" />
-                {createActionLabel}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                onClick={() => {
+                  if (isSearchOpen) setSearchQuery("");
+                  setIsSearchOpen((prev) => !prev);
+                }}
+                aria-label={isSearchOpen ? "Fechar busca" : "Buscar"}
+              >
+                {isSearchOpen ? <X className="size-4" /> : <Search className="size-4" />}
               </Button>
-            )}
+              {activeSection !== "controle" && (
+                <Button size="sm" onClick={() => openCreateDialog()} className="gap-1.5">
+                  <Plus className="size-4" />
+                  {createActionLabel}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {/* Bloco informativo: só aparece no Controle, onde explica um
@@ -487,15 +505,18 @@ export function WorkPage() {
               </div>
             )}
 
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por nome ou observação..."
-                className="pl-9"
-              />
-            </div>
+            {isSearchOpen && (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por nome ou observação..."
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+            )}
 
             {activeSection === "controle" ? (
               <div className="flex flex-col gap-3">
@@ -577,7 +598,6 @@ export function WorkPage() {
                 )}
 
                 <div className="flex items-center gap-2 border-t border-border pt-3">
-                  <span className="text-xs font-medium text-muted-foreground">Relatório:</span>
                   <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadDefectsPdf}>
                     <Download className="size-4" />
                     Baixar PDF
@@ -671,7 +691,6 @@ export function WorkPage() {
                 )}
 
                 <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-                  <span className="text-xs font-medium text-muted-foreground">Relatório:</span>
                   {activeSection === "epis" && (
                     <Select
                       value={reportConditionFilter}

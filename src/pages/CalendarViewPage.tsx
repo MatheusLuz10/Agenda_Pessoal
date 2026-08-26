@@ -7,7 +7,7 @@ import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { TaskListItem } from "@/components/tasks/TaskListItem";
 import { AddTaskDialog } from "@/components/tasks/AddTaskDialog";
 import { BIRTHDAY_CALENDAR_NAME, useAgenda } from "@/contexts/AgendaContext";
-import { formatDateBR, getTaskTimeStatus, todayISO } from "@/lib/date";
+import { formatDateBR, getTaskTimeStatus, MONTH_NAMES_PT, pad2, todayISO } from "@/lib/date";
 
 // Tela "/calendarios/:calendarId" — calendário de um grupo específico.
 // Mostra a grade do mês + um painel lateral com as tarefas do dia
@@ -70,6 +70,15 @@ export function CalendarViewPage() {
     () => tasksForSelectedDate.filter((t) => t.status === "concluida"),
     [tasksForSelectedDate]
   );
+
+  // Só no calendário "Aniversário": todos os aniversariantes do mês
+  // exibido na grade acima (independente do dia selecionado), pra dar
+  // uma visão do mês inteiro de uma vez em vez de dia por dia.
+  const monthBirthdays = useMemo(() => {
+    if (!isBirthdayCalendarView) return [];
+    const monthPrefix = `${year}-${pad2(month + 1)}`;
+    return allTasks.filter((t) => t.date.startsWith(monthPrefix)).sort((a, b) => a.date.localeCompare(b.date));
+  }, [allTasks, isBirthdayCalendarView, year, month]);
 
   // Guarda contra um :calendarId inválido/inexistente na URL.
   if (!calendar) {
@@ -176,6 +185,28 @@ export function CalendarViewPage() {
           </CardContent>
         </Card>
       </div>
+
+      {isBirthdayCalendarView && (
+        <Card>
+          <CardContent className="flex flex-col gap-3 pt-5">
+            <h2 className="text-sm font-semibold">
+              Aniversariantes de {MONTH_NAMES_PT[month]}
+              <span className="ml-1.5 text-xs font-normal text-muted-foreground">({monthBirthdays.length})</span>
+            </h2>
+            {monthBirthdays.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                Nenhum aniversariante em {MONTH_NAMES_PT[month]}.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {monthBirthdays.map((task) => (
+                  <TaskListItem key={task.id} task={task} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Só renderiza o modal quando há um dia selecionado, pois ele
           precisa saber em qual data criar a tarefa. */}
