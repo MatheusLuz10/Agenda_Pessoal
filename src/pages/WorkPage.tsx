@@ -759,10 +759,10 @@ export function WorkPage() {
             </Button>
             <Button
               variant="outline"
-              className="justify-start gap-2"
+              className="h-auto min-h-10 justify-start gap-2 whitespace-normal text-left"
               onClick={() => window.open("https://forms.office.com/r/Sa9raVnQSd", "_blank", "noopener,noreferrer")}
             >
-              <PackageCheck className="size-4" />
+              <PackageCheck className="size-4 shrink-0" />
               Aprovisionamento / Associação / Manobra
             </Button>
             <Button
