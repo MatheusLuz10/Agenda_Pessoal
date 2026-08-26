@@ -66,6 +66,21 @@ const sectionConfig: Record<Exclude<EquipmentSection, "controle">, { label: stri
   },
 };
 
+// Quanto menor, mais urgente — usado pra ordenar a lista de manutenção
+// com os itens que precisam de atenção primeiro, em vez da ordem de
+// cadastro.
+const CONDITION_SEVERITY: Record<EquipmentCondition, number> = {
+  Defeituoso: 0,
+  Médio: 1,
+  Bom: 2,
+};
+
+const CONDITION_BADGE_CLASS: Record<EquipmentCondition, string> = {
+  Bom: "bg-success/10 text-success",
+  Médio: "bg-warning/15 text-warning",
+  Defeituoso: "bg-destructive/10 text-destructive",
+};
+
 // Datas relativas a hoje, usadas como padrão para os nomes dos arquivos de
 // relatório baixados.
 function relativeISO(offsetDays: number): string {
@@ -365,13 +380,21 @@ export function WorkPage() {
     activeSection === "controle" ? defectiveItems : items.filter((item) => item.category === activeSection);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredItems = normalizedQuery
+  const matchingItems = normalizedQuery
     ? visibleItems.filter(
         (item) =>
           item.name.toLowerCase().includes(normalizedQuery) ||
           item.observation.toLowerCase().includes(normalizedQuery)
       )
     : visibleItems;
+
+  // Só a Manutenção do carro é reordenada por urgência (Defeituoso >
+  // Médio > Bom) — é a seção que o técnico pediu pra organizar melhor;
+  // EPIs e Controle continuam na ordem original.
+  const filteredItems =
+    activeSection === "manutencao"
+      ? [...matchingItems].sort((a, b) => CONDITION_SEVERITY[a.condition] - CONDITION_SEVERITY[b.condition])
+      : matchingItems;
 
   // Lista de manutenção/EPIs fica curta por padrão (não durante uma busca,
   // onde faz sentido ver todos os resultados) — "Ver mais" revela o resto.
@@ -595,9 +618,11 @@ export function WorkPage() {
                             <div className="flex flex-col gap-1.5">
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-medium">{item.name}</p>
-                                {activeSection !== "manutencao" && (
-                                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{item.condition}</span>
-                                )}
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${CONDITION_BADGE_CLASS[item.condition]}`}
+                                >
+                                  {item.condition}
+                                </span>
                               </div>
                               <p className="text-sm text-muted-foreground">{item.observation || "Sem observação."}</p>
                             </div>
@@ -738,7 +763,7 @@ export function WorkPage() {
               onClick={() => window.open("https://forms.office.com/r/Sa9raVnQSd", "_blank", "noopener,noreferrer")}
             >
               <PackageCheck className="size-4" />
-              Aprovisionamento / Associação
+              Aprovisionamento / Associação / Manobra
             </Button>
             <Button
               variant="outline"
@@ -776,7 +801,7 @@ export function WorkPage() {
               />
             </div>
 
-            <div className={formCategory === "manutencao" ? "flex flex-col gap-1.5" : "grid grid-cols-2 gap-3"}>
+            <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="equipment-category">Categoria</Label>
                 <div
@@ -787,21 +812,19 @@ export function WorkPage() {
                 </div>
               </div>
 
-              {formCategory !== "manutencao" && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="equipment-condition">Condição</Label>
-                  <Select value={formCondition} onValueChange={(value) => setFormCondition(value as EquipmentCondition)}>
-                    <SelectTrigger id="equipment-condition">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Bom">Bom</SelectItem>
-                      <SelectItem value="Médio">Médio</SelectItem>
-                      <SelectItem value="Defeituoso">Defeituoso</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="equipment-condition">Condição</Label>
+                <Select value={formCondition} onValueChange={(value) => setFormCondition(value as EquipmentCondition)}>
+                  <SelectTrigger id="equipment-condition">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Bom">Bom</SelectItem>
+                    <SelectItem value="Médio">Médio</SelectItem>
+                    <SelectItem value="Defeituoso">Defeituoso</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5">

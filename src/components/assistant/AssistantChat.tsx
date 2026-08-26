@@ -16,17 +16,17 @@ interface ChatMessage {
 }
 
 interface AssistantChatProps {
-  // Versão compacta (usada no widget da Home) tem menos altura de
-  // histórico, para não dominar a tela inicial.
+  // Versão compacta (usada no popup flutuante, ver AssistantWidget) tem
+  // menos altura de histórico, para caber num painel pequeno.
   compact?: boolean;
 }
 
 // Chat de texto livre para criar tarefas sem abrir nenhum formulário,
-// reaproveitado tanto na tela "/assistente" (versão cheia) quanto num
-// widget na Home (versão compacta). O calendário é escolhido manualmente
-// no <Select> — uma tentativa anterior de adivinhar o calendário pelo
-// texto (guessCalendarId, ainda em src/lib/nlpParser.ts) causava
-// escolhas erradas, por isso voltamos ao seletor explícito.
+// mostrado no popup flutuante do Assistente (ver AssistantWidget). O
+// calendário é escolhido manualmente no <Select> — uma tentativa
+// anterior de adivinhar o calendário pelo texto (guessCalendarId, ainda
+// em src/lib/nlpParser.ts) causava escolhas erradas, por isso voltamos
+// ao seletor explícito.
 export function AssistantChat({ compact = false }: AssistantChatProps) {
   const { calendars, addTask, loading } = useAgenda();
   const [calendarId, setCalendarId] = useState(calendars[0]?.id ?? "");
@@ -81,7 +81,7 @@ export function AssistantChat({ compact = false }: AssistantChatProps) {
       pushMessage({
         id: `a-${Date.now()}`,
         role: "assistant",
-        text: "Você ainda não tem nenhum calendário. Crie um na tela de Calendários antes de usar o chat.",
+        text: "Você ainda não tem nenhum calendário. Crie um na tela de AGENDA antes de usar o chat.",
       });
       return;
     }

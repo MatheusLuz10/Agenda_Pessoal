@@ -1,18 +1,34 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Globe, LogOut, Moon, Sun } from "lucide-react";
+import { ArrowLeft, Globe, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { NAV_ITEMS } from "@/config/navigation";
+
+// Deriva o destino do botão "Voltar" a partir do próprio caminho, em vez
+// de usar o histórico do navegador (navigate(-1)): quem entra direto
+// numa rota aninhada (link compartilhado, QR Code, aba nova) não tem
+// histórico dentro do app, e navigate(-1) nesse caso sairia do app em
+// vez de voltar pra dentro dele. Rotas com mais de um segmento (ex:
+// "/calendarios/abc123", "/meu-trabalho/ttk") sobem um nível; as demais
+// (ex: "/financas", que não é mais destino de nenhum item do menu) caem
+// na AGENDA, que é a tela inicial do app.
+function getBackTarget(pathname: string): string {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length <= 1) return "/calendarios";
+  return `/${segments.slice(0, -1).join("/")}`;
+}
 
 // Cabeçalho fixo no topo, presente em todas as páginas (renderizado pelo
-// AppLayout). Contém o botão "Voltar" (exceto na grade "/menu", que é o
-// destino do próprio botão), a logo (mais um atalho pro Painel Principal,
-// além do botão "Início" do menu) e o alternador de tema claro/escuro.
+// AppLayout). Contém o botão "Voltar" (só nas telas que não são um
+// destino direto da barra de navegação fixa embaixo, ex: uma tarefa
+// dentro de um calendário específico), a logo (atalho pra AGENDA) e o
+// alternador de tema claro/escuro.
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  const showBackButton = location.pathname !== "/menu";
+  const showBackButton = !NAV_ITEMS.some((item) => item.to === location.pathname);
 
   // Tema inicial: usa o que foi salvo antes no localStorage ou, na
   // primeira visita, segue a preferência do sistema operacional do
@@ -40,13 +56,13 @@ export function Header() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/menu")}
-            aria-label="Voltar ao menu"
+            onClick={() => navigate(getBackTarget(location.pathname))}
+            aria-label="Voltar"
           >
             <ArrowLeft className="size-4.5" />
           </Button>
         )}
-        <Link to="/menu" className="flex items-center gap-2">
+        <Link to="/calendarios" className="flex items-center gap-2">
           <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Globe className="size-4.5" />
           </div>
@@ -60,6 +76,15 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate("/configuracoes")}
+          aria-label="Configurações"
+        >
+          <Settings className="size-4" />
+        </Button>
+
         <Button
           variant="ghost"
           size="icon"

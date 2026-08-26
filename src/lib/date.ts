@@ -122,6 +122,34 @@ export function addMonths(iso: string, n: number): string {
   return makeISODate(anchor.getFullYear(), anchor.getMonth(), Math.min(day, daysInTargetMonth));
 }
 
+// Idade que a pessoa está fazendo/vai fazer no próximo aniversário, a
+// partir de uma data de nascimento ISO — usado no calendário
+// "Aniversário" (ver BIRTHDAY_CALENDAR_NAME). É a idade do PRÓXIMO
+// aniversário, não a idade atual já completada: se o aniversário deste
+// ano já passou, o próximo é ano que vem, um a mais que a diferença
+// simples de anos.
+export function calculateAge(birthDateISO: string): number {
+  const today = nowInBrasilia();
+  const [birthYear, birthMonth, birthDay] = birthDateISO.split("-").map(Number);
+  let age = today.getFullYear() - birthYear;
+  const birthdayAlreadyHappenedThisYear =
+    today.getMonth() + 1 > birthMonth ||
+    (today.getMonth() + 1 === birthMonth && today.getDate() >= birthDay);
+  if (birthdayAlreadyHappenedThisYear) age += 1;
+  return age;
+}
+
+// Constrói a data do aniversário (mesmo mês/dia da data de nascimento)
+// num ano específico — usado pra gerar as ocorrências futuras do
+// calendário "Aniversário" a partir do ano atual, em vez de a partir do
+// ano de nascimento (ver AddTaskDialog). Mesmo tratamento de 29/02 em
+// ano não bissexto que addMonths (vira 28/02).
+export function birthdayInYear(birthDateISO: string, year: number): string {
+  const [, month, day] = birthDateISO.split("-").map(Number);
+  const daysInMonth = getDaysInMonth(year, month - 1);
+  return makeISODate(year, month - 1, Math.min(day, daysInMonth));
+}
+
 // Próxima ocorrência de um dia da semana (0 = domingo ... 6 = sábado) a
 // partir de hoje. Se hoje já é esse dia, considera o de hoje (não pula
 // para a semana seguinte) — é o comportamento mais intuitivo quando

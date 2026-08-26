@@ -7,8 +7,6 @@ import { FinanceProvider } from "@/contexts/FinanceContext";
 import { OperationProvider } from "@/contexts/OperationContext";
 import { ServiceRequestsProvider } from "@/contexts/ServiceRequestsContext";
 import { WorkProvider } from "@/contexts/WorkContext";
-import { AppGridPage } from "@/pages/AppGridPage";
-import { AssistantPage } from "@/pages/AssistantPage";
 import { CalendarViewPage } from "@/pages/CalendarViewPage";
 import { CalendarsPage } from "@/pages/CalendarsPage";
 import { FinancesPage } from "@/pages/FinancesPage";
@@ -49,8 +47,7 @@ function App() {
                 </AgendaProvider>
               }
             >
-              <Route index element={<Navigate to="/menu" replace />} />
-              <Route path="/menu" element={<AppGridPage />} />
+              <Route index element={<Navigate to="/calendarios" replace />} />
               <Route path="/calendarios" element={<CalendarsPage />} />
               <Route path="/calendarios/:calendarId" element={<CalendarViewPage />} />
               <Route path="/meu-trabalho" element={<WorkPage />} />
@@ -59,7 +56,6 @@ function App() {
               <Route path="/operacao" element={<OperationsPage />} />
               <Route path="/gestao-de-tempo" element={<TimeManagementPage />} />
               <Route path="/solicitacoes" element={<ServiceRequestsPage />} />
-              <Route path="/assistente" element={<AssistantPage />} />
               <Route path="/financas" element={<FinancesPage />} />
               <Route path="/configuracoes" element={<SettingsPage />} />
             </Route>

@@ -1,29 +1,27 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Award,
   Ban,
   Calendar,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
-  Clock,
-  DollarSign,
   History,
   Info,
   Lightbulb,
   ListChecks,
-  Pencil,
+  Minus,
   Plus,
   Settings,
   TrendingUp,
   Trash2,
-  Upload,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -33,50 +31,21 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { fetchFinancialOverrides, saveFinancialOverrides } from "@/data/operationApi";
 import { useOperation } from "@/contexts/OperationContext";
-import { formatDateBR, todayISO } from "@/lib/date";
-import { extractPunchFromImage } from "@/lib/ocr";
+import { addDays, formatDateBR, todayISO } from "@/lib/date";
 import {
   CATEGORY_LABEL,
   computeCategory,
   computeCycleSummary,
-  computeFinancialSummary,
-  computeOvertimeSummary,
   computePrizeAmount,
   computeProductionSummary,
-  computePunchDay,
-  formatMinutesAsHM,
   getCurrentCycleRange,
   getCycleForDate,
   getPreviousCycleRange,
   isWithinRange,
 } from "@/lib/operation";
-import { isSupabaseConfigured } from "@/lib/supabaseClient";
-import type {
-  ActivityType,
-  FinancialOverrides,
-  OperationActivity,
-  OperationSettings,
-  PunchRecord,
-} from "@/types";
-
-const EMPTY_OVERRIDES: FinancialOverrides = {
-  baseSalary: null,
-  hazardPay: null,
-  overtime50Amount: null,
-  overtime100Amount: null,
-  dsrAmount: null,
-  prizeAmount: null,
-};
+import type { ActivityType, OperationActivity, OperationSettings } from "@/types";
 
 function formatNumber(value: number, decimals = 1): string {
   return value.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -86,38 +55,14 @@ function formatCurrency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// Monta o estado do formulário de ajustes do Card 7 a partir dos overrides
-// salvos: cada campo começa marcado como "manual" só quando já existe um
-// ajuste; o valor mostrado é o ajuste (se houver) ou o calculado, pra dar
-// um ponto de partida sensato quando o técnico decide editar.
-function buildFinancialForm(
-  overrides: FinancialOverrides,
-  computed: ReturnType<typeof computeFinancialSummary>
-): Record<keyof FinancialOverrides, { manual: boolean; value: string }> {
-  function field(overrideValue: number | null, computedValue: number) {
-    return { manual: overrideValue !== null, value: String(overrideValue ?? computedValue) };
-  }
-  return {
-    baseSalary: field(overrides.baseSalary, computed.baseSalary),
-    hazardPay: field(overrides.hazardPay, computed.hazardPay),
-    overtime50Amount: field(overrides.overtime50Amount, computed.overtime50Amount),
-    overtime100Amount: field(overrides.overtime100Amount, computed.overtime100Amount),
-    dsrAmount: field(overrides.dsrAmount, computed.dsrAmount),
-    prizeAmount: field(overrides.prizeAmount, computed.prizeAmount),
-  };
-}
-
 export function OperationsPage() {
   const {
     activities,
-    punches,
     settings,
     addActivity,
     updateActivity,
     deleteActivity,
     updateSettings,
-    savePunch,
-    deletePunch,
   } = useOperation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -215,9 +160,7 @@ export function OperationsPage() {
   const [isCategoryCardOpen, setIsCategoryCardOpen] = useState(false);
   const [isPrizeCardOpen, setIsPrizeCardOpen] = useState(false);
   const [isComparisonCardOpen, setIsComparisonCardOpen] = useState(false);
-  const [isPunchCardOpen, setIsPunchCardOpen] = useState(false);
   const [isIndicatorsCardOpen, setIsIndicatorsCardOpen] = useState(false);
-  const [isFinancialCardOpen, setIsFinancialCardOpen] = useState(false);
 
   // Mesmo pipeline de cálculo do ciclo atual, aplicado à janela do ciclo
   // anterior — usado no card de comparação. "Zerar e memorizar" já
@@ -281,6 +224,10 @@ export function OperationsPage() {
       // mandar.
       addActivity({ type: formType, date: formDate, quantity, description });
       setSessionAdded((prev) => ({ ...prev, [formType]: prev[formType] + quantity }));
+      // A data dos botões rápidos (+1 BA/+1 BD) acompanha a última data
+      // lançada, seja pelo diálogo ou por eles mesmos — assim quem lança
+      // um dia atrasado aqui continua no mesmo dia ao usar o atalho.
+      setQuickDate(formDate);
       setFormQuantity("1");
       setFormDescription("");
     }
@@ -289,6 +236,27 @@ export function OperationsPage() {
   function handleDelete(activityId: string) {
     if (!window.confirm("Excluir esta atividade?")) return;
     deleteActivity(activityId);
+  }
+
+  // Atalho pro caso comum: 1 atividade na data escolhida, sem abrir o
+  // diálogo. `quickDate` começa em hoje, mas depois passa a acompanhar a
+  // última data lançada (por ele mesmo ou pelo diálogo "Lançar
+  // atividade", ver handleSave) — continua editável a qualquer momento
+  // pelo campo de data, pra quem quiser lançar num dia diferente.
+  // `quickFeedback` só dá uma confirmação visual rápida (some sozinho) —
+  // não precisa persistir em lugar nenhum.
+  const [quickDate, setQuickDate] = useState(todayISO());
+  const [quickFeedback, setQuickFeedback] = useState<{ type: ActivityType; date: string; key: number } | null>(null);
+
+  useEffect(() => {
+    if (!quickFeedback) return;
+    const timeout = setTimeout(() => setQuickFeedback(null), 2000);
+    return () => clearTimeout(timeout);
+  }, [quickFeedback]);
+
+  function quickAddActivity(type: ActivityType) {
+    addActivity({ type, date: quickDate, quantity: 1 });
+    setQuickFeedback({ type, date: quickDate, key: Date.now() });
   }
 
   const indicators = useMemo(
@@ -303,176 +271,6 @@ export function OperationsPage() {
     [production, category, cycleSummary.weightedDays, prizeAmount, settings.effectivenessPercent]
   );
 
-  // --- Card 5: Ponto e horas extras ---
-  const [isPunchDialogOpen, setIsPunchDialogOpen] = useState(false);
-  const [editingPunchId, setEditingPunchId] = useState<string | null>(null);
-  const [punchDate, setPunchDate] = useState(todayISO());
-  const [clockIn, setClockIn] = useState("");
-  const [lunchStart, setLunchStart] = useState("");
-  const [lunchEnd, setLunchEnd] = useState("");
-  const [clockOut, setClockOut] = useState("");
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrError, setOcrError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const cyclePunches = useMemo(
-    () => punches.filter((p) => isWithinRange(p.date, cycle.start, cycle.end)),
-    [punches, cycle]
-  );
-
-  const overtimeSummary = useMemo(
-    () => computeOvertimeSummary(cyclePunches, settings, cycle.start, cycle.end),
-    [cyclePunches, settings, cycle]
-  );
-
-  function resetPunchForm() {
-    setEditingPunchId(null);
-    setPunchDate(todayISO());
-    setClockIn("08:00"); // jornada padrão — sempre editável se o dia foi diferente
-    setLunchStart("");
-    setLunchEnd("");
-    setClockOut("");
-    setOcrError(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
-
-  function openPunchDialog() {
-    resetPunchForm();
-    setIsPunchDialogOpen(true);
-  }
-
-  function openEditPunchDialog(punch: PunchRecord) {
-    setEditingPunchId(punch.id);
-    setPunchDate(punch.date);
-    setClockIn(punch.clockIn);
-    setLunchStart(punch.lunchStart);
-    setLunchEnd(punch.lunchEnd);
-    setClockOut(punch.clockOut);
-    setOcrError(null);
-    setIsPunchDialogOpen(true);
-  }
-
-  async function handlePunchImageChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setOcrLoading(true);
-    setOcrError(null);
-    try {
-      const punch = await extractPunchFromImage(file);
-      if (punch.times.length === 0) {
-        setOcrError("Não encontramos horários nessa imagem. Preencha os campos manualmente.");
-      } else {
-        // Entrada fica fixa em 08:00 (jornada padrão); os 3 últimos
-        // horários lidos preenchem início/fim do almoço e saída, nessa
-        // ordem. Sempre revise antes de salvar — a leitura pode errar um
-        // dígito ou faltar algum registro do dia.
-        if (punch.clockIn) setClockIn(punch.clockIn);
-        if (punch.lunchStart) setLunchStart(punch.lunchStart);
-        if (punch.lunchEnd) setLunchEnd(punch.lunchEnd);
-        if (punch.clockOut) setClockOut(punch.clockOut);
-        if (!punch.lunchStart || !punch.lunchEnd || !punch.clockOut) {
-          setOcrError(
-            `Encontramos ${punch.times.length} horário(s) nessa imagem. Confira e complete os campos que faltarem.`
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Falha ao ler imagem do ponto por OCR:", error);
-      const detail = error instanceof Error ? error.message : String(error);
-      setOcrError(`Não foi possível ler essa imagem (${detail}). Preencha os campos manualmente.`);
-    } finally {
-      setOcrLoading(false);
-    }
-  }
-
-  function handleSavePunch() {
-    if (!clockIn || !lunchStart || !lunchEnd || !clockOut) return;
-
-    savePunch({ date: punchDate, clockIn, lunchStart, lunchEnd, clockOut });
-    setIsPunchDialogOpen(false);
-    resetPunchForm();
-  }
-
-  function handleDeletePunch(punchId: string) {
-    if (!window.confirm("Excluir este registro de ponto?")) return;
-    deletePunch(punchId);
-  }
-
-  // --- Card 7: Resumo financeiro ---
-  const financialSummary = useMemo(
-    () => computeFinancialSummary(settings, overtimeSummary, prizeAmount),
-    [settings, overtimeSummary, prizeAmount]
-  );
-
-  const [overrides, setOverrides] = useState<FinancialOverrides>(EMPTY_OVERRIDES);
-
-  // Os ajustes manuais são por ciclo (identificados pela data de início).
-  // Troca de ciclo (ou primeiro carregamento) recarrega o que já foi
-  // salvo pra esse ciclo específico. Sem Supabase não há onde persistir
-  // por ciclo, então o estado (iniciado vazio) simplesmente não recarrega.
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    let isMounted = true;
-    fetchFinancialOverrides(cycle.start)
-      .then((saved) => {
-        if (isMounted) setOverrides(saved ?? EMPTY_OVERRIDES);
-      })
-      .catch((error) => console.error("Falha ao carregar ajustes do resumo financeiro:", error));
-    return () => {
-      isMounted = false;
-    };
-  }, [cycle.start]);
-
-  // Efetivo = ajuste manual quando existir, senão o valor calculado.
-  const effectiveFinancial = {
-    baseSalary: overrides.baseSalary ?? financialSummary.baseSalary,
-    hazardPay: overrides.hazardPay ?? financialSummary.hazardPay,
-    overtime50Amount: overrides.overtime50Amount ?? financialSummary.overtime50Amount,
-    overtime100Amount: overrides.overtime100Amount ?? financialSummary.overtime100Amount,
-    dsrAmount: overrides.dsrAmount ?? financialSummary.dsrAmount,
-    prizeAmount: overrides.prizeAmount ?? financialSummary.prizeAmount,
-  };
-  const effectiveTotalGross =
-    effectiveFinancial.baseSalary +
-    effectiveFinancial.hazardPay +
-    effectiveFinancial.overtime50Amount +
-    effectiveFinancial.overtime100Amount +
-    effectiveFinancial.dsrAmount +
-    effectiveFinancial.prizeAmount;
-
-  const [isFinancialDialogOpen, setIsFinancialDialogOpen] = useState(false);
-  const [financialForm, setFinancialForm] = useState<Record<keyof FinancialOverrides, { manual: boolean; value: string }>>(
-    () => buildFinancialForm(EMPTY_OVERRIDES, financialSummary)
-  );
-
-  function openFinancialDialog() {
-    setFinancialForm(buildFinancialForm(overrides, financialSummary));
-    setIsFinancialDialogOpen(true);
-  }
-
-  function handleSaveFinancialOverrides() {
-    const next: FinancialOverrides = {
-      baseSalary: financialForm.baseSalary.manual ? Number(financialForm.baseSalary.value) || 0 : null,
-      hazardPay: financialForm.hazardPay.manual ? Number(financialForm.hazardPay.value) || 0 : null,
-      overtime50Amount: financialForm.overtime50Amount.manual ? Number(financialForm.overtime50Amount.value) || 0 : null,
-      overtime100Amount: financialForm.overtime100Amount.manual
-        ? Number(financialForm.overtime100Amount.value) || 0
-        : null,
-      dsrAmount: financialForm.dsrAmount.manual ? Number(financialForm.dsrAmount.value) || 0 : null,
-      prizeAmount: financialForm.prizeAmount.manual ? Number(financialForm.prizeAmount.value) || 0 : null,
-    };
-
-    setOverrides(next);
-    setIsFinancialDialogOpen(false);
-
-    if (isSupabaseConfigured) {
-      saveFinancialOverrides(cycle.start, next).catch((error) =>
-        console.error("Falha ao salvar ajustes do resumo financeiro:", error)
-      );
-    }
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -482,11 +280,54 @@ export function OperationsPage() {
             Produtividade, categoria e estimativa de remuneração do ciclo atual.
           </p>
         </div>
-        <Button size="sm" onClick={openCreateDialog} className="gap-1.5">
-          <Plus className="size-4" />
-          Lançar atividade
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => setQuickDate((prev) => addDays(prev, -1))}
+            aria-label="Dia anterior"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <Input
+            type="date"
+            value={quickDate}
+            onChange={(e) => setQuickDate(e.target.value)}
+            className="w-auto"
+            aria-label="Data para lançamento rápido"
+          />
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => setQuickDate((prev) => addDays(prev, 1))}
+            aria-label="Próximo dia"
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => quickAddActivity("BA")} className="gap-1.5">
+            <Plus className="size-4" />
+            BA
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => quickAddActivity("BD")} className="gap-1.5">
+            <Plus className="size-4" />
+            BD
+          </Button>
+          <Button size="sm" onClick={openCreateDialog} className="gap-1.5">
+            <Plus className="size-4" />
+            Lançar atividade
+          </Button>
+        </div>
       </div>
+
+      {quickFeedback && (
+        <div
+          key={quickFeedback.key}
+          className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-sm text-success"
+        >
+          <CheckCircle2 className="size-4 shrink-0" />
+          <span>+1 {quickFeedback.type} lançado em {formatDateBR(quickFeedback.date)}.</span>
+        </div>
+      )}
 
       {/* Todas as atividades (de qualquer ciclo): fica recolhida, só com a
           contagem — clique expande pra ver/editar/excluir qualquer uma, não
@@ -733,81 +574,6 @@ export function OperationsPage() {
         </div>
       </CollapsibleCard>
 
-      {/* Card 5 – Ponto e Horas Extras */}
-      <CollapsibleCard
-        icon={Clock}
-        title="Ponto e horas extras"
-        open={isPunchCardOpen}
-        onToggle={() => setIsPunchCardOpen((prev) => !prev)}
-        headerAction={
-          <Button size="sm" variant="outline" onClick={openPunchDialog} className="shrink-0 gap-1.5">
-            <Upload className="size-4" />
-            Importar ponto
-          </Button>
-        }
-      >
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-lg bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Horas Extras 50%</p>
-              <p className="mt-1 text-lg font-semibold">{formatMinutesAsHM(overtimeSummary.overtime50Minutes)}</p>
-              <p className="text-sm text-muted-foreground">{formatCurrency(overtimeSummary.overtime50Amount)}</p>
-            </div>
-            <div className="rounded-lg bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Horas Extras 100%</p>
-              <p className="mt-1 text-lg font-semibold">{formatMinutesAsHM(overtimeSummary.overtime100Minutes)}</p>
-              <p className="text-sm text-muted-foreground">{formatCurrency(overtimeSummary.overtime100Amount)}</p>
-            </div>
-            <div className="rounded-lg bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">DSR Hora Extra</p>
-              <p className="mt-1 text-lg font-semibold">{formatCurrency(overtimeSummary.dsrAmount)}</p>
-            </div>
-          </div>
-          <StatRow label="Total estimado de horas extras" value={formatCurrency(overtimeSummary.totalAmount)} />
-
-          <div className="flex flex-col gap-2">
-            {cyclePunches.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                Nenhum ponto lançado neste ciclo ainda.
-              </p>
-            ) : (
-              [...cyclePunches]
-                .sort((a, b) => b.date.localeCompare(a.date))
-                .map((punch) => {
-                  const day = computePunchDay(punch);
-                  return (
-                    <div key={punch.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-sm font-medium">{formatDateBR(punch.date)}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {punch.clockIn} - {punch.lunchStart} / {punch.lunchEnd} - {punch.clockOut}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Trabalhado: {formatMinutesAsHM(day.workedMinutes)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openEditPunchDialog(punch)}>
-                          Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDeletePunch(punch.id)}
-                          aria-label="Excluir ponto"
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })
-            )}
-          </div>
-        </div>
-      </CollapsibleCard>
-
       {/* Card 6 – Indicadores Inteligentes */}
       <CollapsibleCard
         icon={Lightbulb}
@@ -825,47 +591,6 @@ export function OperationsPage() {
         </div>
       </CollapsibleCard>
 
-      {/* Card 7 – Resumo Financeiro */}
-      <CollapsibleCard
-        icon={DollarSign}
-        title="Resumo financeiro"
-        open={isFinancialCardOpen}
-        onToggle={() => setIsFinancialCardOpen((prev) => !prev)}
-        headerAction={
-          <Button
-            size="icon"
-            variant="ghost"
-            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-            onClick={openFinancialDialog}
-            aria-label="Editar resumo financeiro"
-          >
-            <Pencil className="size-4" />
-          </Button>
-        }
-      >
-        <div className="flex flex-col gap-3">
-          <StatRow label="Salário base" value={formatCurrency(effectiveFinancial.baseSalary)} edited={overrides.baseSalary !== null} />
-          <StatRow label="Periculosidade" value={formatCurrency(effectiveFinancial.hazardPay)} edited={overrides.hazardPay !== null} />
-          <StatRow
-            label="Horas Extras 50%"
-            value={formatCurrency(effectiveFinancial.overtime50Amount)}
-            edited={overrides.overtime50Amount !== null}
-          />
-          <StatRow
-            label="Horas Extras 100%"
-            value={formatCurrency(effectiveFinancial.overtime100Amount)}
-            edited={overrides.overtime100Amount !== null}
-          />
-          <StatRow label="DSR Hora Extra" value={formatCurrency(effectiveFinancial.dsrAmount)} edited={overrides.dsrAmount !== null} />
-          <StatRow label="Prêmio produção" value={formatCurrency(effectiveFinancial.prizeAmount)} edited={overrides.prizeAmount !== null} />
-          <div className="my-1 border-t border-border" />
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium">Estimativa total bruta</span>
-            <span className="text-xl font-semibold text-success">{formatCurrency(effectiveTotalGross)}</span>
-          </div>
-        </div>
-      </CollapsibleCard>
-
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent>
           <DialogHeader>
@@ -873,16 +598,25 @@ export function OperationsPage() {
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="activity-type">Tipo</Label>
-              <Select value={formType} onValueChange={(value) => setFormType(value as ActivityType)}>
-                <SelectTrigger id="activity-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="BA">BA (Instalação)</SelectItem>
-                  <SelectItem value="BD">BD (Reparo)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Tipo</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={formType === "BA" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setFormType("BA")}
+                >
+                  BA (Instalação)
+                </Button>
+                <Button
+                  type="button"
+                  variant={formType === "BD" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setFormType("BD")}
+                >
+                  BD (Reparo)
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -892,13 +626,36 @@ export function OperationsPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="activity-quantity">Quantidade</Label>
-                <Input
-                  id="activity-quantity"
-                  type="number"
-                  min={1}
-                  value={formQuantity}
-                  onChange={(e) => setFormQuantity(e.target.value)}
-                />
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => setFormQuantity(String(Math.max(1, Number(formQuantity || "1") - 1)))}
+                    aria-label="Diminuir quantidade"
+                  >
+                    <Minus className="size-4" />
+                  </Button>
+                  <Input
+                    id="activity-quantity"
+                    type="number"
+                    min={1}
+                    className="text-center"
+                    value={formQuantity}
+                    onChange={(e) => setFormQuantity(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => setFormQuantity(String(Number(formQuantity || "0") + 1))}
+                    aria-label="Aumentar quantidade"
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -973,143 +730,6 @@ export function OperationsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={isPunchDialogOpen}
-        onOpenChange={(open) => {
-          setIsPunchDialogOpen(open);
-          if (!open) resetPunchForm();
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingPunchId ? "Editar ponto" : "Importar ponto"}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            {!editingPunchId && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="punch-image">Print do app de ponto (opcional)</Label>
-                <Input id="punch-image" type="file" accept="image/*" ref={fileInputRef} onChange={handlePunchImageChange} />
-                <p className="text-xs text-muted-foreground">
-                  Lemos a imagem por OCR (gratuito, roda no navegador) e preenchemos os horários abaixo — confira
-                  antes de salvar, o reconhecimento pode errar.
-                </p>
-                {ocrLoading && <p className="text-xs text-primary">Lendo imagem...</p>}
-                {ocrError && <p className="text-xs text-warning">{ocrError}</p>}
-              </div>
-            )}
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="punch-date">Data</Label>
-              <Input
-                id="punch-date"
-                type="date"
-                value={punchDate}
-                onChange={(e) => setPunchDate(e.target.value)}
-                disabled={!!editingPunchId}
-              />
-              {editingPunchId && (
-                <p className="text-xs text-muted-foreground">
-                  Pra mover este ponto pra outro dia, exclua e lance de novo na data certa.
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="punch-clock-in">Entrada</Label>
-                <Input id="punch-clock-in" type="time" value={clockIn} onChange={(e) => setClockIn(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="punch-lunch-start">Início do almoço</Label>
-                <Input
-                  id="punch-lunch-start"
-                  type="time"
-                  value={lunchStart}
-                  onChange={(e) => setLunchStart(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="punch-lunch-end">Fim do almoço</Label>
-                <Input id="punch-lunch-end" type="time" value={lunchEnd} onChange={(e) => setLunchEnd(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="punch-clock-out">Saída</Label>
-                <Input id="punch-clock-out" type="time" value={clockOut} onChange={(e) => setClockOut(e.target.value)} />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPunchDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSavePunch} disabled={!clockIn || !lunchStart || !lunchEnd || !clockOut}>
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isFinancialDialogOpen} onOpenChange={setIsFinancialDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar resumo financeiro</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <p className="text-xs text-muted-foreground">
-              Marque a caixinha de um valor pra digitar manualmente. Sem marcar, ele continua calculado
-              automaticamente e atualiza sozinho quando você lança atividades ou pontos.
-            </p>
-            <FinancialOverrideField
-              id="fin-base-salary"
-              label="Salário base"
-              field={financialForm.baseSalary}
-              computedValue={financialSummary.baseSalary}
-              onChange={(next) => setFinancialForm((prev) => ({ ...prev, baseSalary: next }))}
-            />
-            <FinancialOverrideField
-              id="fin-hazard-pay"
-              label="Periculosidade"
-              field={financialForm.hazardPay}
-              computedValue={financialSummary.hazardPay}
-              onChange={(next) => setFinancialForm((prev) => ({ ...prev, hazardPay: next }))}
-            />
-            <FinancialOverrideField
-              id="fin-overtime-50"
-              label="Horas Extras 50%"
-              field={financialForm.overtime50Amount}
-              computedValue={financialSummary.overtime50Amount}
-              onChange={(next) => setFinancialForm((prev) => ({ ...prev, overtime50Amount: next }))}
-            />
-            <FinancialOverrideField
-              id="fin-overtime-100"
-              label="Horas Extras 100%"
-              field={financialForm.overtime100Amount}
-              computedValue={financialSummary.overtime100Amount}
-              onChange={(next) => setFinancialForm((prev) => ({ ...prev, overtime100Amount: next }))}
-            />
-            <FinancialOverrideField
-              id="fin-dsr"
-              label="DSR Hora Extra"
-              field={financialForm.dsrAmount}
-              computedValue={financialSummary.dsrAmount}
-              onChange={(next) => setFinancialForm((prev) => ({ ...prev, dsrAmount: next }))}
-            />
-            <FinancialOverrideField
-              id="fin-prize"
-              label="Prêmio produção"
-              field={financialForm.prizeAmount}
-              computedValue={financialSummary.prizeAmount}
-              onChange={(next) => setFinancialForm((prev) => ({ ...prev, prizeAmount: next }))}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsFinancialDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveFinancialOverrides}>Salvar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -1167,8 +787,8 @@ function ActivityRow({
 }
 
 // Card recolhível: fica só com o título visível por padrão, clique
-// expande o conteúdo. `headerAction`, quando informado (ex: botão
-// "Importar ponto"), continua acessível mesmo com o card fechado.
+// expande o conteúdo. `headerAction`, quando informado (ex: botão de
+// ajuste no cabeçalho), continua acessível mesmo com o card fechado.
 function CollapsibleCard({
   icon: Icon,
   title,
@@ -1252,50 +872,6 @@ function CompareRow({
       </span>
       <span className="text-right text-sm text-muted-foreground">{previous}</span>
     </>
-  );
-}
-
-// Uma linha do diálogo "Editar resumo financeiro": checkbox liga/desliga o
-// modo manual daquele valor; o input só fica editável quando ligado. Sem
-// marcar, mostra o valor calculado automaticamente como referência.
-function FinancialOverrideField({
-  id,
-  label,
-  field,
-  computedValue,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  field: { manual: boolean; value: string };
-  computedValue: number;
-  onChange: (next: { manual: boolean; value: string }) => void;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <Checkbox
-        className="mt-7"
-        checked={field.manual}
-        onCheckedChange={(checked) => onChange({ manual: Boolean(checked), value: field.value })}
-        aria-label={`Editar ${label} manualmente`}
-      />
-      <div className="flex flex-1 flex-col gap-1.5">
-        <Label htmlFor={id}>{label}</Label>
-        <Input
-          id={id}
-          type="number"
-          step="0.01"
-          disabled={!field.manual}
-          value={field.value}
-          onChange={(e) => onChange({ manual: field.manual, value: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">
-          {field.manual
-            ? "Valor manual — não muda sozinho até você desmarcar."
-            : `Automático: ${computedValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
-        </p>
-      </div>
-    </div>
   );
 }
 

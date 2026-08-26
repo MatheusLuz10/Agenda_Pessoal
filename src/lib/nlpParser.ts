@@ -39,14 +39,14 @@ const CALENDAR_KEYWORDS: Record<string, string[]> = {
 };
 
 // Tenta descobrir, pelo conteúdo da frase, a qual calendário do usuário
-// um compromisso pertence — assim o chat (AssistantPage) não precisa de
+// um compromisso pertence — assim o chat (AssistantChat) não precisa de
 // um seletor manual. Estratégia, da mais para a menos específica:
 //   1) o nome de algum calendário aparece literalmente na frase;
 //   2) uma palavra-chave de CALENDAR_KEYWORDS aparece na frase, e existe
 //      um calendário cujo nome contém aquele tema (ex: tema "pet" casa
 //      com um calendário chamado "Pets");
 //   3) nenhum dos dois: devolve null, e quem chamar decide o calendário
-//      padrão (ver AssistantPage, que usa o primeiro da lista).
+//      padrão (ver AssistantChat, que usa o primeiro da lista).
 export function guessCalendarId(
   text: string,
   calendars: { id: string; name: string }[]

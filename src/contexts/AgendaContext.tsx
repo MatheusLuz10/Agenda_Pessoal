@@ -39,6 +39,15 @@ interface AgendaContextValue {
 
 const AgendaContext = createContext<AgendaContextValue | null>(null);
 
+// Nome do calendário fixo de aniversários, criado sozinho (ver o efeito
+// logo abaixo) e nunca removível pela UI (ver CalendarsPage) — usado
+// como identificador em vez de um id fixo porque o id real só existe
+// depois de criado (gerado pelo Postgres/gen_random_uuid, ou por
+// Date.now() no modo mock). Componentes que precisam de tratamento
+// especial pra este calendário (AddTaskDialog, TaskListItem,
+// CalendarsPage) comparam `calendar.name === BIRTHDAY_CALENDAR_NAME`.
+export const BIRTHDAY_CALENDAR_NAME = "Aniversário";
+
 // Provedor de estado global da agenda. Estratégia de dados:
 //
 //   - Se VITE_SUPABASE_URL/ANON_KEY não estão configuradas
@@ -110,6 +119,17 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
         .catch((error) => console.error("Falha ao criar calendário:", error));
     }
   };
+
+  // Garante que o calendário fixo "Aniversário" sempre exista, sem o
+  // usuário precisar criá-lo manualmente. Espera `loading` terminar
+  // antes de checar — senão, com Supabase configurado, `calendars`
+  // ainda estaria vazio durante o carregamento inicial e este efeito
+  // criaria um "Aniversário" duplicado antes dos dados reais chegarem.
+  useEffect(() => {
+    if (loading) return;
+    if (calendars.some((c) => c.name === BIRTHDAY_CALENDAR_NAME)) return;
+    addCalendar({ name: BIRTHDAY_CALENDAR_NAME, icon: "🎂", color: "rose" });
+  }, [loading, calendars]);
 
   // Mesma lógica de atualização otimista usada em addCalendar, aplicada
   // à criação de tarefas.

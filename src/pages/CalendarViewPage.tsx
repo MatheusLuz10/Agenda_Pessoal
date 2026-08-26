@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { TaskListItem } from "@/components/tasks/TaskListItem";
 import { AddTaskDialog } from "@/components/tasks/AddTaskDialog";
-import { useAgenda } from "@/contexts/AgendaContext";
+import { BIRTHDAY_CALENDAR_NAME, useAgenda } from "@/contexts/AgendaContext";
 import { formatDateBR, getTaskTimeStatus, todayISO } from "@/lib/date";
 
 // Tela "/calendarios/:calendarId" — calendário de um grupo específico.
@@ -31,19 +31,23 @@ export function CalendarViewPage() {
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [isCompletedOpen, setIsCompletedOpen] = useState(false);
 
+  const isBirthdayCalendarView = calendar?.name === BIRTHDAY_CALENDAR_NAME;
+
   // Marca no calendário apenas os dias com tarefas DESTE calendário
   // (diferente do markedDates da Home, que olha todos os calendários).
+  // Aniversário não tem "vencido" (é lembrete, não tarefa com prazo — ver
+  // TaskListItem), então esse calendário nunca acende a bolinha vermelha.
   const markedDates = useMemo(() => {
     const map: Record<string, { count: number; hasOverdue?: boolean }> = {};
     for (const task of allTasks) {
       if (task.status === "concluida") continue;
       const existing = map[task.date] ?? { count: 0 };
       existing.count += 1;
-      if (getTaskTimeStatus(task) === "vencida") existing.hasOverdue = true;
+      if (!isBirthdayCalendarView && getTaskTimeStatus(task) === "vencida") existing.hasOverdue = true;
       map[task.date] = existing;
     }
     return map;
-  }, [allTasks]);
+  }, [allTasks, isBirthdayCalendarView]);
 
   // Tarefas do dia atualmente selecionado na grade, ordenadas por horário.
   const tasksForSelectedDate = useMemo(
@@ -73,7 +77,7 @@ export function CalendarViewPage() {
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <p className="text-muted-foreground">Calendário não encontrado.</p>
         <Button variant="outline" onClick={() => navigate("/calendarios")}>
-          Voltar para Calendários
+          Voltar para AGENDA
         </Button>
       </div>
     );

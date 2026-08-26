@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Clock, AlertCircle, Pencil, Trash2 } from "lucide-react";
+import { Cake, ChevronDown, ChevronUp, Clock, AlertCircle, Pencil, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatDateBR, getTaskTimeStatus } from "@/lib/date";
-import { useAgenda } from "@/contexts/AgendaContext";
+import { calculateAge, formatDateBR, getTaskTimeStatus } from "@/lib/date";
+import { BIRTHDAY_CALENDAR_NAME, useAgenda } from "@/contexts/AgendaContext";
 import { AddTaskDialog } from "@/components/tasks/AddTaskDialog";
 import type { Task } from "@/types";
 
@@ -29,12 +29,22 @@ interface TaskListItemProps {
 export function TaskListItem({ task, showCalendarName = false, onClick }: TaskListItemProps) {
   const { toggleTaskStatus, deleteTask, getCalendarById } = useAgenda();
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const timeStatus = getTaskTimeStatus(task);
+  const [isBirthdayRevealed, setIsBirthdayRevealed] = useState(false);
   const calendar = getCalendarById(task.calendarId);
+  const isBirthday = calendar?.name === BIRTHDAY_CALENDAR_NAME;
+  // Aniversário é um lembrete, não uma tarefa com prazo: nunca fica
+  // "vencido" mesmo depois que a data passa (o próximo ano já tem sua
+  // própria ocorrência) — só "hoje" continua valendo, pra destacar quem
+  // faz aniversário hoje.
+  const rawTimeStatus = getTaskTimeStatus(task);
+  const timeStatus = isBirthday && rawTimeStatus === "vencida" ? "futura" : rawTimeStatus;
 
   const statusStyles: Record<typeof timeStatus, string> = {
     concluida: "border-success/30 bg-success/5",
-    vencida: "border-destructive/40 bg-destructive/5",
+    // Mais vermelho que os outros estados de propósito: é o caso mais
+    // urgente (prazo já passou), então precisa saltar aos olhos mais que
+    // "hoje" ou "futura".
+    vencida: "border-destructive/70 bg-destructive/15",
     hoje: "border-warning/40 bg-warning/10",
     futura: "border-border bg-card",
   };
@@ -42,21 +52,28 @@ export function TaskListItem({ task, showCalendarName = false, onClick }: TaskLi
   return (
     <>
     <div
-      onClick={onClick}
+      onClick={() => {
+        onClick?.();
+        if (isBirthday) setIsBirthdayRevealed((prev) => !prev);
+      }}
       className={cn(
         "flex items-start gap-3 rounded-xl border p-3 transition-colors",
-        onClick && "cursor-pointer hover:border-primary/40",
+        (onClick || isBirthday) && "cursor-pointer hover:border-primary/40",
         statusStyles[timeStatus]
       )}
     >
       {/* `onClick` com stopPropagation evita que marcar a checkbox também
-          acione o onClick do card (que normalmente navega para outra tela). */}
-      <Checkbox
-        checked={task.status === "concluida"}
-        onCheckedChange={() => toggleTaskStatus(task.id)}
-        onClick={(e) => e.stopPropagation()}
-        className="mt-0.5"
-      />
+          acione o onClick do card (que normalmente navega para outra tela).
+          Aniversário não tem checkbox: é um lembrete, não uma tarefa que se
+          conclui. */}
+      {!isBirthday && (
+        <Checkbox
+          checked={task.status === "concluida"}
+          onCheckedChange={() => toggleTaskStatus(task.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-0.5"
+        />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
           {showCalendarName && calendar && (
@@ -100,12 +117,13 @@ export function TaskListItem({ task, showCalendarName = false, onClick }: TaskLi
         <p
           className={cn(
             "text-sm font-medium",
-            task.status === "concluida" && "text-muted-foreground line-through"
+            task.status === "concluida" && "text-muted-foreground line-through",
+            timeStatus === "vencida" && "text-destructive"
           )}
         >
           {task.title}
         </p>
-        {task.description && (
+        {!isBirthday && task.description && (
           <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -119,21 +137,35 @@ export function TaskListItem({ task, showCalendarName = false, onClick }: TaskLi
               {task.time}
             </span>
           )}
-          <Badge
-            variant={
-              task.priority === "alta"
-                ? "destructive"
-                : task.priority === "media"
-                ? "warning"
-                : "secondary"
-            }
-          >
-            {PRIORITY_LABEL[task.priority]}
-          </Badge>
+          {isBirthday ? (
+            <Badge variant="secondary">
+              <Cake className="size-3" />
+              Aniversário
+              {isBirthdayRevealed ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+            </Badge>
+          ) : (
+            <Badge
+              variant={
+                task.priority === "alta"
+                  ? "destructive"
+                  : task.priority === "media"
+                  ? "warning"
+                  : "secondary"
+              }
+            >
+              {PRIORITY_LABEL[task.priority]}
+            </Badge>
+          )}
           {timeStatus === "vencida" && <Badge variant="destructive">Vencida</Badge>}
           {timeStatus === "hoje" && <Badge variant="warning">Hoje</Badge>}
           {timeStatus === "concluida" && <Badge variant="success">Concluída</Badge>}
         </div>
+        {isBirthday && isBirthdayRevealed && (
+          <div className="mt-2 rounded-lg bg-muted/40 p-2 text-xs">
+            <p className="font-medium">Vai fazer {task.description || `${calculateAge(task.date)} anos`}</p>
+            <p className="mt-1 text-muted-foreground">{task.observation || "Sem observações."}</p>
+          </div>
+        )}
       </div>
     </div>
     <AddTaskDialog
