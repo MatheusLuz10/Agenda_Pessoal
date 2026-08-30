@@ -12,6 +12,7 @@ import { CalendarsPage } from "@/pages/CalendarsPage";
 import { FinancesPage } from "@/pages/FinancesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { OperationsPage } from "@/pages/OperationsPage";
+import { ReportPatternsPage } from "@/pages/ReportPatternsPage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { ServiceRequestPublicPage } from "@/pages/ServiceRequestPublicPage";
 import { ServiceRequestsPage } from "@/pages/ServiceRequestsPage";
@@ -53,6 +54,7 @@ function App() {
               <Route path="/meu-trabalho" element={<WorkPage />} />
               <Route path="/meu-trabalho/ttk" element={<TtkPage />} />
               <Route path="/meu-trabalho/relatorios" element={<ReportsPage />} />
+              <Route path="/meu-trabalho/relatorios/padroes" element={<ReportPatternsPage />} />
               <Route path="/operacao" element={<OperationsPage />} />
               <Route path="/gestao-de-tempo" element={<TimeManagementPage />} />
               <Route path="/solicitacoes" element={<ServiceRequestsPage />} />

@@ -22,7 +22,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Trash2,
-  Wrench,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -778,14 +777,6 @@ export function WorkPage() {
             >
               <PackageCheck className="size-4 shrink-0" />
               Aprovisionamento / Associação / Manobra
-            </Button>
-            <Button
-              variant="outline"
-              className="h-auto min-h-10 justify-start gap-2 whitespace-normal text-left"
-              onClick={() => navigate("/meu-trabalho/ttk")}
-            >
-              <Wrench className="size-4" />
-              Abertura de TTK
             </Button>
             <Button
               variant="outline"

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Copy, FileStack } from "lucide-react";
+import { ArrowLeft, Check, ClipboardList, Copy, FileStack } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +38,19 @@ export function ReportsPage() {
           <p className="text-sm text-muted-foreground">Escolha o tipo de relatório para gerar.</p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Relatórios Padrões</CardTitle>
+          <CardDescription>Transforme uma OS em um relatório técnico padronizado.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button className="gap-2" onClick={() => navigate("/meu-trabalho/relatorios/padroes")}>
+            <ClipboardList className="size-4" />
+            Abrir Relatórios Padrões
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

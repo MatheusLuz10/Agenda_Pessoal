@@ -6,7 +6,28 @@
       "PowerShell(npm run build 2>&1)",
       "PowerShell(git add -A)",
       "PowerShell(git push)",
-      "PowerShell(git add .claude/settings.json)"
+      "PowerShell(git add .claude/settings.json)",
+      "PowerShell(git add src/pages/WorkPage.tsx)",
+      "PowerShell(git add src/pages/LoginPage.tsx)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(Object.keys\\(p.dependencies||{}\\).filter\\(d=>/pdf/i.test\\(d\\)\\)\\); console.log\\(Object.keys\\(p.devDependencies||{}\\).filter\\(d=>/pdf/i.test\\(d\\)\\)\\)\")",
+      "PowerShell(npm install jspdf 2>&1)",
+      "PowerShell(git add src/components/tasks/AddTaskDialog.tsx src/components/tasks/TaskListItem.tsx src/contexts/AgendaContext.tsx src/data/supabaseApi.ts)",
+      "Bash(node -e ' *)",
+      "Bash(pdftotext -v)",
+      "Bash(pdftotext /tmp/test.pdf -)",
+      "Bash(pdftotext \"C:/Users/mathe/AppData/Local/Temp/claude/test.pdf\" -)",
+      "Bash(pdftotext \"C:/Users/mathe/AppData/Local/Temp/claude/test.pdf\" \"C:/Users/mathe/AppData/Local/Temp/claude/test.txt\")",
+      "Read(//c/Users/mathe/AppData/Local/Temp/claude/**)",
+      "Bash(pdftotext \"C:/Users/mathe/AppData/Local/Temp/claude/test2.pdf\" \"C:/Users/mathe/AppData/Local/Temp/claude/test2.txt\")",
+      "Bash(cat /tmp/dev.log)",
+      "Read(//tmp/**)",
+      "Bash(jobs)",
+      "Bash(cp /tmp/jspdf_test.mjs \"c:/tmp/pw-check/jspdf_test.mjs\")",
+      "Bash(node jspdf_test.mjs)",
+      "Bash(powershell -Command 'Get-Process node -ErrorAction SilentlyContinue | Where-Object {$_.Id -ne __TRACKED_VAR__} | Out-Null')",
+      "Bash(pkill -f \"vite\")",
+      "Bash(xargs grep -liE \"trabalho|\\\\bwork\\\\b\")",
+      "Bash(taskkill //PID 16184 //F)"
     ]
   }
 }

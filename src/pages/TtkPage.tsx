@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
 import { nowInBrasilia } from "@/lib/date";
+import { loadDraft } from "@/lib/reportPatterns";
 import { jsPDF } from "jspdf";
 
 // Os 4 tipos de ocorrência que o técnico pode abrir. O carimbo (texto do
@@ -77,6 +79,33 @@ function loadSavedTechnician(): Pick<TtkFormState, "nomeTecnico" | "telefoneTecn
   }
 }
 
+// "Designador de acesso Fibrasil 069", "Instância/Designador reclamado",
+// "Caixa (CTO)", "Endereço da ocorrência" e "Endereço do cliente" costumam
+// ser os mesmos valores já extraídos de uma OS em Relatórios Padrões (ID
+// Fibra/Acesso termina em -069, Designador termina em -013, ID da CTO é a
+// própria caixa, e Endereço é o endereço do cliente/ocorrência) — se o
+// técnico processou uma OS lá antes de abrir o TTK, aproveita. Armário já
+// deriva de Caixa (CTO) — pré-preencher aqui mantém os dois em
+// sincronia desde o início. Endereço da CTO fica de fora de propósito:
+// é sempre preenchido manualmente pelo técnico.
+function loadOsPrefill(
+  userId: string
+): Pick<
+  TtkFormState,
+  "designadorAcesso" | "instanciaDesignador" | "caixaCto" | "armario" | "enderecoOcorrencia" | "enderecoCliente"
+> {
+  const draft = loadDraft(userId);
+  const caixaCto = draft?.data.idCto ?? "";
+  return {
+    designadorAcesso: draft?.data.idFibra ?? "",
+    instanciaDesignador: draft?.data.designador ?? "",
+    enderecoOcorrencia: draft?.data.endereco ?? "",
+    enderecoCliente: draft?.data.endereco ?? "",
+    caixaCto,
+    armario: caixaCto.slice(0, 3).toUpperCase(),
+  };
+}
+
 function relativeISO(): string {
   const date = nowInBrasilia();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -116,12 +145,21 @@ Longitude: ${form.longitudeCliente}`;
 
 // Tela "/meu-trabalho/ttk" — gera o texto/carimbo de abertura de TTK a
 // partir de um dos 4 tipos de ocorrência. Não é persistido no Supabase:
-// é um formulário de preenchimento rápido, só o nome/telefone do técnico
-// ficam salvos localmente (ver TECHNICIAN_STORAGE_KEY).
+// é um formulário de preenchimento rápido. Nome/telefone do técnico ficam
+// salvos localmente (ver TECHNICIAN_STORAGE_KEY), e Designador de acesso
+// Fibrasil 069 / Instância-Designador reclamado / Caixa (CTO) / Armário /
+// Endereço da ocorrência vêm pré-preenchidos da última OS processada em
+// Relatórios Padrões (ver loadOsPrefill).
 export function TtkPage() {
   const navigate = useNavigate();
+  const { session } = useAuth();
+  const userId = session?.user?.id ?? session?.user?.email ?? "local";
   const [selectedType, setSelectedType] = useState<TtkType | null>(null);
-  const [form, setForm] = useState<TtkFormState>(() => ({ ...EMPTY_FORM, ...loadSavedTechnician() }));
+  const [form, setForm] = useState<TtkFormState>(() => ({
+    ...EMPTY_FORM,
+    ...loadSavedTechnician(),
+    ...loadOsPrefill(userId),
+  }));
   const [copied, setCopied] = useState(false);
   const [locationError, setLocationError] = useState<Record<"cto" | "cliente", string | null>>({
     cto: null,
@@ -132,6 +170,11 @@ export function TtkPage() {
   function patchForm(patch: Partial<TtkFormState>) {
     setForm((prev) => {
       const next = { ...prev, ...patch };
+      // Armário são sempre os 3 primeiros caracteres da caixa (CTO) —
+      // continua editável manualmente depois, só não fica em branco.
+      if ("caixaCto" in patch) {
+        next.armario = next.caixaCto.slice(0, 3).toUpperCase();
+      }
       if ("nomeTecnico" in patch || "telefoneTecnico" in patch) {
         localStorage.setItem(
           TECHNICIAN_STORAGE_KEY,
@@ -148,26 +191,75 @@ export function TtkPage() {
   }
 
   // Converte coordenadas em endereço legível via Nominatim (OpenStreetMap,
-  // gratuito e sem chave de API). Retorna null se a busca falhar — nesse
-  // caso as coordenadas já capturadas continuam válidas, só o endereço
-  // fica em branco para preenchimento manual.
-  async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
+  // gratuito e sem chave de API). Retorna null se a busca falhar OU se a
+  // via mais próxima do ponto exato não tiver nome no OSM (comum em
+  // trechos menores/sem saída) — "display_name" nesse caso seria só
+  // bairro/cidade/CEP (ex: "Condor, Guamá, Belém, Pará..."), que parece
+  // endereço mas não é a rua. zoom=17 (nível de rua, não de prédio)
+  // aumenta a chance de já vir com nome; além de "road", tenta outras
+  // tags de logradouro do OSM que às vezes existem quando "road" não
+  // existe.
+  async function reverseGeocodeViaNominatim(lat: number, lon: number): Promise<string | null> {
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=17&addressdetails=1`,
         { headers: { Accept: "application/json" } }
       );
       if (!response.ok) return null;
       const data = await response.json();
-      const road = data.address?.road;
-      if (typeof road !== "string") {
-        return typeof data.display_name === "string" ? data.display_name : null;
-      }
+      const road =
+        data.address?.road ??
+        data.address?.pedestrian ??
+        data.address?.footway ??
+        data.address?.path ??
+        data.address?.residential;
+      if (typeof road !== "string") return null;
       const houseNumber = data.address?.house_number;
       return typeof houseNumber === "string" ? `${road}, ${houseNumber}` : road;
     } catch {
       return null;
     }
+  }
+
+  // Quando a via mais próxima do ponto exato não tem nome no OSM, busca a
+  // via NOMEADA mais próxima num raio pequeno via Overpass API (outro
+  // serviço gratuito do OpenStreetMap, mais indicado pra busca espacial
+  // do que o Nominatim) — a rua certa quase sempre existe no mapa, só não
+  // era exatamente o trecho mais próximo do ponto capturado pelo GPS.
+  async function findNearestNamedRoad(lat: number, lon: number): Promise<string | null> {
+    try {
+      const query = `[out:json][timeout:10];way["highway"]["name"](around:150,${lat},${lon});out tags center 10;`;
+      const response = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: `data=${encodeURIComponent(query)}`,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const ways: { center?: { lat: number; lon: number }; tags?: { name?: string } }[] = data.elements ?? [];
+
+      let closest: { name: string; distance: number } | null = null;
+      for (const way of ways) {
+        const name = way.tags?.name;
+        const center = way.center;
+        if (!name || !center) continue;
+        const distance = Math.hypot(center.lat - lat, center.lon - lon);
+        if (!closest || distance < closest.distance) closest = { name, distance };
+      }
+      return closest?.name ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Importante: nada disso corrige imprecisão do GPS do aparelho — se as
+  // coordenadas capturadas caem perto de outra rua de verdade, a busca
+  // legitimamente resolve pra essa outra rua. Ainda assim, o técnico pode
+  // corrigir manualmente o campo antes de gerar o relatório.
+  async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
+    const direct = await reverseGeocodeViaNominatim(lat, lon);
+    if (direct) return direct;
+    return findNearestNamedRoad(lat, lon);
   }
 
   function requestCurrentLocation(target: "cto" | "cliente") {
@@ -252,7 +344,7 @@ export function TtkPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/meu-trabalho")}>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/meu-trabalho/relatorios/padroes")}>
           <ArrowLeft className="size-4" />
         </Button>
         <div className="flex size-10 items-center justify-center rounded-xl bg-accent text-xl">
