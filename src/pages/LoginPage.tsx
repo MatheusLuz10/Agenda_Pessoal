@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { CalendarHeart, Eye, EyeOff } from "lucide-react";
+import { Droplet, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
-// Tela "/login" — porta de entrada quando o Supabase está configurado
-// (ver RequireAuth, em src/App.tsx, que decide se esta tela aparece).
-// Usa e-mail/senha porque é o jeito mais simples de proteger um app
-// pessoal de um único usuário, sem precisar de cadastro público.
+// Tela "/login" — porta de entrada quando o Supabase está configurado.
 export function LoginPage() {
   const { session, signIn } = useAuth();
   const [email, setEmail] = useState("");
@@ -19,8 +17,6 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Se já existe uma sessão válida, não faz sentido mostrar o login de
-  // novo — manda direto para a tela inicial.
   if (session) return <Navigate to="/" replace />;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -33,17 +29,22 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-screen items-center justify-center bg-verde px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <div className="mb-2 flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <CalendarHeart className="size-5" />
+            <Droplet className="size-5" />
           </div>
           <CardTitle>Entrar</CardTitle>
-          <CardDescription>Acesse sua agenda pessoal.</CardDescription>
+          <CardDescription>Acesse o sistema da Distribuidora DEU SEDE!</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {!isSupabaseConfigured && (
+              <p className="text-sm text-destructive">
+                O login seguro ainda não está configurado. Defina as variáveis do Supabase para habilitá-lo.
+              </p>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="login-email">E-mail</Label>
               <Input
@@ -77,7 +78,7 @@ export function LoginPage() {
               </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" disabled={submitting} className="mt-1">
+            <Button type="submit" disabled={submitting || !isSupabaseConfigured} className="mt-1">
               {submitting ? "Entrando..." : "Entrar"}
             </Button>
           </form>

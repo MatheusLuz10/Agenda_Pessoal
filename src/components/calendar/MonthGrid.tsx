@@ -112,7 +112,7 @@ export function MonthGrid({
                 isSelected
                   ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20"
                   : isToday
-                  ? "border-primary/40 bg-primary/10 font-semibold text-primary"
+                  ? "border-amarelo bg-amarelo/15 font-semibold text-verde"
                   : "border-border/50 bg-card text-foreground hover:border-primary/40 hover:bg-accent"
               )}
             >

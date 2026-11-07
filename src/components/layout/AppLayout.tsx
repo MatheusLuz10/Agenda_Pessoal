@@ -1,27 +1,64 @@
-import { Outlet } from "react-router-dom";
-import { Header } from "@/components/layout/Header";
-import { BottomNav } from "@/components/layout/Sidebar";
+import { Outlet, useLocation } from "react-router-dom";
+import { FlaskConical, LogOut } from "lucide-react";
+import { Shell } from "@/components/layout/Shell";
 import { AssistantWidget } from "@/components/assistant/AssistantWidget";
+import { NAV_ITEMS } from "@/config/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
-// Esqueleto visual compartilhado por todas as rotas (ver App.tsx: este
-// componente é o elemento da rota "pai", e cada página entra no lugar
-// do <Outlet />, que é onde o react-router injeta a rota filha ativa.
-//
-// A barra inferior fixa fica sempre visível, com todos os itens de
-// NAV_ITEMS (ver navigation.ts) — único menu de navegação do app, em
-// qualquer tamanho de tela. O botão "Voltar" do Header (ver Header.tsx)
-// é um atalho adicional, não um substituto dela.
+// Destino do botão "Voltar" (celular) derivado do próprio caminho, sem
+// depender do histórico do navegador: quem entra direto numa rota
+// aninhada (ex: "/calendarios/abc123", link compartilhado) sobe um nível.
+function destinoVoltar(pathname: string): string | null {
+  if (NAV_ITEMS.some((item) => item.to === pathname)) return null;
+  const partes = pathname.split("/").filter(Boolean);
+  if (partes.length <= 1) return "/calendarios";
+  return `/${partes.slice(0, -1).join("/")}`;
+}
+
+// Esqueleto principal da Distribuidora DEU SEDE! (Shell).
 export function AppLayout() {
+  const { pathname } = useLocation();
+  const { session, signOut } = useAuth();
+
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
-      <main className="flex-1 px-4 py-6 pb-24 sm:px-6">
-        <div className="mx-auto w-full max-w-5xl">
-          <Outlet />
-        </div>
-      </main>
-      <AssistantWidget />
-      <BottomNav />
-    </div>
+    <Shell
+      marca={{ titulo: "Distribuidora DEU SEDE!", to: "/calendarios" }}
+      itens={NAV_ITEMS}
+      rotuloMenu="Menu principal"
+      telaCheia={pathname === "/pdv"}
+      voltarPara={destinoVoltar(pathname)}
+      acaoCabecalho={
+        isSupabaseConfigured ? (
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="flex size-10 shrink-0 items-center justify-center rounded-xl text-offwhite/90 hover:bg-verde-600"
+            aria-label="Sair"
+          >
+            <LogOut className="size-5" />
+          </button>
+        ) : null
+      }
+      rodape={
+        isSupabaseConfigured ? (
+          <>
+            <p className="truncate text-offwhite/60" title={session?.user.email ?? ""}>
+              {session?.user.email}
+            </p>
+            <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-offwhite/85 hover:text-offwhite">
+              <LogOut className="size-4" /> Sair
+            </button>
+          </>
+        ) : (
+          <p className="flex items-center gap-2 text-offwhite/60">
+            <FlaskConical className="size-4" /> Modo de teste local
+          </p>
+        )
+      }
+    >
+      <Outlet />
+      {pathname !== "/pdv" && <AssistantWidget />}
+    </Shell>
   );
 }

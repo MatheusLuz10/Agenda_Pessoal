@@ -1,0 +1,109 @@
+import { Link, Outlet } from "react-router-dom";
+import { ArrowLeft, CalendarDays, FlaskConical, LogOut } from "lucide-react";
+import { Shell } from "@/components/layout/Shell";
+import { DEU_SEDE_BASE, MODULES } from "@/modules/deu-sede/config/modules";
+import { useSessaoDeuSede } from "@/modules/deu-sede/sessao";
+import { useConsulta, useRecarregarAoVoltar } from "@/modules/deu-sede/data/cliente";
+import { AreaProtegida, SenhaProvider } from "@/modules/deu-sede/senha";
+import type { Acesso } from "@/modules/deu-sede/data/tipos";
+import { Aviso, Carregando } from "@/modules/deu-sede/components/ui/aviso";
+
+// Seção de compras dentro do app: mesmo esqueleto visual da área principal
+// (components/layout/Shell), com o menu de compras e o atalho de volta
+// para o Calendário.
+const AGENDA_HOME = "/calendarios";
+
+function AvisoModoLocal() {
+  const { mode } = useSessaoDeuSede();
+  if (mode !== "local") return null;
+  return (
+    <div className="flex items-center gap-2 border-b border-amarelo/40 bg-amarelo/15 px-4 py-2 text-xs text-marrom sm:text-sm">
+      <FlaskConical className="size-4 shrink-0" />
+      <span>
+        <strong>Modo de teste local</strong> — sem login. O que você cadastrar fica salvo só neste navegador.
+      </span>
+    </div>
+  );
+}
+
+// Só mostra as telas para quem tem perfil no DEU SEDE! (no modo local,
+// o usuário de teste é administrador).
+function ConteudoProtegido() {
+  const { dados: acesso, erro, carregando } = useConsulta<Acesso | null>("meu_acesso");
+  if (erro) return <Aviso tom="erro">{erro}</Aviso>;
+  if (carregando && acesso === undefined) return <Carregando texto="Preparando o DEU SEDE!…" />;
+  if (!acesso) {
+    return (
+      <Aviso tom="atencao">
+        <strong>Seu usuário ainda não tem acesso ao DEU SEDE!.</strong> Peça ao administrador para liberar o seu perfil.
+      </Aviso>
+    );
+  }
+  return (
+    <AreaProtegida area="deu-sede">
+      <Outlet />
+    </AreaProtegida>
+  );
+}
+
+export function DeuSedeLayout() {
+  const { mode, userLabel, signOut } = useSessaoDeuSede();
+  useRecarregarAoVoltar();
+
+  return (
+    <div className="deu-sede">
+      <Shell
+        marca={{ titulo: "DEU SEDE!", to: DEU_SEDE_BASE }}
+        itens={MODULES}
+        rotuloMenu="Menu DEU SEDE!"
+        aviso={<AvisoModoLocal />}
+        acaoCabecalho={
+          <Link
+            to={AGENDA_HOME}
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-offwhite/90 hover:bg-verde-600"
+          >
+            <ArrowLeft className="size-4" /> Calendário
+          </Link>
+        }
+        rodape={
+          <>
+            <Link to={AGENDA_HOME} className="flex h-10 items-center gap-2 font-medium text-offwhite/85 hover:text-offwhite">
+              <CalendarDays className="size-4" /> Voltar para o Calendário
+            </Link>
+            <p className="mt-1 truncate text-offwhite/60" title={userLabel}>
+              {userLabel}
+            </p>
+            {mode === "supabase" && (
+              <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-offwhite/85 hover:text-offwhite">
+                <LogOut className="size-4" /> Sair
+              </button>
+            )}
+          </>
+        }
+        extrasMenuMais={
+          <>
+            <Link
+              to={AGENDA_HOME}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-verde text-sm font-semibold text-offwhite"
+            >
+              <CalendarDays className="size-4" /> Voltar ao Calendário
+            </Link>
+            {mode === "supabase" && (
+              <button
+                type="button"
+                onClick={() => signOut()}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-linha text-sm font-medium text-verde"
+              >
+                <LogOut className="size-4" /> Sair ({userLabel})
+              </button>
+            )}
+          </>
+        }
+      >
+        <SenhaProvider>
+          <ConteudoProtegido />
+        </SenhaProvider>
+      </Shell>
+    </div>
+  );
+}

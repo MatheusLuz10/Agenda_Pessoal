@@ -2,74 +2,100 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ===================================================================
+   Identidade visual do app inteiro: DEU SEDE!
+   Verde #001F07 · Amarelo #FED502 · Branco · detalhe vermelho #FA020C.
+   Tons claros derivados da marca mantêm o conteúdo confortável para leitura.
+
+   As variáveis abaixo alimentam os componentes (bg-primary,
+   text-muted-foreground, border...) e os tokens da marca (bg-verde,
+   bg-amarelo, border-linha...) usados no layout e no DEU SEDE!.
+   As cores semânticas acompanham o tema claro ou escuro.
+   =================================================================== */
 :root {
   color-scheme: light;
   --radius: 0.75rem;
+  --offwhite: #fff7cc;
+  --fundo: #f5f8f2;
+  --superficie: #ffffff;
+  --linha: #d7e2d3;
+  --texto: #001f07;
+  --texto-suave: #526155;
 
-  --background: oklch(0.97 0.015 225);
-  --foreground: oklch(0.22 0.03 230);
+  --background: #f5f8f2;
+  --foreground: #001f07;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.03 230);
+  --card: #ffffff;
+  --card-foreground: #001f07;
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.03 230);
+  --popover: #ffffff;
+  --popover-foreground: #001f07;
 
-  --primary: oklch(0.61 0.16 225);
-  --primary-foreground: oklch(0.98 0.005 225);
+  /* ação principal: amarelo com texto verde */
+  --primary: #fed502;
+  --primary-foreground: #001f07;
 
-  --secondary: oklch(0.95 0.02 220);
-  --secondary-foreground: oklch(0.3 0.03 230);
+  --secondary: #fff7cc;
+  --secondary-foreground: #001f07;
 
-  --muted: oklch(0.95 0.02 220);
-  --muted-foreground: oklch(0.52 0.03 230);
+  --muted: #eef3eb;
+  --muted-foreground: #526155;
 
-  --accent: oklch(0.93 0.05 220);
-  --accent-foreground: oklch(0.3 0.05 230);
+  --accent: #fff7cc;
+  --accent-foreground: #001f07;
 
-  --destructive: oklch(0.6 0.21 25);
-  --destructive-foreground: oklch(0.98 0.005 25);
+  --destructive: #c91d24;
+  --destructive-foreground: #ffffff;
 
-  --success: oklch(0.62 0.16 145);
-  --warning: oklch(0.78 0.15 85);
+  --success: #2f6b3f;
+  --warning: #d3a900;
+  --dado: #9a6a00;
 
-  --border: oklch(0.89 0.03 220);
-  --input: oklch(0.89 0.03 220);
-  --ring: oklch(0.61 0.16 225);
+  --border: #d7e2d3;
+  --input: #c8d8c6;
+  --ring: #fed502;
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0 0 0);
-  --foreground: oklch(0.98 0.003 230);
+  --offwhite: #fff7cc;
+  --fundo: #101712;
+  --superficie: #19221b;
+  --linha: #344238;
+  --texto: #e6eee7;
+  --texto-suave: #aab8ad;
 
-  --card: oklch(0.22 0.015 230);
-  --card-foreground: oklch(0.98 0.003 230);
+  --background: #101712;
+  --foreground: #e6eee7;
 
-  --popover: oklch(0.22 0.015 230);
-  --popover-foreground: oklch(0.98 0.003 230);
+  --card: #19221b;
+  --card-foreground: #e6eee7;
 
-  --primary: oklch(0.66 0.16 225);
-  --primary-foreground: oklch(0.12 0.02 230);
+  --popover: #19221b;
+  --popover-foreground: #e6eee7;
 
-  --secondary: oklch(0.19 0.03 230);
-  --secondary-foreground: oklch(0.98 0.003 230);
+  --primary: #fed502;
+  --primary-foreground: #001f07;
 
-  --muted: oklch(0.18 0.02 230);
-  --muted-foreground: oklch(0.82 0.03 230);
+  --secondary: #2a362c;
+  --secondary-foreground: #e6eee7;
 
-  --accent: oklch(0.18 0.04 230);
-  --accent-foreground: oklch(0.98 0.003 230);
+  --muted: #263129;
+  --muted-foreground: #aab8ad;
 
-  --destructive: oklch(0.67 0.19 25);
-  --destructive-foreground: oklch(0.98 0.005 25);
+  --accent: #303d32;
+  --accent-foreground: #e6eee7;
 
-  --success: oklch(0.62 0.16 150);
-  --warning: oklch(0.79 0.14 82);
+  --destructive: #e26368;
+  --destructive-foreground: #1b1010;
 
-  --border: oklch(0.28 0.03 230);
-  --input: oklch(0.28 0.03 230);
-  --ring: oklch(0.66 0.16 225);
+  --success: #85c496;
+  --warning: #f0cc48;
+  --dado: #f0cc48;
+
+  --border: #344238;
+  --input: #415044;
+  --ring: #fed502;
 }
 
 @theme inline {
@@ -101,6 +127,27 @@
   --color-ring: var(--ring);
 }
 
+/* Tokens da marca (bg-verde, text-amarelo, border-linha...). */
+@theme {
+  --color-verde: #001f07;
+  --color-verde-700: #00310c;
+  --color-verde-600: #06451a;
+  --color-amarelo: #fed502;
+  --color-ouro: #ffe45c;
+  --color-offwhite: var(--offwhite);
+  --color-marrom: #684318;
+
+  --color-fundo: var(--fundo);
+  --color-superficie: var(--superficie);
+  --color-linha: var(--linha);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-perigo: var(--destructive);
+  --color-sucesso: var(--success);
+  /* cor de dados dos gráficos: âmbar da marca, validado (contraste ≥ 3:1) */
+  --color-dado: var(--dado);
+}
+
 @layer base {
   * {
     border-color: var(--border);
@@ -112,15 +159,34 @@
     font-family: system-ui, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
   }
+  :focus-visible {
+    outline: 3px solid var(--color-ouro);
+    outline-offset: 2px;
+  }
+}
 
-  .dark body {
-    background: var(--background);
-  }
+.deu-sede {
+  color-scheme: inherit;
+}
 
-  :root body {
-    background:
-      radial-gradient(circle at top, rgba(191, 219, 254, 0.6), transparent 18%),
-      var(--background);
-  }
+.dark .text-verde {
+  color: #b6d6bd;
+}
+
+.dark .text-marrom {
+  color: #e8c98b;
+}
+
+.dark .bg-offwhite {
+  background-color: #202a22;
+}
+
+.dark .bg-white {
+  background-color: var(--superficie);
+}
+
+.dark .text-black {
+  color: var(--texto);
 }

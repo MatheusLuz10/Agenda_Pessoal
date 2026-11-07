@@ -71,3 +71,15 @@ export default defineConfig([
   },
 ])
 ```
+
+## Login do administrador
+
+Para habilitar a proteção por senha, configure `VITE_SUPABASE_URL` e
+`VITE_SUPABASE_ANON_KEY` em `.env.local` (ou nas variáveis de ambiente da
+implantação). No painel do Supabase, crie a conta administradora em
+**Authentication > Users**. O acesso ao app usa o e-mail e a senha dessa
+conta; a senha pode ser alterada em **Configurações** e é gerenciada pelo
+Supabase Auth, não pelo armazenamento local do navegador.
+
+Sem essas variáveis, o app funciona em modo local de demonstração e não
+exige autenticação. Não use esse modo para proteger uma implantação pública.

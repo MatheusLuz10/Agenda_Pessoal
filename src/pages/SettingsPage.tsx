@@ -2,11 +2,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { Bell, Moon, Database, User } from "lucide-react";
+import { Bell, Moon, Database, User, Shield, Sun } from "lucide-react";
 import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { fetchUserProfile, saveUserProfile, uploadAvatarPhoto } from "@/data/userProfileApi";
-import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
+import { useTheme } from "@/contexts/ThemeContext";
 import { getDisplayName, setDisplayName } from "@/lib/userProfile";
 import type { UserProfile } from "@/types";
 
@@ -16,9 +18,14 @@ const DEFAULT_PROFILE: UserProfile = { name: "", photoUrl: null, photoPositionX:
 // "decorativos": guardam estado local mas não plugam em nenhuma lógica
 // real de notificações (ficaria para uma próxima etapa).
 export function SettingsPage() {
+  const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [overdueAlerts, setOverdueAlerts] = useState(true);
   const [todayAlerts, setTodayAlerts] = useState(true);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
+  const [adminPasswordStatus, setAdminPasswordStatus] = useState<string | null>(null);
+  const [savingAdminPassword, setSavingAdminPassword] = useState(false);
 
   // Perfil (nome + foto): sem Supabase configurado, o nome vive só no
   // localStorage (ver lib/userProfile.ts) — mesma limitação de sempre,
@@ -52,6 +59,45 @@ export function SettingsPage() {
         setProfile(rest);
       })
       .catch((error) => console.error("Falha ao salvar nome de perfil:", error));
+  }
+
+  async function handleAdminPasswordSave() {
+    if (!supabase) {
+      setAdminPasswordStatus("Configure o Supabase para alterar a senha com segurança.");
+      return;
+    }
+
+    if (adminPassword.length < 6) {
+      setAdminPasswordStatus("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (adminPassword !== adminPasswordConfirm) {
+      setAdminPasswordStatus("As senhas não conferem.");
+      return;
+    }
+
+    setSavingAdminPassword(true);
+    setAdminPasswordStatus(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: adminPassword });
+      if (error) {
+        setAdminPasswordStatus(`Não foi possível alterar a senha: ${error.message}`);
+        return;
+      }
+
+      setAdminPassword("");
+      setAdminPasswordConfirm("");
+      setAdminPasswordStatus("Senha da conta administradora alterada com sucesso.");
+    } catch (error) {
+      setAdminPasswordStatus(
+        error instanceof Error
+          ? `Não foi possível alterar a senha: ${error.message}`
+          : "Não foi possível alterar a senha por um erro inesperado."
+      );
+    } finally {
+      setSavingAdminPassword(false);
+    }
   }
 
   async function handleAvatarSave(
@@ -100,6 +146,53 @@ export function SettingsPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center gap-2">
+          <Shield className="size-4.5 text-muted-foreground" />
+          <CardTitle>Senha de administrador</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <CardDescription>
+            {isSupabaseConfigured
+              ? "A senha é atualizada com segurança na conta autenticada do Supabase e não fica salva no navegador."
+              : "O login seguro exige configurar o Supabase e criar a conta administradora no painel de autenticação. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para habilitar esta opção."}
+          </CardDescription>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="admin-password">Nova senha (mínimo 6 caracteres)</Label>
+            <Input
+              id="admin-password"
+              type="password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              minLength={6}
+              autoComplete="new-password"
+              placeholder="Mínimo 6 caracteres"
+              disabled={!isSupabaseConfigured || savingAdminPassword}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="admin-password-confirm">Confirmar senha</Label>
+            <Input
+              id="admin-password-confirm"
+              type="password"
+              value={adminPasswordConfirm}
+              onChange={(e) => setAdminPasswordConfirm(e.target.value)}
+              placeholder="Repita a senha"
+              autoComplete="new-password"
+              disabled={!isSupabaseConfigured || savingAdminPassword}
+            />
+          </div>
+          {adminPasswordStatus && <p className="text-sm text-muted-foreground">{adminPasswordStatus}</p>}
+          <Button
+            type="button"
+            onClick={handleAdminPasswordSave}
+            disabled={!isSupabaseConfigured || savingAdminPassword}
+          >
+            {savingAdminPassword ? "Salvando..." : "Alterar senha"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2">
           <Bell className="size-4.5 text-muted-foreground" />
           <CardTitle>Notificações</CardTitle>
         </CardHeader>
@@ -132,8 +225,26 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <CardDescription>
-            O tema claro está ativo. Suporte a tema escuro já está preparado na base de estilos.
+            Escolha a aparência do aplicativo. A preferência fica salva neste navegador e vale para todas as telas.
           </CardDescription>
+          <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Tema do aplicativo">
+            <Button
+              type="button"
+              variant={theme === "light" ? "default" : "outline"}
+              aria-pressed={theme === "light"}
+              onClick={() => setTheme("light")}
+            >
+              <Sun className="size-4" /> Claro
+            </Button>
+            <Button
+              type="button"
+              variant={theme === "dark" ? "default" : "outline"}
+              aria-pressed={theme === "dark"}
+              onClick={() => setTheme("dark")}
+            >
+              <Moon className="size-4" /> Escuro
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

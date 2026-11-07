@@ -3,6 +3,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 
+const LEGACY_LOCAL_AUTH_KEYS = ["agenda-admin-password", "agenda-admin-session"];
+
 interface AuthContextValue {
   session: Session | null;
   loading: boolean;
@@ -21,6 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(isSupabaseConfigured);
 
   useEffect(() => {
+    LEGACY_LOCAL_AUTH_KEYS.forEach((key) => localStorage.removeItem(key));
     if (!isSupabaseConfigured) return;
 
     // Recupera a sessão atual (se o usuário já tinha logado antes e o
@@ -42,15 +45,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Tenta logar com e-mail/senha. Retorna uma mensagem de erro em
   // português (ou null em caso de sucesso) para a LoginPage exibir.
   const signIn: AuthContextValue["signIn"] = async (email, password) => {
-    if (!supabase) return { error: "Supabase não está configurado." };
+    if (!supabase) return { error: "Configure o Supabase para habilitar o login seguro." };
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: "E-mail ou senha inválidos." };
     return { error: null };
   };
 
   const signOut = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
+    if (supabase) await supabase.auth.signOut();
   };
 
   return (

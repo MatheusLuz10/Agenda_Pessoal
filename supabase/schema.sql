@@ -140,6 +140,71 @@ create policy "authenticated manage avatars" on storage.objects
   for all using (bucket_id = 'avatars' and auth.uid() is not null)
   with check (bucket_id = 'avatars' and auth.uid() is not null);
 
+-- Pets cadastrados na sub-aba "Pets" (ver src/pages/DocumentsPage.tsx) —
+-- perfil simples, cadastrado pelo próprio usuário, sem nenhum pet
+-- pré-semeado aqui de propósito.
+create table if not exists public.pets (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  species text not null check (species in ('Gato', 'Cachorro')),
+  breed text not null default '',
+  color text not null default '',
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+
+-- Categorias de documento (sub-abas dinâmicas da tela "Documentos") — o
+-- usuário cria as suas além das duas semeadas abaixo. "unique(name)"
+-- evita duplicar categoria com o mesmo nome sem querer.
+create table if not exists public.document_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz not null default now()
+);
+
+insert into public.document_categories (name) values ('Casa'), ('Saúde')
+on conflict (name) do nothing;
+
+-- Documentos das sub-abas de categoria + da sub-aba fixa "Pets" — mesma
+-- tabela pras duas, "category_id" preenchido num caso e "pet_id" no
+-- outro (nunca os dois — "check" abaixo garante isso). "on delete
+-- cascade" nos dois: um documento sem a categoria/pet que ele pertence
+-- não tem onde aparecer na tela. O anexo em si (foto ou PDF) fica no
+-- Storage (bucket "documents" abaixo), aqui só a URL.
+create table if not exists public.documents (
+  id uuid primary key default gen_random_uuid(),
+  category_id uuid references public.document_categories (id) on delete cascade,
+  pet_id uuid references public.pets (id) on delete cascade,
+  name text not null,
+  file_url text not null,
+  file_name text not null,
+  created_at timestamptz not null default now(),
+  constraint documents_category_xor_pet check (
+    (category_id is not null and pet_id is null) or (category_id is null and pet_id is not null)
+  )
+);
+
+-- Bucket público (mesmo padrão do bucket "avatars"): o anexo precisa ser
+-- lido sem token pra abrir direto num link/nova aba. PDF liberado, além
+-- de imagem, já que documento costuma ser digitalizado como PDF.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'documents',
+  'documents',
+  true,
+  15728640,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "authenticated manage documents" on storage.objects;
+create policy "authenticated manage documents" on storage.objects
+  for all using (bucket_id = 'documents' and auth.uid() is not null)
+  with check (bucket_id = 'documents' and auth.uid() is not null);
+
 -- Atividades (BA/BD) da aba "Operação", uma por dia+tipo (ou várias, se
 -- lançadas em momentos diferentes) — usadas para calcular produção,
 -- categoria e prêmio do ciclo.
@@ -421,6 +486,9 @@ alter table public.goals enable row level security;
 alter table public.equipment_items enable row level security;
 alter table public.equipment_replacements enable row level security;
 alter table public.service_orders enable row level security;
+alter table public.pets enable row level security;
+alter table public.document_categories enable row level security;
+alter table public.documents enable row level security;
 alter table public.operation_activities enable row level security;
 alter table public.operation_punches enable row level security;
 alter table public.operation_settings enable row level security;
@@ -452,6 +520,9 @@ drop policy if exists "authenticated full access goals" on public.goals;
 drop policy if exists "authenticated full access equipment_items" on public.equipment_items;
 drop policy if exists "authenticated full access equipment_replacements" on public.equipment_replacements;
 drop policy if exists "authenticated full access service_orders" on public.service_orders;
+drop policy if exists "authenticated full access pets" on public.pets;
+drop policy if exists "authenticated full access document_categories" on public.document_categories;
+drop policy if exists "authenticated full access documents" on public.documents;
 drop policy if exists "authenticated full access operation_activities" on public.operation_activities;
 drop policy if exists "authenticated full access operation_punches" on public.operation_punches;
 drop policy if exists "authenticated full access operation_settings" on public.operation_settings;
@@ -486,6 +557,15 @@ create policy "authenticated full access equipment_replacements" on public.equip
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access service_orders" on public.service_orders
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access pets" on public.pets
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access document_categories" on public.document_categories
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "authenticated full access documents" on public.documents
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
 
 create policy "authenticated full access operation_activities" on public.operation_activities

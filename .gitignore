@@ -28,3 +28,6 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Backups de variaveis de ambiente (contem chaves do Supabase)
+.env*.bak*

@@ -1,19 +1,14 @@
-import {
-  Briefcase,
-  CalendarDays,
-  ClipboardList,
-  Inbox,
-} from "lucide-react";
+import { CalendarDays, FileText, ScanBarcode, Settings, ShoppingCart } from "lucide-react";
+import type { ItemMenu } from "@/components/layout/Shell";
 
-// Único menu de navegação do app: a barra fixa embaixo (ver
-// BottomNav em Sidebar.tsx), visível em qualquer tamanho de tela —
-// não existe mais grade de ícones nem menu lateral. "Assistente" não
-// entra aqui de propósito: virou um popup de conversa flutuante (ver
-// AssistantWidget), não uma aba. "Configurações" também fica de fora:
-// acessível só pela engrenagem no cabeçalho (ver Header.tsx).
-export const NAV_ITEMS = [
-  { to: "/calendarios", label: "AGENDA", icon: CalendarDays, end: false },
-  { to: "/meu-trabalho", label: "Meu trabalho", icon: Briefcase, end: false },
-  { to: "/operacao", label: "OPERAÇÂO", icon: ClipboardList, end: false },
-  { to: "/solicitacoes", label: "Conecta Rede", icon: Inbox, end: false },
-] as const;
+// Menu do app (lateral no computador, barra inferior no celular — ver
+// components/layout/Shell). O assistente continua como balão flutuante
+// (AssistantWidget), não como aba.
+export const NAV_ITEMS: ItemMenu[] = [
+  { key: "agenda", to: "/calendarios", label: "Calendário", shortLabel: "Calendário", icon: CalendarDays, end: false },
+  { key: "documentos", to: "/documentos", label: "Documentos", shortLabel: "Documentos", icon: FileText },
+  { key: "pdv", to: "/pdv", label: "PDV", shortLabel: "PDV", icon: ScanBarcode },
+  // Abre a seção de compras, que tem menu próprio.
+  { key: "deu-sede", to: "/deu-sede", label: "DEU SEDE! Compras", shortLabel: "DEU SEDE!", icon: ShoppingCart },
+  { key: "configuracoes", to: "/configuracoes", label: "Configurações", shortLabel: "Config.", icon: Settings },
+];

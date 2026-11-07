@@ -6,9 +6,8 @@ import { isSupabaseConfigured } from "@/lib/supabaseClient";
 // tudo que está dentro dela só renderiza se passar pela condição abaixo
 // (o conteúdo da rota filha entra no lugar do <Outlet />).
 //
-//   - Sem Supabase configurado (modo mock local) não há nada para
-//     proteger, então libera direto — útil para estudar/testar o app
-//     sem precisar criar conta em lugar nenhum.
+//   - Sem Supabase configurado (modo mock local) não há autenticação;
+//     o app continua liberado para desenvolvimento.
 //   - Com Supabase configurado, espera a checagem inicial da sessão
 //     (loading) e só then decide: sem sessão -> manda para /login;
 //     com sessão -> libera o conteúdo.

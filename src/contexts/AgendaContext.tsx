@@ -125,9 +125,14 @@ export function AgendaProvider({ children }: { children: React.ReactNode }) {
   // antes de checar — senão, com Supabase configurado, `calendars`
   // ainda estaria vazio durante o carregamento inicial e este efeito
   // criaria um "Aniversário" duplicado antes dos dados reais chegarem.
+  // A ref impede a criação em dobro quando o efeito roda duas vezes antes
+  // do estado atualizar (React StrictMode em desenvolvimento).
+  const criandoAniversario = React.useRef(false);
   useEffect(() => {
     if (loading) return;
     if (calendars.some((c) => c.name === BIRTHDAY_CALENDAR_NAME)) return;
+    if (criandoAniversario.current) return;
+    criandoAniversario.current = true;
     addCalendar({ name: BIRTHDAY_CALENDAR_NAME, icon: "🎂", color: "rose" });
   }, [loading, calendars]);
 
