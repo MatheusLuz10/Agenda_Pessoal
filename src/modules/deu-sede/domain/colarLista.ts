@@ -6,13 +6,18 @@ import type { Embalagem } from "@/modules/deu-sede/data/tipos";
 // produto/quantidade/valor, e associa cada linha a um produto do sistema.
 // Nada é gravado aqui: a tela mostra a conferência e o usuário confirma.
 
-export const INSTRUCAO_IA = `Transforme o documento abaixo (nota fiscal, pedido ou orçamento) em uma lista com UMA LINHA POR PRODUTO.
-Use as colunas abaixo, separadas por ponto e vírgula, e a primeira linha com os nomes das colunas:
-Código;Produto;Quantidade;Unidade;Itens por embalagem;Valor unitário;Valor total
-- Unidade: como aparece no documento (CX, FD, PCT, DZ, UN...).
-- Itens por embalagem: quantas unidades vêm em cada CX/FD/PCT (ex.: "CX C/12" = 12, "15X269ML" = 15, DZ = 12). Para UN, use 1. Se o documento não disser, deixe vazio (não chute).
-- Use vírgula como separador decimal (ex.: 39,90) e não use "R$".
-- Não escreva nada além da lista.`;
+// Instrução curta para a IA: uma linha por produto, 4 campos. A
+// embalagem já diz quantas unidades vêm nela ("CX 12"), então o app não
+// precisa perguntar. Listas no formato antigo (com cabeçalho e 7 colunas)
+// continuam sendo lidas.
+export const INSTRUCAO_IA = `Liste os produtos desta nota, um por linha, neste formato:
+Produto; Quantidade; Embalagem; Preço da embalagem
+
+Embalagem = tipo e quantas unidades vêm nela: CX 12, FD 6, PCT 15 ou UN.
+Exemplo:
+Cerveja Brahma Lata 269ml; 2; CX 12; 45,90
+
+Responda só com a lista.`;
 
 export interface LinhaColada {
   /** número da linha no texto colado (1, 2, 3…) */
@@ -42,6 +47,14 @@ const CABECALHOS: [Coluna, RegExp][] = [
 ];
 
 const UNIDADES_TEXTO = /^(cx|caixa|caixas|fd|fardo|fardos|pct|pt|pacote|pacotes|pack|packs|un|und|unid|unidade|unidades|eng|engradado|gf|garrafao|garrafão|dz|duzia|dúzia|kg|l|lt)\.?$/i;
+
+/** Célula de embalagem com as unidades: "CX 12", "FD/6", "PCT C/15", "Caixa com 12", "UN", "DZ". */
+function ehEmbalagem(c: string): boolean {
+  if (UNIDADES_TEXTO.test(c.trim())) return true;
+  return /^(cx|caixa|caixas|fd|fardo|fardos|pct|pt|pc|pacote|pack|pk|eng|engradado|gf|garrafao)\.?\s*(c\s*\/|com|x|\/|de)?\s*\d{1,3}\s*(un|und|unid|unidades)?\.?$/.test(
+    normalizarBusca(c).trim(),
+  );
+}
 
 /**
  * Embalagem pela coluna "Unidade" da nota: CX -> caixa, FD -> fardo,
@@ -110,7 +123,7 @@ function inferirColunas(celulas: string[]): Partial<Record<Coluna, number>> {
   const mapa: Partial<Record<Coluna, number>> = {};
   const numericas = celulas.map((c, i) => (ehNumero(c) ? i : -1)).filter((i) => i >= 0);
   const textos = celulas.map((c, i) => (!ehNumero(c) && c ? i : -1)).filter((i) => i >= 0);
-  const unidade = textos.find((i) => UNIDADES_TEXTO.test(celulas[i]));
+  const unidade = textos.find((i) => ehEmbalagem(celulas[i]));
   if (unidade !== undefined) mapa.unidade = unidade;
   const textosSemUnidade = textos.filter((i) => i !== unidade);
   // descrição = texto mais longo; código = coluna antes dela, se curta

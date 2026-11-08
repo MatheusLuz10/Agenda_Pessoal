@@ -129,7 +129,6 @@ export function Shell({
           })}
         </nav>
         <div className="mt-4 border-t border-verde-600 px-2 pt-4 text-sm">
-          <ThemeToggle />
           {rodape}
         </div>
       </aside>}
@@ -149,15 +148,22 @@ export function Shell({
           <LogoMarca marca={marca} horizontal />
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <ThemeToggle compact />
           {acaoCabecalho}
+          <ThemeToggle />
         </div>
       </header>}
+
+      {/* Computador: tema claro/escuro, só o ícone, no canto superior direito */}
+      {!telaCheia && (
+        <div className="hidden justify-end px-8 pt-3 lg:flex">
+          <ThemeToggle variante="pagina" />
+        </div>
+      )}
 
       {!telaCheia && aviso}
 
       <main className={cn(
-        "mx-auto w-full max-w-6xl px-4 pt-5 pb-28 sm:px-6 lg:px-8 lg:pt-8 lg:pb-10",
+        "mx-auto w-full max-w-6xl px-4 pt-5 pb-28 sm:px-6 lg:px-8 lg:pt-3 lg:pb-10",
         telaCheia && "h-dvh max-w-none overflow-hidden p-0",
       )}>{children}</main>
 

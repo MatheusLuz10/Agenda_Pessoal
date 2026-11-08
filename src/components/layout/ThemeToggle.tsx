@@ -2,26 +2,29 @@ import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 
-export function ThemeToggle({ compact = false }: { compact?: boolean }) {
+// Só o ícone (lua/sol), no canto superior direito: sobre o verde do
+// cabeçalho no celular ("cabecalho") ou sobre o fundo da página no
+// computador ("pagina").
+export function ThemeToggle({ variante = "cabecalho" }: { variante?: "cabecalho" | "pagina" }) {
   const { theme, setTheme } = useTheme();
   const nextTheme = theme === "light" ? "dark" : "light";
   const Icon = theme === "light" ? Moon : Sun;
+  const rotulo = `Ativar tema ${nextTheme === "dark" ? "escuro" : "claro"}`;
 
   return (
     <button
       type="button"
       onClick={() => setTheme(nextTheme)}
-      aria-label={`Ativar tema ${nextTheme === "dark" ? "escuro" : "claro"}`}
-      title={`Ativar tema ${nextTheme === "dark" ? "escuro" : "claro"}`}
+      aria-label={rotulo}
+      title={rotulo}
       className={cn(
-        "flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors",
-        compact
-          ? "size-10 text-creme/90 hover:bg-verde-600 hover:text-creme"
-          : "h-10 w-full px-3 text-creme/85 hover:bg-verde-600 hover:text-creme",
+        "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
+        variante === "cabecalho"
+          ? "text-creme/90 hover:bg-verde-600 hover:text-creme"
+          : "border border-linha bg-superficie text-verde shadow-sm hover:border-amarelo",
       )}
     >
-      <Icon className="size-4" />
-      {!compact && (theme === "light" ? "Tema escuro" : "Tema claro")}
+      <Icon className="size-5" />
     </button>
   );
 }

@@ -71,8 +71,10 @@ export function EntradaNotaPage() {
       for (const it of prontos) {
         const existente = r.find((l) => l.produto_id === it.candidatoId);
         const valores = { quantidade: paraCampo(it.quantidade), preco: paraCampo(it.valorUnitario, 2) };
-        if (existente) Object.assign(existente, valores);
-        else r.push({ ...nova(), produto_id: it.candidatoId, ...padrao(it.candidatoId, cad), ...valores });
+        // a embalagem escrita na nota ("CX 12") vale para esta entrada
+        const daNota = it.embalagem ? { tipo_embalagem: it.embalagem.tipo, unidades: String(it.embalagem.unidades) } : null;
+        if (existente) Object.assign(existente, valores, daNota ?? {});
+        else r.push({ ...nova(), produto_id: it.candidatoId, ...(daNota ?? padrao(it.candidatoId, cad)), ...valores });
       }
       return r.length ? r : [nova()];
     });

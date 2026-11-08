@@ -136,3 +136,35 @@ describe("produto novo a partir da nota", () => {
     expect(sugerirCategoria("GELO 5KG", cats)).toBeNull();
   });
 });
+
+describe("formato simples da instrução para a IA (Produto; Quantidade; Embalagem; Preço)", () => {
+  it("lê as 4 colunas sem cabeçalho e tira as unidades da embalagem", () => {
+    const { linhas, ignoradas } = interpretarLista(`Cerveja Brahma Lata 269ml; 2; CX 12; 45,90
+Refrigerante Coca-Cola 2L; 3; FD 6; 54,00
+Água Mineral 500ml; 1; PCT C/12; 18,50
+Bitter Campari 900ml; 2; UN; 39,90
+Cerveja Amstel Lata 269ml; 1; DZ; 36,00
+Cerveja Skol Lata 269ml; 4; Caixa com 15; R$ 41,90`);
+    expect(ignoradas).toEqual([]);
+    expect(linhas.map((l) => [l.descricao, l.quantidade, l.unidade, l.unidadesPorEmbalagem, l.valorUnitario])).toEqual([
+      ["Cerveja Brahma Lata 269ml", 2, "CX 12", 12, 45.9],
+      ["Refrigerante Coca-Cola 2L", 3, "FD 6", 6, 54],
+      ["Água Mineral 500ml", 1, "PCT C/12", 12, 18.5],
+      ["Bitter Campari 900ml", 2, "UN", 1, 39.9],
+      ["Cerveja Amstel Lata 269ml", 1, "DZ", 12, 36],
+      ["Cerveja Skol Lata 269ml", 4, "Caixa com 15", 15, 41.9],
+    ]);
+  });
+
+  it("aceita a linha de cabeçalho se a IA escrever", () => {
+    const { linhas } = interpretarLista(`Produto; Quantidade; Embalagem; Preço da embalagem
+Cerveja Brahma Lata 269ml; 2; CX 12; 45,90`);
+    expect(linhas).toHaveLength(1);
+    expect([linhas[0].descricao, linhas[0].quantidade, linhas[0].unidadesPorEmbalagem, linhas[0].valorUnitario]).toEqual([
+      "Cerveja Brahma Lata 269ml",
+      2,
+      12,
+      45.9,
+    ]);
+  });
+});

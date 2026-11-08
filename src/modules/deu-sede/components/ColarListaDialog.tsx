@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardCopy, ClipboardPaste } from "lucide-react";
+import { ClipboardCopy, ClipboardPaste, Pencil } from "lucide-react";
 import { Button } from "@/modules/deu-sede/components/ui/button";
 import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Dialogo } from "@/modules/deu-sede/components/ui/dialogo";
@@ -16,7 +16,7 @@ import {
   sugerirCategoria,
   type Candidato,
 } from "@/modules/deu-sede/domain/colarLista";
-import { EMBALAGENS, lerDecimal, moeda, normalizarBusca, paraCampo } from "@/modules/deu-sede/domain/formatos";
+import { descreverEmbalagem, EMBALAGENS, lerDecimal, moeda, normalizarBusca, paraCampo } from "@/modules/deu-sede/domain/formatos";
 import type { Categoria, Embalagem } from "@/modules/deu-sede/data/tipos";
 
 export interface CandidatoLista extends Candidato {
@@ -42,6 +42,8 @@ export interface LinhaAplicada {
   novo?: ProdutoNovo;
   quantidade: number | null;
   valorUnitario: number | null;
+  /** embalagem escrita na lista ("CX 12"), para produto já cadastrado */
+  embalagem?: { tipo: Embalagem; unidades: number };
   /** preço diferente da referência, confirmado pelo usuário */
   precoAlterado: boolean;
 }
@@ -55,6 +57,8 @@ interface LinhaEditavel {
   quantidade: string;
   valor: string;
   convertido: boolean;
+  /** embalagem que a lista informou (vale para produto já cadastrado) */
+  embalagemLista: { tipo: Embalagem; unidades: number } | null;
   codigo: string | null;
   novoNome: string;
   novoCategoria: string;
@@ -99,12 +103,30 @@ export function ColarListaDialog({
   // linhas de produto novo que chegaram sem unidades por embalagem: ficam
   // no painel do topo até aplicar (não somem enquanto a pessoa digita)
   const [faltavam, setFaltavam] = useState<number[]>([]);
+  // linhas mostradas com todos os campos; as demais aparecem resumidas
+  // (nome, quantidade e preço) com o botão "Alterar"
+  const [abertas, setAbertas] = useState<Set<number>>(new Set());
   const porId = new Map(candidatos.map((c) => [c.id, c]));
+  const nomeCategoria = new Map((categoriasNovos ?? []).map((c) => [c.id, c.nome]));
+
+  // Linha que precisa de alguém olhar: produto novo incompleto, linha não
+  // reconhecida (onde não dá para cadastrar), quantidade ou preço faltando.
+  function precisaAtencao(l: LinhaEditavel): boolean {
+    if (!l.candidatoId) return !categoriasNovos;
+    if (lerDecimal(l.quantidade) === null) return true;
+    if (exigirPreco && lerDecimal(l.valor) === null) return true;
+    if (l.candidatoId === NOVO) {
+      const u = Number(l.novoUnidades);
+      return !l.novoNome.trim() || !l.novoCategoria || !Number.isInteger(u) || u <= 0;
+    }
+    return false;
+  }
 
   function fechar() {
     setTexto("");
     setLinhas(null);
     setFaltavam([]);
+    setAbertas(new Set());
     setIgnoradas([]);
     setConfirmouPrecos(false);
     setErro(null);
@@ -149,6 +171,11 @@ export function ColarListaDialog({
           quantidade: paraCampo(conv.quantidade),
           valor: paraCampo(conv.valorUnitario, 2),
           convertido: conv.convertido,
+          // "CX 12" na lista: a nota manda na embalagem desta entrada (o
+          // padrão do produto pode ser outro). Linha em UN já convertida
+          // para a embalagem do produto fica com a do produto.
+          embalagemLista:
+            !conv.convertido && unidadesNovo && (l.unidade || l.unidadesPorEmbalagem) ? { tipo: embalagem.tipo, unidades: unidadesNovo } : null,
           // só código de barras vai para o cadastro: código interno do
           // fornecedor ("924") pode ser outro produto em outro fornecedor
           codigo: ehCodigoDeBarras(l.codigo) ? l.codigo : null,
@@ -160,6 +187,8 @@ export function ColarListaDialog({
     });
     setLinhas(analisadas);
     setFaltavam(analisadas.filter((l) => l.candidatoId === NOVO && !l.novoUnidades).map((l) => l.linha));
+    // o que falta só a embalagem já está no painel do topo
+    setAbertas(new Set(analisadas.filter((l) => precisaAtencao({ ...l, novoUnidades: l.novoUnidades || "1" })).map((l) => l.linha)));
   }
 
   const mudar = (i: number, campo: Partial<LinhaEditavel>) =>
@@ -216,6 +245,7 @@ export function ColarListaDialog({
                   unidades_por_embalagem: Number(l.novoUnidades),
                 }
               : undefined,
+          embalagem: l.candidatoId !== NOVO && l.embalagemLista ? l.embalagemLista : undefined,
           quantidade: lerDecimal(l.quantidade),
           valorUnitario: lerDecimal(l.valor),
           precoAlterado: comPrecoNovo.includes(l),
@@ -259,15 +289,32 @@ export function ColarListaDialog({
       {!linhas ? (
         <div className="flex flex-col gap-3 text-sm">
           <p className="text-texto">{explicacao}</p>
-          <details className="rounded-xl border border-linha bg-offwhite/50 px-3 py-2">
-            <summary className="cursor-pointer font-medium text-verde">Como gerar a lista com IA</summary>
-            <p className="mt-2 text-texto-suave">
-              Envie a foto ou o PDF da nota para a IA (ChatGPT, Claude, Gemini…) junto com esta instrução e cole aqui a resposta:
-            </p>
-            <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-white p-2 text-xs whitespace-pre-wrap text-verde">{INSTRUCAO_IA}</pre>
-            <Button size="sm" variant="contorno" className="mt-2" onClick={copiarInstrucao}>
-              <ClipboardCopy className="size-4" /> {copiado ? "Instrução copiada!" : "Copiar instrução"}
-            </Button>
+<ol className="flex flex-col gap-2.5 rounded-xl border border-linha bg-offwhite/50 p-3">
+            <li className="flex items-start gap-2.5">
+              <Passo n={1} />
+              <div className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="font-medium text-verde">Copie a instrução</span>
+                <Button size="sm" variant="secundario" onClick={copiarInstrucao}>
+                  <ClipboardCopy className="size-4" /> {copiado ? "Copiada!" : "Copiar instrução"}
+                </Button>
+              </div>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <Passo n={2} />
+              <span className="text-texto">
+                <span className="font-medium text-verde">Envie para a IA</span> (ChatGPT, Gemini, Claude…) junto com a foto ou o PDF da nota.
+              </span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <Passo n={3} />
+              <span className="text-texto">
+                <span className="font-medium text-verde">Cole a resposta</span> no campo abaixo.
+              </span>
+            </li>
+          </ol>
+          <details className="text-xs text-texto-suave">
+            <summary className="cursor-pointer">Ver a instrução</summary>
+            <pre className="mt-2 overflow-auto rounded-lg border border-linha bg-white p-2 whitespace-pre-wrap text-verde">{INSTRUCAO_IA}</pre>
           </details>
           <label className="flex flex-col gap-1.5 font-medium text-verde">
             Lista de produtos
@@ -276,7 +323,7 @@ export function ColarListaDialog({
               rows={8}
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
-              placeholder={"Produto;Quantidade;Valor unitário\nBrahma Chopp 269ml;20;39,90\n— ou —\n20 cx Brahma Chopp 269ml R$ 39,90"}
+              placeholder={"Cerveja Brahma Lata 269ml; 2; CX 12; 45,90\nRefrigerante Coca-Cola 2L; 3; FD 6; 54,00"}
               className="font-mono text-sm"
             />
           </label>
@@ -286,8 +333,8 @@ export function ColarListaDialog({
         <div className="flex flex-col gap-3 text-sm">
           <p className="text-texto-suave">
             {categoriasNovos
-              ? "Confira cada linha. Produtos que ainda não existem já vêm marcados para cadastro: confira nome, categoria e unidades por embalagem, ou escolha o produto certo na lista."
-              : 'Confira cada linha. Produtos não reconhecidos ficam em branco: escolha o produto certo ou deixe "ignorar".'}
+              ? "Confira a lista. Produto que ainda não existe será cadastrado. Para corrigir uma linha, toque em Alterar."
+              : "Confira a lista. Linha não reconhecida fica de fora até você escolher o produto."}
           </p>
           <p className="font-medium text-verde">
             {existentes.length} {existentes.length === 1 ? "reconhecido" : "reconhecidos"}
@@ -361,15 +408,49 @@ export function ColarListaDialog({
               const c = porId.get(l.candidatoId);
               const valor = lerDecimal(l.valor);
               const mudou = !!c && precoMudou(valor, c.precoReferencia);
+              const aberta = abertas.has(l.linha);
               return (
                 <li key={l.linha} className="rounded-xl border border-linha p-3">
-                  <p className="mb-2 font-medium break-words text-verde">
+                  <div className="flex items-start gap-2">
+                  <p className="min-w-0 flex-1 font-medium break-words text-verde">
                     {l.descricao}{" "}
                     {l.confianca === "codigo" && <Badge tone="verde">pelo código</Badge>}
                     {l.confianca === "nome" && l.candidatoId && <Badge tone="amarelo">pelo nome — confira</Badge>}
                     {!l.candidatoId && <Badge tone="perigo">não reconhecido</Badge>}
                     {l.candidatoId === NOVO && <Badge tone="amarelo">novo — será cadastrado</Badge>}
                   </p>
+                  {!aberta && (
+                    <Button size="sm" variant="fantasma" className="-mt-1 shrink-0" aria-label={`Alterar a linha ${l.linha}`} onClick={() => setAbertas((a) => new Set(a).add(l.linha))}>
+                      <Pencil className="size-4" /> Alterar
+                    </Button>
+                  )}
+                  </div>
+                  {!aberta && (
+                    <p className="mt-1 text-texto-suave">
+                      {!l.candidatoId ? (
+                        "Esta linha será ignorada."
+                      ) : (
+                        <>
+                          {l.candidatoId === NOVO ? (
+                            <>
+                              Produto novo · {nomeCategoria.get(l.novoCategoria) ?? "sem categoria"} ·{" "}
+                              {descreverEmbalagem(l.novoEmbalagem, Number(l.novoUnidades) || 1)}
+                            </>
+                          ) : (
+                            <>
+                              → {c?.rotulo}
+                              {l.embalagemLista && ` · ${descreverEmbalagem(l.embalagemLista.tipo, l.embalagemLista.unidades)}`}
+                            </>
+                          )}
+                          <br />
+                          <strong className="text-verde">{l.quantidade || "?"}</strong> {lerDecimal(l.quantidade) === 1 ? "embalagem" : "embalagens"} ×{" "}
+                          <strong className="text-verde">{valor === null ? "sem preço" : moeda(valor)}</strong>
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {aberta && (
+                    <div className="mt-2">
                   <Select
                     aria-label={`Produto da linha ${l.linha}`}
                     value={l.candidatoId}
@@ -439,6 +520,8 @@ export function ColarListaDialog({
                       </label>
                     </div>
                   )}
+                    </div>
+                  )}
                   {l.convertido && <p className="mt-1 text-xs text-texto-suave">Convertido de unidades para embalagens.</p>}
                   {mudou && (
                     <p className="mt-2 text-xs font-medium text-marrom">
@@ -465,6 +548,14 @@ export function ColarListaDialog({
         </div>
       )}
     </Dialogo>
+  );
+}
+
+function Passo({ n }: { n: number }) {
+  return (
+    <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-full bg-verde text-xs font-bold text-creme">
+      {n}
+    </span>
   );
 }
 
