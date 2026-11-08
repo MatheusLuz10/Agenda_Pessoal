@@ -57,12 +57,19 @@ export type FuncaoRPC =
   | "verificar_senha"
   | "salvar_seguranca";
 
-function mensagemDeErro(e: unknown): string {
+// Funções que vieram em migrações recentes: o erro diz qual arquivo falta rodar.
+const MIGRACAO_DA_FUNCAO: Partial<Record<FuncaoRPC, string>> = {
+  excluir_produtos: "0013_excluir_produtos.sql",
+};
+
+function mensagemDeErro(e: unknown, fn?: FuncaoRPC): string {
   const msg = (e as { message?: string })?.message ?? String(e);
   if (/schema must be one of/i.test(msg) || /Invalid schema/i.test(msg)) {
     return 'O esquema "deusede" ainda não foi liberado no Supabase (Project Settings → Data API → Exposed schemas).';
   }
   if (/Could not find the function/i.test(msg) || /does not exist/i.test(msg)) {
+    const arquivo = fn && MIGRACAO_DA_FUNCAO[fn];
+    if (arquivo) return `Falta atualizar o banco do DEU SEDE! no Supabase: rode o arquivo supabase/deu-sede/${arquivo} no SQL Editor.`;
     return "O banco do DEU SEDE! ainda não foi instalado no Supabase: rode os arquivos de supabase/deu-sede no SQL Editor.";
   }
   if (/Failed to fetch|NetworkError/i.test(msg)) return "Sem conexão com o servidor. Verifique a internet e tente de novo.";
@@ -80,7 +87,7 @@ export async function chamar<T>(fn: FuncaoRPC, payload: object = {}): Promise<T>
     const r = await db.query<{ r: T }>(`select deusede.${fn}($1::jsonb) as r`, [JSON.stringify(payload)]);
     return r.rows[0].r;
   } catch (e) {
-    throw new Error(mensagemDeErro(e), { cause: e });
+    throw new Error(mensagemDeErro(e, fn), { cause: e });
   }
 }
 

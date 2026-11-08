@@ -51,7 +51,7 @@ const UNIDADES_TEXTO = /^(cx|caixa|caixas|fd|fardo|fardos|pct|pt|pacote|pacotes|
 /** Célula de embalagem com as unidades: "CX 12", "FD/6", "PCT C/15", "Caixa com 12", "UN", "DZ". */
 function ehEmbalagem(c: string): boolean {
   if (UNIDADES_TEXTO.test(c.trim())) return true;
-  return /^(cx|caixa|caixas|fd|fardo|fardos|pct|pt|pc|pacote|pack|pk|eng|engradado|gf|garrafao)\.?\s*(c\s*\/|com|x|\/|de)?\s*\d{1,3}\s*(un|und|unid|unidades)?\.?$/.test(
+  return /^(cx|caixa|caixas|fd|fardo|fardos|pct|pt|pc|pacote|pack|pk|eng|engradado|gf|garrafao|dz|duzia)\.?\s*(c\s*\/|com|x|\/|de)?\s*\d{1,3}\s*(un|und|unid|unidades)?\.?$/.test(
     normalizarBusca(c).trim(),
   );
 }
@@ -249,7 +249,9 @@ function interpretarTextoLivre(texto: string): Omit<LinhaColada, "linha" | "text
 export function interpretarLista(texto: string): { linhas: LinhaColada[]; ignoradas: string[] } {
   const brutas = texto
     .split(/\r?\n/)
-    .map((l, i) => ({ i: i + 1, l: l.trim() }))
+    // "\" no fim da linha (quebra de linha do markdown que a IA às vezes
+    // escreve) e "<br>" grudavam no preço: "47,52\" não era número
+    .map((l, i) => ({ i: i + 1, l: l.replace(/<br\s*\/?>/gi, " ").replace(/(\s*\\)+\s*$/, "").trim() }))
     .filter(({ l }) => l && !/^\|?\s*:?-{2,}/.test(l) && !/^```/.test(l));
   const sep = separador(brutas.map((b) => b.l));
   const linhas: LinhaColada[] = [];

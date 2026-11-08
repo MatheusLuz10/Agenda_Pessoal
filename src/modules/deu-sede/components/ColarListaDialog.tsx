@@ -13,6 +13,7 @@ import {
   INSTRUCAO_IA,
   interpretarLista,
   precoMudou,
+  semelhanca,
   sugerirCategoria,
   type Candidato,
 } from "@/modules/deu-sede/domain/colarLista";
@@ -185,6 +186,24 @@ export function ColarListaDialog({
           novoUnidades: unidadesNovo ? String(unidadesNovo) : "",
         };
     });
+    // Duas linhas diferentes da nota (preço ou embalagem diferente) que o
+    // reconhecimento PELO NOME ligou ao mesmo produto: só a de nome mais
+    // parecido fica com ele; a outra vira produto novo (ou fica para
+    // escolher). Linhas iguais continuam ligadas e são somadas ao aplicar.
+    const porCandidato = new Map<string, LinhaEditavel[]>();
+    for (const l of analisadas) {
+      if (l.confianca !== "nome" || !l.candidatoId || l.candidatoId === NOVO) continue;
+      porCandidato.set(l.candidatoId, [...(porCandidato.get(l.candidatoId) ?? []), l]);
+    }
+    for (const [id, grupo] of porCandidato) {
+      if (grupo.length < 2) continue;
+      const nome = porId.get(id)?.nome ?? "";
+      const [melhor, ...outras] = [...grupo].sort((a, b) => semelhanca(b.descricao, nome) - semelhanca(a.descricao, nome));
+      for (const l of outras) {
+        const igual = l.valor === melhor.valor && (l.embalagemLista?.unidades ?? null) === (melhor.embalagemLista?.unidades ?? null);
+        if (!igual) Object.assign(l, { candidatoId: categoriasNovos ? NOVO : "", confianca: "nenhuma", embalagemLista: null });
+      }
+    }
     setLinhas(analisadas);
     setFaltavam(analisadas.filter((l) => l.candidatoId === NOVO && !l.novoUnidades).map((l) => l.linha));
     // o que falta só a embalagem já está no painel do topo
@@ -197,10 +216,36 @@ export function ColarListaDialog({
   const usadas = (linhas ?? []).filter((l) => l.candidatoId);
   const comPrecoNovo = usadas.filter((l) => l.candidatoId !== NOVO && precoMudou(lerDecimal(l.valor), porId.get(l.candidatoId)?.precoReferencia));
   const existentes = usadas.filter((l) => l.candidatoId !== NOVO);
-  const repetidos = existentes.filter((l, i) => existentes.findIndex((x) => x.candidatoId === l.candidatoId) !== i);
   const novos = usadas.filter((l) => l.candidatoId === NOVO);
   const chaveNome = (l: LinhaEditavel) => normalizarBusca(l.novoNome).replace(/\s+/g, " ");
-  const novoRepetido = novos.find((l, i) => novos.findIndex((x) => chaveNome(x) === chaveNome(l)) !== i);
+  // O mesmo produto em duas linhas (a nota repete, ou "AGUA DE COCO" e "Água
+  // de Coco"): com o mesmo preço e a mesma embalagem, as quantidades somam.
+  // Preço ou embalagem diferente é conflito para a pessoa resolver.
+  const juntas: LinhaEditavel[] = [];
+  let conflito: LinhaEditavel | null = null;
+  {
+    const porChave = new Map<string, LinhaEditavel>();
+    for (const l of usadas) {
+      const k = l.candidatoId === NOVO ? `novo:${chaveNome(l)}` : `id:${l.candidatoId}`;
+      const ja = porChave.get(k);
+      if (!ja) {
+        const copia = { ...l };
+        porChave.set(k, copia);
+        juntas.push(copia);
+        continue;
+      }
+      const mesmaEmbalagem =
+        l.candidatoId === NOVO
+          ? ja.novoEmbalagem === l.novoEmbalagem && Number(ja.novoUnidades) === Number(l.novoUnidades)
+          : (ja.embalagemLista?.unidades ?? null) === (l.embalagemLista?.unidades ?? null);
+      if (!mesmaEmbalagem || lerDecimal(ja.valor) !== lerDecimal(l.valor)) {
+        conflito ??= l;
+        continue;
+      }
+      ja.quantidade = paraCampo((lerDecimal(ja.quantidade) ?? 0) + (lerDecimal(l.quantidade) ?? 0));
+    }
+  }
+  const somadas = usadas.length - juntas.length;
   const codigoRepetido = novos.find((l, i) => l.codigo && novos.findIndex((x) => x.codigo?.trim().toLowerCase() === l.codigo!.trim().toLowerCase()) !== i);
   const semUnidades = novos.filter((l) => {
     const u = Number(l.novoUnidades);
@@ -209,8 +254,10 @@ export function ColarListaDialog({
 
   async function aplicar() {
     if (usadas.length === 0) return setErro("Escolha o produto de ao menos uma linha.");
-    if (repetidos.length) return setErro("O mesmo produto foi escolhido em duas linhas. Ajuste ou ignore uma delas.");
-    if (novoRepetido) return setErro(`O produto novo "${novoRepetido.novoNome}" aparece em duas linhas. Junte as quantidades em uma linha ou ignore uma delas.`);
+    if (conflito)
+      return setErro(
+        `"${conflito.candidatoId === NOVO ? conflito.novoNome : porId.get(conflito.candidatoId)?.nome}" aparece em duas linhas com preço ou embalagem diferentes (linha ${conflito.linha}). Ajuste ou ignore uma delas.`,
+      );
     if (codigoRepetido) return setErro(`O código ${codigoRepetido.codigo} aparece em dois produtos novos. Ajuste ou ignore uma das linhas.`);
     if (semUnidades.length > 1)
       return setErro(
@@ -233,7 +280,7 @@ export function ColarListaDialog({
     setAplicando(true);
     try {
       await aoAplicar(
-        usadas.map((l) => ({
+        juntas.map((l) => ({
           candidatoId: l.candidatoId === NOVO ? "" : l.candidatoId,
           novo:
             l.candidatoId === NOVO
@@ -248,7 +295,7 @@ export function ColarListaDialog({
           embalagem: l.candidatoId !== NOVO && l.embalagemLista ? l.embalagemLista : undefined,
           quantidade: lerDecimal(l.quantidade),
           valorUnitario: lerDecimal(l.valor),
-          precoAlterado: comPrecoNovo.includes(l),
+          precoAlterado: comPrecoNovo.some((x) => x.linha === l.linha),
         })),
       );
       fechar();
@@ -271,7 +318,7 @@ export function ColarListaDialog({
               Voltar ao texto
             </Button>
             <Button data-principal onClick={aplicar} disabled={aplicando}>
-              {aplicando ? "Aplicando…" : `Aplicar ${usadas.length} ${usadas.length === 1 ? "produto" : "produtos"}`}
+              {aplicando ? "Aplicando…" : `Aplicar ${juntas.length} ${juntas.length === 1 ? "produto" : "produtos"}`}
             </Button>
           </>
         ) : (
@@ -340,6 +387,7 @@ export function ColarListaDialog({
             {existentes.length} {existentes.length === 1 ? "reconhecido" : "reconhecidos"}
             {categoriasNovos && ` · ${novos.length} ${novos.length === 1 ? "novo para cadastrar" : "novos para cadastrar"}`}
             {` · ${linhas.length - usadas.length} ${linhas.length - usadas.length === 1 ? "ignorado" : "ignorados"}`}
+            {somadas > 0 && ` · ${somadas} ${somadas === 1 ? "linha repetida será somada" : "linhas repetidas serão somadas"}`}
             {semUnidades.length > 0 && (
               <span className="text-perigo">
                 {" "}

@@ -168,3 +168,16 @@ Cerveja Brahma Lata 269ml; 2; CX 12; 45,90`);
     ]);
   });
 });
+
+describe("sujeira que a IA deixa no fim da linha", () => {
+  it('"\\" (quebra de linha do markdown) e <br> não grudam no preço', () => {
+    const { linhas } = interpretarLista(
+      ["ACHOCOL LIQ PIRAKIDS 200ML; 1; CX 27; 47,52\\", "CERVEJA AMSTEL LT 269ML; 1; DZ 12; 36,00 \\", "REFR 2L PEPSI; 1; CX 6; 51,90<br>"].join("\n"),
+    );
+    expect(linhas.map((l) => [l.valorUnitario, l.unidadesPorEmbalagem])).toEqual([
+      [47.52, 27],
+      [36, 12],
+      [51.9, 6],
+    ]);
+  });
+});
