@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { associar, converterParaEmbalagem, interpretarLista, precoMudou, semelhanca, type Candidato } from "./colarLista";
+import {
+  associar,
+  converterParaEmbalagem,
+  interpretarLista,
+  precoMudou,
+  semelhanca,
+  sugerirCategoria,
+  unidadesDaDescricao,
+  type Candidato,
+} from "./colarLista";
 
 const candidatos: Candidato[] = [
   { id: "brahma", nome: "Cerveja Brahma Chopp Lata 269 ml", codigos: ["7891149103102"], unidadesPorEmbalagem: 12 },
@@ -84,5 +93,46 @@ describe("associar ao produto do sistema", () => {
     expect(precoMudou(41.5, 39.9)).toBe(true);
     expect(precoMudou(39.9, 39.9)).toBe(false);
     expect(precoMudou(null, 39.9)).toBe(false);
+  });
+});
+
+describe("produto novo a partir da nota", () => {
+  it("lê a coluna 'Itens por embalagem' da instrução da IA", () => {
+    const { linhas } = interpretarLista(`Código;Produto;Quantidade;Unidade;Itens por embalagem;Valor unitário;Valor total
+7891149103102;CERV BRAHMA CHOPP LT 350ML;10;CX;12;39,90;399,00
+123;AGUA CRYSTAL 500ML;24;UN;1;1,50;36,00
+456;GELO 5KG;3;PCT;;8,00;24,00`);
+    expect(linhas).toHaveLength(3);
+    expect(linhas[0]).toMatchObject({ codigo: "7891149103102", quantidade: 10, unidade: "CX", unidadesPorEmbalagem: 12, valorUnitario: 39.9 });
+    expect(linhas[1]).toMatchObject({ unidade: "UN", unidadesPorEmbalagem: 1, valorUnitario: 1.5 });
+    expect(linhas[2]).toMatchObject({ unidadesPorEmbalagem: null, valorUnitario: 8 });
+  });
+
+  it("sem a coluna, tira as unidades da descrição", () => {
+    const { linhas } = interpretarLista("Produto;Quantidade;Valor unitário\nREFRIG COCA COLA 2L PET FD6;5;45,00");
+    expect(linhas[0].unidadesPorEmbalagem).toBe(6);
+  });
+
+  it("reconhece os jeitos comuns de escrever na nota", () => {
+    expect(unidadesDaDescricao("CERV BRAHMA CHOPP LT 350ML C/12")).toBe(12);
+    expect(unidadesDaDescricao("CERV SKOL LT 269ML CX C/ 15")).toBe(15);
+    expect(unidadesDaDescricao("AGUA CRYSTAL 500ML FD 12UN")).toBe(12);
+    expect(unidadesDaDescricao("SKOL 12X350ML")).toBe(12);
+    expect(unidadesDaDescricao("HEINEKEN SIX PACK LN 330ML")).toBe(6);
+    // volume não é quantidade por embalagem
+    expect(unidadesDaDescricao("COCA COLA 2L")).toBeNull();
+    expect(unidadesDaDescricao("HEINEKEN LN 330ML")).toBeNull();
+    expect(unidadesDaDescricao("CX 600ML")).toBeNull();
+  });
+
+  it("sugere a categoria pelo nome", () => {
+    const cats = ["Cervejas", "Refrigerantes", "Águas", "Sucos", "Energéticos", "Descartáveis", "Outros"].map((nome) => ({ id: nome, nome }));
+    expect(sugerirCategoria("CERV BRAHMA CHOPP LT 350ML", cats)).toBe("Cervejas");
+    expect(sugerirCategoria("REFRIG GUARANA ANTARCTICA 2L", cats)).toBe("Refrigerantes");
+    expect(sugerirCategoria("AGUA MINERAL CRYSTAL 500ML", cats)).toBe("Águas");
+    expect(sugerirCategoria("ENERG RED BULL 250ML", cats)).toBe("Energéticos");
+    expect(sugerirCategoria("SUCO DEL VALLE UVA 1L", cats)).toBe("Sucos");
+    expect(sugerirCategoria("COPO DESCARTAVEL 200ML", cats)).toBe("Descartáveis");
+    expect(sugerirCategoria("GELO 5KG", cats)).toBeNull();
   });
 });

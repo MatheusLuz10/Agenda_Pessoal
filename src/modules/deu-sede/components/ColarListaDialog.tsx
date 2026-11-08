@@ -11,9 +11,10 @@ import {
   INSTRUCAO_IA,
   interpretarLista,
   precoMudou,
+  sugerirCategoria,
   type Candidato,
 } from "@/modules/deu-sede/domain/colarLista";
-import { EMBALAGENS, lerDecimal, moeda, paraCampo } from "@/modules/deu-sede/domain/formatos";
+import { EMBALAGENS, lerDecimal, moeda, normalizarBusca, paraCampo } from "@/modules/deu-sede/domain/formatos";
 import type { Categoria, Embalagem } from "@/modules/deu-sede/data/tipos";
 
 export interface CandidatoLista extends Candidato {
@@ -25,6 +26,8 @@ export interface CandidatoLista extends Candidato {
 
 export interface ProdutoNovo {
   nome: string;
+  /** código da nota (EAN ou do fornecedor): a próxima nota reconhece pelo código */
+  codigo: string | null;
   categoria_id: string;
   tipo_embalagem: Embalagem;
   unidades_por_embalagem: number;
@@ -50,6 +53,7 @@ interface LinhaEditavel {
   quantidade: string;
   valor: string;
   convertido: boolean;
+  codigo: string | null;
   novoNome: string;
   novoCategoria: string;
   novoEmbalagem: Embalagem;
@@ -131,24 +135,32 @@ export function ColarListaDialog({
     }
     setErro(null);
     setIgnoradas(r.ignoradas);
+    const ativas = (categoriasNovos ?? []).filter((c) => c.ativo);
+    const categoriaPadrao = ativas.find((c) => c.nome === "Outros")?.id ?? ativas[0]?.id ?? "";
     setLinhas(
       r.linhas.map((l) => {
         const a = associar(l, candidatos);
         const c = a.candidatoId ? porId.get(a.candidatoId) : undefined;
         const conv = converterParaEmbalagem(l, c?.unidadesPorEmbalagem ?? 1);
+        const embalagem = embalagemDoTexto(l.unidade);
+        const unidadesNovo = embalagem === "unidade" ? 1 : l.unidadesPorEmbalagem;
         return {
           linha: l.linha,
           texto: l.texto,
           descricao: l.descricao,
-          candidatoId: a.candidatoId ?? "",
+          // Onde dá para cadastrar (entrada por nota), o que não existe já
+          // vem marcado como produto novo: com o banco vazio, toda a nota é
+          // "não reconhecida" e escolher linha a linha travava a entrada.
+          candidatoId: a.candidatoId ?? (categoriasNovos ? NOVO : ""),
           confianca: a.confianca,
           quantidade: paraCampo(conv.quantidade),
           valor: paraCampo(conv.valorUnitario, 2),
           convertido: conv.convertido,
+          codigo: l.codigo,
           novoNome: l.descricao,
-          novoCategoria: categoriasNovos?.find((c) => c.nome === "Outros")?.id ?? categoriasNovos?.[0]?.id ?? "",
-          novoEmbalagem: embalagemDoTexto(l.unidade),
-          novoUnidades: embalagemDoTexto(l.unidade) === "unidade" ? "1" : "",
+          novoCategoria: sugerirCategoria(l.descricao, ativas) ?? categoriaPadrao,
+          novoEmbalagem: embalagem,
+          novoUnidades: unidadesNovo ? String(unidadesNovo) : "",
         };
       }),
     );
@@ -161,10 +173,16 @@ export function ColarListaDialog({
   const comPrecoNovo = usadas.filter((l) => l.candidatoId !== NOVO && precoMudou(lerDecimal(l.valor), porId.get(l.candidatoId)?.precoReferencia));
   const existentes = usadas.filter((l) => l.candidatoId !== NOVO);
   const repetidos = existentes.filter((l, i) => existentes.findIndex((x) => x.candidatoId === l.candidatoId) !== i);
+  const novos = usadas.filter((l) => l.candidatoId === NOVO);
+  const chaveNome = (l: LinhaEditavel) => normalizarBusca(l.novoNome).replace(/\s+/g, " ");
+  const novoRepetido = novos.find((l, i) => novos.findIndex((x) => chaveNome(x) === chaveNome(l)) !== i);
+  const codigoRepetido = novos.find((l, i) => l.codigo && novos.findIndex((x) => x.codigo?.trim().toLowerCase() === l.codigo!.trim().toLowerCase()) !== i);
 
   async function aplicar() {
     if (usadas.length === 0) return setErro("Escolha o produto de ao menos uma linha.");
     if (repetidos.length) return setErro("O mesmo produto foi escolhido em duas linhas. Ajuste ou ignore uma delas.");
+    if (novoRepetido) return setErro(`O produto novo "${novoRepetido.novoNome}" aparece em duas linhas. Junte as quantidades em uma linha ou ignore uma delas.`);
+    if (codigoRepetido) return setErro(`O código ${codigoRepetido.codigo} aparece em dois produtos novos. Ajuste ou ignore uma das linhas.`);
     for (const l of usadas) {
       const q = lerDecimal(l.quantidade);
       const v = lerDecimal(l.valor);
@@ -186,7 +204,13 @@ export function ColarListaDialog({
           candidatoId: l.candidatoId === NOVO ? "" : l.candidatoId,
           novo:
             l.candidatoId === NOVO
-              ? { nome: l.novoNome.trim(), categoria_id: l.novoCategoria, tipo_embalagem: l.novoEmbalagem, unidades_por_embalagem: Number(l.novoUnidades) }
+              ? {
+                  nome: l.novoNome.trim(),
+                  codigo: l.codigo?.trim() || null,
+                  categoria_id: l.novoCategoria,
+                  tipo_embalagem: l.novoEmbalagem,
+                  unidades_por_embalagem: Number(l.novoUnidades),
+                }
               : undefined,
           quantidade: lerDecimal(l.quantidade),
           valorUnitario: lerDecimal(l.valor),
@@ -257,7 +281,14 @@ export function ColarListaDialog({
       ) : (
         <div className="flex flex-col gap-3 text-sm">
           <p className="text-texto-suave">
-            Confira cada linha. Produtos não reconhecidos ficam em branco: escolha o produto certo ou deixe "ignorar".
+            {categoriasNovos
+              ? "Confira cada linha. Produtos que ainda não existem já vêm marcados para cadastro: confira nome, categoria e unidades por embalagem, ou escolha o produto certo na lista."
+              : 'Confira cada linha. Produtos não reconhecidos ficam em branco: escolha o produto certo ou deixe "ignorar".'}
+          </p>
+          <p className="font-medium text-verde">
+            {existentes.length} {existentes.length === 1 ? "reconhecido" : "reconhecidos"}
+            {categoriasNovos && ` · ${novos.length} ${novos.length === 1 ? "novo para cadastrar" : "novos para cadastrar"}`}
+            {` · ${linhas.length - usadas.length} ${linhas.length - usadas.length === 1 ? "ignorado" : "ignorados"}`}
           </p>
           <ul className="flex flex-col gap-2">
             {linhas.map((l, i) => {
@@ -271,6 +302,7 @@ export function ColarListaDialog({
                     {l.confianca === "codigo" && <Badge tone="verde">pelo código</Badge>}
                     {l.confianca === "nome" && l.candidatoId && <Badge tone="amarelo">pelo nome — confira</Badge>}
                     {!l.candidatoId && <Badge tone="perigo">não reconhecido</Badge>}
+                    {l.candidatoId === NOVO && <Badge tone="amarelo">novo — será cadastrado</Badge>}
                   </p>
                   <Select
                     aria-label={`Produto da linha ${l.linha}`}
@@ -317,7 +349,14 @@ export function ColarListaDialog({
                         </label>
                         <label className="flex flex-col gap-1 text-xs font-medium text-texto-suave">
                           Unid./emb.
-                          <Input inputMode="numeric" value={l.novoUnidades} onChange={(e) => mudar(i, { novoUnidades: e.target.value })} />
+                          <Input
+                            inputMode="numeric"
+                            value={l.novoUnidades}
+                            aria-invalid={!l.novoUnidades.trim()}
+                            className={!l.novoUnidades.trim() ? "border-perigo" : undefined}
+                            onChange={(e) => mudar(i, { novoUnidades: e.target.value })}
+                          />
+                          {!l.novoUnidades.trim() && <span className="text-perigo">Informe</span>}
                         </label>
                       </div>
                     </div>

@@ -7,8 +7,9 @@ import { lerDecimal, normalizarBusca } from "@/modules/deu-sede/domain/formatos"
 
 export const INSTRUCAO_IA = `Transforme o documento abaixo (nota fiscal, pedido ou orçamento) em uma lista com UMA LINHA POR PRODUTO.
 Use as colunas abaixo, separadas por ponto e vírgula, e a primeira linha com os nomes das colunas:
-Código;Produto;Quantidade;Unidade;Valor unitário;Valor total
+Código;Produto;Quantidade;Unidade;Itens por embalagem;Valor unitário;Valor total
 - Unidade: como aparece no documento (CX, FD, PCT, UN...).
+- Itens por embalagem: quantas unidades vêm em cada CX/FD/PCT (ex.: "CX C/12" = 12). Para UN, use 1. Se não souber, deixe vazio.
 - Use vírgula como separador decimal (ex.: 39,90) e não use "R$".
 - Não escreva nada além da lista.`;
 
@@ -22,11 +23,15 @@ export interface LinhaColada {
   unidade: string | null;
   valorUnitario: number | null;
   valorTotal: number | null;
+  /** unidades em cada embalagem (coluna própria ou "C/12" na descrição) */
+  unidadesPorEmbalagem?: number | null;
 }
 
-type Coluna = "codigo" | "descricao" | "quantidade" | "unidade" | "valorUnitario" | "valorTotal";
+type Coluna = "codigo" | "descricao" | "quantidade" | "unidade" | "unidadesEmbalagem" | "valorUnitario" | "valorTotal";
 
 const CABECALHOS: [Coluna, RegExp][] = [
+  // antes das outras: "Itens por embalagem", "Unid./emb.", "Unidades por caixa"
+  ["unidadesEmbalagem", /^(itens|unidades|unid|und|un)\.?\s*(por|p\/|\/|na|da|x)\s*(emb|cx|caixa|fardo|pacote)/],
   ["valorTotal", /(valor|vl|vlr|v\.?)\s*\.?\s*tot|^total$|subtotal/],
   ["valorUnitario", /unit|pre[cç]o|(valor|vl|vlr|v\.?)\s*\.?\s*un|^valor$/],
   ["quantidade", /^qt|quant/],
@@ -108,6 +113,59 @@ function numeroDe(c: string | undefined): number | null {
   return n === null || Number.isNaN(n) ? null : n;
 }
 
+const VOLUME = String.raw`(?!\s*(?:ml|l|lt|lts|litros?|g|kg)\b)`;
+const PADROES_UNIDADES: RegExp[] = [
+  new RegExp(String.raw`\bc\s*\/\s*(\d{1,3})\b` + VOLUME), // C/12, CX C/ 12
+  new RegExp(String.raw`\b(?:cx|caixa|fd|fardo|pct|pacote|pack|pk|eng|engradado)\s*(?:com\s+|\/\s*|x\s*)?(\d{1,3})\b` + VOLUME), // CX12, FD 6
+  /\b(\d{1,3})\s*x\s*\d+(?:[.,]\d+)?\s*(?:ml|l|lt|g|kg)\b/, // 12X350ML
+  /\b(\d{1,3})\s*(?:un|und|unid|unidades)\b/, // 12UN
+];
+
+/** Unidades por embalagem escritas na descrição da nota ("C/12", "FD6", "12X350ML"). */
+export function unidadesDaDescricao(descricao: string): number | null {
+  const t = normalizarBusca(descricao);
+  if (/\bsix\s*-?\s*pack\b/.test(t)) return 6;
+  for (const re of PADROES_UNIDADES) {
+    const m = t.match(re);
+    const n = m ? Number(m[1]) : NaN;
+    if (Number.isInteger(n) && n >= 2 && n <= 200) return n;
+  }
+  return null;
+}
+
+function inteiroPositivo(n: number | null): number | null {
+  return n !== null && Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// Primeiro o tipo escrito na nota (CERV, REFRIG, AGUA…), depois a marca:
+// "REFRIG GUARANA ANTARCTICA" é refrigerante, mesmo Antarctica sendo cerveja.
+const TIPO_CATEGORIA: [string, RegExp][] = [
+  ["energeticos", /\b(energ\w*)\b/],
+  ["sucos", /\b(suco|sucos|nectar)\b/],
+  ["cervejas", /\b(cerv\w*|chopp?|chope|pilsen|lager|ipa|puro malte)\b/],
+  ["refrigerantes", /\b(refri\w*|soda|tonica|guarana)\b/],
+  ["aguas", /\b(agua|aguas|mineral)\b/],
+  ["descartaveis", /\b(copo|copos|descart\w*|guardanapo|canudo|prato|pratos|sacola|sacolas|talher\w*)\b/],
+];
+const MARCA_CATEGORIA: [string, RegExp][] = [
+  ["energeticos", /\b(red ?bull|monster|tnt|burn|fusion|baly|flying horse|vibe)\b/],
+  ["sucos", /\b(del ?valle|maguary|ades|tial|natural one)\b/],
+  ["refrigerantes", /\b(coca|cola|fanta|sprite|pepsi|kuat|sukita|h2oh|schweppes)\b/],
+  ["cervejas", /\b(brahma|skol|antarctica|budweiser|heineken|stella|corona|original|amstel|itaipava|spaten|eisenbahn|devassa|bohemia|colorado|becks?|petra)\b/],
+  ["aguas", /\b(bonafont|indaia|minalba|lindoya|crystal)\b/],
+];
+
+/** Categoria provável pelo nome do produto da nota (null se não der para saber). */
+export function sugerirCategoria<T extends { id: string; nome: string }>(descricao: string, categorias: T[]): string | null {
+  const t = normalizarBusca(descricao);
+  for (const [nome, re] of [...TIPO_CATEGORIA, ...MARCA_CATEGORIA]) {
+    if (!re.test(t)) continue;
+    const c = categorias.find((x) => normalizarBusca(x.nome) === nome);
+    if (c) return c.id;
+  }
+  return null;
+}
+
 /** Linha de texto livre: "20 cx Brahma Chopp 269ml R$ 39,90" */
 function interpretarTextoLivre(texto: string): Omit<LinhaColada, "linha" | "texto"> | null {
   let t = texto.replace(/^(?:[-*•]|\d+[.)])\s+/, "").trim(); // marcador de lista "-", "•", "1."
@@ -144,6 +202,7 @@ function interpretarTextoLivre(texto: string): Omit<LinhaColada, "linha" | "text
     unidade,
     valorUnitario: valores[0] ?? null,
     valorTotal: valores[1] ?? null,
+    unidadesPorEmbalagem: unidadesDaDescricao(descricao),
   };
 }
 
@@ -190,6 +249,8 @@ export function interpretarLista(texto: string): { linhas: LinhaColada[]; ignora
         // sem valor unitário mas com total e quantidade: calcula
         valorUnitario: valorUnitario ?? (valorTotal !== null && quantidade ? Math.round((valorTotal / quantidade) * 100) / 100 : null),
         valorTotal,
+        unidadesPorEmbalagem:
+          inteiroPositivo(numeroDe(m.unidadesEmbalagem !== undefined ? celulas[m.unidadesEmbalagem] : undefined)) ?? unidadesDaDescricao(descricao),
       });
     } else {
       const r = interpretarTextoLivre(l);
