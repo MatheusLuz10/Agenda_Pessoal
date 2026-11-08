@@ -107,8 +107,8 @@ function Formulario({ produto, categorias }: { produto: Produto | null; categori
             <Campo rotulo="Marca">{(id) => <Input id={id} value={marca} onChange={(e) => setMarca(e.target.value)} />}</Campo>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Campo rotulo="Código ou identificação" ajuda="Opcional. Ex.: código de barras ou código interno.">
-              {(id) => <Input id={id} value={codigo} onChange={(e) => setCodigo(e.target.value)} />}
+            <Campo rotulo="Código do produto" ajuda="Deixe em branco e o sistema dá o próximo número (0001, 0002…). Pode usar o código de barras.">
+              {(id) => <Input id={id} value={codigo} placeholder="Automático" onChange={(e) => setCodigo(e.target.value)} />}
             </Campo>
             <div className="grid grid-cols-[1fr_6rem] gap-2">
               <Campo rotulo="Volume ou peso por unidade">

@@ -48,11 +48,18 @@ export function ProdutosPage() {
     () =>
       (dados?.produtos ?? []).map((p) => {
         const precos = (vinculosPorProduto.get(p.id) ?? []).filter((v) => v.ativo && v.preco_unitario !== null);
+        const e = estoquePorProduto.get(p.id);
         return {
           p,
           categoria: categorias.get(p.categoria_id)?.nome ?? "—",
-          estoque: estoquePorProduto.get(p.id),
-          menorCusto: precos.length ? Math.min(...precos.map((v) => Number(v.preco_unitario))) : null,
+          estoque: e,
+          // menor preço atual entre os fornecedores; sem fornecedor com preço,
+          // o custo da última entrada (nota colada ou recebimento)
+          menorCusto: precos.length
+            ? Math.min(...precos.map((v) => Number(v.preco_unitario)))
+            : e?.ultimo_custo_unitario != null
+              ? Number(e.ultimo_custo_unitario)
+              : null,
           fornecedores: (vinculosPorProduto.get(p.id) ?? []).filter((v) => v.ativo).length,
         };
       }),
@@ -272,7 +279,7 @@ export function ProdutosPage() {
                       <span className={l.estoque?.abaixo_minimo ? "font-semibold text-marrom" : undefined}>{numero(l.p.estoque_minimo)}</span>
                     ),
                 },
-                { chave: "custo", rotulo: "Menor custo/un", num: true, ordenar: (l) => l.menorCusto, celula: (l) => moedaUnitaria(l.menorCusto) },
+                { chave: "custo", rotulo: "Custo/un", num: true, ordenar: (l) => l.menorCusto, celula: (l) => moedaUnitaria(l.menorCusto) },
                 { chave: "venda", rotulo: "Venda/un", num: true, ordenar: (l) => l.p.preco_venda, celula: (l) => moedaUnitaria(l.p.preco_venda) },
                 { chave: "fornecedores", rotulo: "Fornec.", num: true, ordenar: (l) => l.fornecedores, celula: (l) => numero(l.fornecedores) },
                 {

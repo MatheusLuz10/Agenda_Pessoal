@@ -31,3 +31,6 @@ dist-ssr
 
 # Backups de variaveis de ambiente (contem chaves do Supabase)
 .env*.bak*
+
+# Copias de seguranca do banco (dados pessoais): nunca versionar
+backups/

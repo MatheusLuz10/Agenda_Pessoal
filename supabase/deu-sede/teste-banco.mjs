@@ -560,5 +560,23 @@ await as(LEITOR);
 await rpcErr("perfil 'consulta' não exclui produto", "excluir_produtos", { ids: [refri.id] }, /não tem permissão/);
 await asSuper();
 
+console.log("\n25) Código do produto controlado pelo sistema");
+const semCodigo = await one("select count(*)::int n from deusede.produtos where codigo is null or trim(codigo) = ''");
+semCodigo.n === 0 ? pass("todos os produtos existentes ganharam código") : bad("produtos sem código", semCodigo.n);
+await as(ADMIN);
+const auto1 = await rpcOk("produto sem código", "salvar_produto", { nome: "Produto Código Auto 1", categoria_id: catBebida });
+const auto2 = await rpcOk("outro produto sem código", "salvar_produto", { nome: "Produto Código Auto 2", categoria_id: catBebida });
+/^\d{4,}$/.test(auto1?.codigo ?? "") && /^\d{4,}$/.test(auto2?.codigo ?? "") && Number(auto2.codigo) > Number(auto1.codigo)
+  ? pass(`código automático em sequência (${auto1.codigo}, ${auto2.codigo})`) : bad("códigos automáticos", `${auto1?.codigo} ${auto2?.codigo}`);
+const proximoLivre = String(Number(auto2.codigo) + 1).padStart(4, "0");
+const manual = await rpcOk("código informado à mão", "salvar_produto", { nome: "Produto Código Manual", categoria_id: catBebida, codigo: proximoLivre });
+manual?.codigo === proximoLivre ? pass("código informado é mantido") : bad("código manual", manual?.codigo);
+const auto3 = await rpcOk("produto sem código depois de um manual", "salvar_produto", { nome: "Produto Código Auto 3", categoria_id: catBebida });
+auto3?.codigo && auto3.codigo !== proximoLivre ? pass(`o sistema pula o número já usado à mão (${auto3.codigo})`) : bad("pulou?", auto3?.codigo);
+const limpo = await rpcOk("apagar o código de um produto", "salvar_produto", { id: auto1.id, nome: auto1.nome, categoria_id: catBebida, codigo: "" });
+limpo?.codigo && limpo.codigo !== auto1.codigo ? pass(`código apagado vira um novo (${limpo.codigo})`) : bad("código apagado", limpo?.codigo);
+await rpcErr("código repetido é barrado", "salvar_produto", { nome: "Produto Código Repetido", categoria_id: catBebida, codigo: auto2.codigo }, /código já é usado/);
+await asSuper();
+
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);
