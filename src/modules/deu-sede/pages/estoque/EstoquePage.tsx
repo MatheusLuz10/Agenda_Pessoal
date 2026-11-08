@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PackagePlus, Warehouse } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
@@ -7,13 +7,14 @@ import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
 import { CampoBusca, Segmentado } from "@/modules/deu-sede/components/ui/filtros";
 import { Select } from "@/modules/deu-sede/components/ui/input";
-import { Secao, Tabela } from "@/modules/deu-sede/components/ui/secao";
+import { Planilha } from "@/modules/deu-sede/components/ui/planilha";
+import { Tabela } from "@/modules/deu-sede/components/ui/secao";
 import { MovimentoEstoqueDialog } from "@/modules/deu-sede/components/MovimentoEstoqueDialog";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useCadastros } from "@/modules/deu-sede/data/hooks";
 import type { EntradaNotaResumo, ItemEstoque, MovimentoEstoque } from "@/modules/deu-sede/data/tipos";
-import { contemBusca, dataBR, dataHoraBR, descreverQuantidade, moeda, moedaUnitaria, numero } from "@/modules/deu-sede/domain/formatos";
+import { contemBusca, dataBR, dataHoraBR, descreverEmbalagem, descreverQuantidade, moeda, moedaUnitaria, numero } from "@/modules/deu-sede/domain/formatos";
 import { useSenha } from "@/modules/deu-sede/senha";
 
 type Aba = "saldo" | "movimentos" | "entradas";
@@ -52,6 +53,7 @@ export function EstoquePage() {
 }
 
 function Saldo() {
+  const navigate = useNavigate();
   const { dados, erro } = useConsulta<ItemEstoque[]>("estoque");
   const { dados: cad } = useCadastros();
   const { pedirSenha } = useSenha();
@@ -111,36 +113,99 @@ function Saldo() {
           {filtro === "com_saldo" ? "Nenhum produto com estoque. Registre um recebimento ou uma entrada por nota." : "Mude a busca ou o filtro."}
         </Vazio>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {lista.map((e) => (
-            <li key={e.produto_id} className="flex flex-col gap-2 rounded-xl border border-linha bg-superficie p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <Link to={rota("produtos", e.produto_id)} className="font-semibold text-verde hover:underline">
+        <Planilha<ItemEstoque>
+          rotulo="Saldo de estoque por produto"
+          linhas={lista}
+          chave={(e) => e.produto_id}
+          aoAbrir={(e) => navigate(rota("produtos", e.produto_id))}
+          ordemInicial={{ chave: "produto", sentido: 1 }}
+          destaqueLinha={(e) => (e.abaixo_minimo ? "[&>td:first-child]:shadow-[inset_4px_0_0_var(--color-amarelo)]" : undefined)}
+          colunas={[
+            {
+              chave: "produto",
+              rotulo: "Produto",
+              fixa: true,
+              larguraMax: "max-w-[11rem] sm:max-w-[20rem]",
+              titulo: (e) => e.produto_nome,
+              ordenar: (e) => e.produto_nome,
+              celula: (e) => (
+                <Link to={rota("produtos", e.produto_id)} onClick={(ev) => ev.stopPropagation()} className="font-semibold text-verde hover:underline">
                   {e.produto_nome}
                 </Link>
-                <p className="text-sm text-texto-suave">
-                  {e.categoria_nome}
-                  {e.ultimo_custo_unitario !== null && ` · último custo ${moedaUnitaria(e.ultimo_custo_unitario)}/un`}
-                  {e.ultima_entrada && ` · última entrada ${dataBR(e.ultima_entrada)}`}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <span className="text-right">
-                  <span className={Number(e.saldo_unidades) < 0 ? "block font-bold text-perigo" : "block font-bold text-verde"}>
-                    {descreverQuantidade(e.saldo_unidades, e.unidades_por_embalagem, e.tipo_embalagem)}
-                  </span>
-                  <span className="block text-xs text-texto-suave">
-                    {numero(e.saldo_unidades)} un{e.estoque_minimo !== null && ` · mínimo ${numero(e.estoque_minimo)} emb.`}
-                  </span>
-                </span>
-                {e.abaixo_minimo && <Badge tone="amarelo">Abaixo do mínimo</Badge>}
-                <Button size="sm" variant="contorno" onClick={async () => (await pedirSenha("estoque_ajuste")) && setMovendo(e)}>
+              ),
+            },
+            { chave: "codigo", rotulo: "Código", ordenar: (e) => e.codigo, celula: (e) => e.codigo || <span className="text-texto-suave">—</span> },
+            { chave: "categoria", rotulo: "Categoria", ordenar: (e) => e.categoria_nome, celula: (e) => e.categoria_nome },
+            {
+              chave: "embalagem",
+              rotulo: "Embalagem",
+              ordenar: (e) => e.unidades_por_embalagem,
+              celula: (e) => descreverEmbalagem(e.tipo_embalagem, e.unidades_por_embalagem),
+            },
+            {
+              chave: "emb",
+              rotulo: "Saldo emb.",
+              num: true,
+              ordenar: (e) => Number(e.saldo_embalagens),
+              classe: (e) => (Number(e.saldo_unidades) < 0 ? "font-bold text-perigo" : "font-bold text-verde"),
+              celula: (e) => numero(e.saldo_embalagens, 2),
+            },
+            {
+              chave: "un",
+              rotulo: "Saldo un",
+              num: true,
+              ordenar: (e) => Number(e.saldo_unidades),
+              classe: (e) => (Number(e.saldo_unidades) < 0 ? "text-perigo" : undefined),
+              celula: (e) => numero(e.saldo_unidades),
+            },
+            {
+              chave: "minimo",
+              rotulo: "Mínimo emb.",
+              num: true,
+              ordenar: (e) => e.estoque_minimo,
+              celula: (e) => (e.estoque_minimo === null ? <span className="text-texto-suave">—</span> : numero(e.estoque_minimo)),
+            },
+            { chave: "custo", rotulo: "Últ. custo/un", num: true, ordenar: (e) => e.ultimo_custo_unitario, celula: (e) => moedaUnitaria(e.ultimo_custo_unitario) },
+            { chave: "valor", rotulo: "Valor em estoque", num: true, ordenar: (e) => Number(e.valor_estimado), celula: (e) => moeda(e.valor_estimado) },
+            { chave: "entrada", rotulo: "Últ. entrada", ordenar: (e) => e.ultima_entrada, celula: (e) => dataBR(e.ultima_entrada) },
+            {
+              chave: "situacao",
+              rotulo: "Situação",
+              ordenar: (e) => (Number(e.saldo_unidades) < 0 ? 0 : e.abaixo_minimo ? 1 : Number(e.saldo_unidades) === 0 ? 2 : 3),
+              celula: (e) =>
+                Number(e.saldo_unidades) < 0 ? (
+                  <Badge tone="perigo">Negativo</Badge>
+                ) : e.abaixo_minimo ? (
+                  <Badge tone="amarelo">Abaixo do mínimo</Badge>
+                ) : Number(e.saldo_unidades) === 0 ? (
+                  <span className="text-texto-suave">Sem estoque</span>
+                ) : (
+                  <span className="text-sucesso">OK</span>
+                ),
+            },
+            {
+              chave: "acao",
+              rotulo: "",
+              celula: (e) => (
+                <Button
+                  size="sm"
+                  variant="contorno"
+                  onClick={async (ev) => {
+                    ev.stopPropagation();
+                    if (await pedirSenha("estoque_ajuste")) setMovendo(e);
+                  }}
+                >
                   Saída / ajuste
                 </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+              ),
+            },
+          ]}
+          totais={{
+            produto: `${lista.length} ${lista.length === 1 ? "produto" : "produtos"}`,
+            un: numero(lista.reduce((s, e) => s + Number(e.saldo_unidades), 0)),
+            valor: moeda(lista.reduce((s, e) => s + Number(e.valor_estimado), 0)),
+          }}
+        />
       )}
       {movendo && <MovimentoEstoqueDialog item={movendo} aoFechar={() => setMovendo(null)} />}
     </div>
@@ -205,14 +270,74 @@ export function ListaMovimentos({ movimentos, mostrarProduto = true }: { movimen
   );
 }
 
+function documentoMovimento(m: MovimentoEstoque): string {
+  return m.pedido_numero ?? m.nota_entrada_numero ?? m.venda_numero ?? "";
+}
+
 function Movimentos() {
+  const navigate = useNavigate();
+  const [busca, setBusca] = useState("");
   const { dados, erro } = useConsulta<MovimentoEstoque[]>("movimentos_estoque", { limite: 200 });
   if (erro) return <Aviso tom="erro">{erro}</Aviso>;
   if (!dados) return <Carregando />;
+  const lista = dados.filter((m) => contemBusca(busca, m.produto_nome, documentoMovimento(m), m.fornecedor_nome, m.motivo, ORIGEM[m.origem]));
   return (
-    <Secao titulo="Últimas movimentações" descricao="Cada entrada e saída fica registrada para sempre; correções viram um novo ajuste." semPadding>
-      <ListaMovimentos movimentos={dados} />
-    </Secao>
+    <div className="grid gap-3">
+      <p className="text-sm text-texto-suave">Cada entrada e saída fica registrada para sempre; correções viram um novo ajuste. Últimas 200.</p>
+      <CampoBusca valor={busca} aoMudar={setBusca} placeholder="Pesquisar produto, documento, fornecedor ou motivo" />
+      {lista.length === 0 ? (
+        <Vazio icone={Warehouse} titulo="Nenhuma movimentação">
+          {dados.length ? "Mude a busca." : "As entradas e saídas aparecem aqui."}
+        </Vazio>
+      ) : (
+        <Planilha<MovimentoEstoque>
+          rotulo="Movimentações de estoque"
+          linhas={lista}
+          chave={(m) => String(m.id)}
+          aoAbrir={(m) => navigate(m.pedido_id ? rota("pedidos", m.pedido_id) : rota("produtos", m.produto_id))}
+          ordemInicial={{ chave: "quando", sentido: -1 }}
+          colunas={[
+            { chave: "quando", rotulo: "Quando", ordenar: (m) => m.created_at, celula: (m) => dataHoraBR(m.created_at) },
+            {
+              chave: "produto",
+              rotulo: "Produto",
+              fixa: true,
+              larguraMax: "max-w-[11rem] sm:max-w-[18rem]",
+              titulo: (m) => m.produto_nome,
+              ordenar: (m) => m.produto_nome,
+              celula: (m) => <span className="font-medium text-verde">{m.produto_nome}</span>,
+            },
+            { chave: "origem", rotulo: "Origem", ordenar: (m) => ORIGEM[m.origem], celula: (m) => ORIGEM[m.origem] },
+            { chave: "documento", rotulo: "Documento", ordenar: documentoMovimento, celula: (m) => documentoMovimento(m) || <span className="text-texto-suave">—</span> },
+            {
+              chave: "detalhe",
+              rotulo: "Fornecedor / motivo",
+              larguraMax: "max-w-[16rem]",
+              titulo: (m) => [m.fornecedor_nome, m.nota_fiscal && `NF ${m.nota_fiscal}`, m.origem !== "venda" ? m.motivo : null].filter(Boolean).join(" · "),
+              celula: (m) =>
+                [m.fornecedor_nome, m.nota_fiscal && `NF ${m.nota_fiscal}`, m.origem !== "venda" ? m.motivo : null].filter(Boolean).join(" · ") || (
+                  <span className="text-texto-suave">—</span>
+                ),
+            },
+            {
+              chave: "qtd",
+              rotulo: "Qtd (un)",
+              num: true,
+              ordenar: (m) => Number(m.quantidade_unidades),
+              classe: (m) => (Number(m.quantidade_unidades) < 0 ? "font-semibold text-perigo" : "font-semibold text-sucesso"),
+              celula: (m) => `${Number(m.quantidade_unidades) > 0 ? "+" : ""}${numero(m.quantidade_unidades)}`,
+            },
+            {
+              chave: "saldo",
+              rotulo: "Saldo depois",
+              num: true,
+              ordenar: (m) => Number(m.saldo_apos),
+              celula: (m) => descreverQuantidade(m.saldo_apos, m.unidades_por_embalagem, m.tipo_embalagem),
+            },
+          ]}
+        />
+      )}
+    </div>
   );
 }
 
@@ -220,29 +345,38 @@ function Entradas() {
   const { dados, erro } = useConsulta<EntradaNotaResumo[]>("listar_entradas_nota");
   if (erro) return <Aviso tom="erro">{erro}</Aviso>;
   if (!dados) return <Carregando />;
+  if (dados.length === 0)
+    return (
+      <Vazio icone={PackagePlus} titulo="Nenhuma entrada por nota ainda">
+        As notas sem pedido (balcão, entrega avulsa) aparecem aqui depois de registradas.
+      </Vazio>
+    );
   return (
-    <Secao titulo="Entradas por nota (sem pedido)" semPadding>
-      {dados.length === 0 ? (
-        <p className="px-5 pb-4 text-sm text-texto-suave">Nenhuma entrada por nota ainda.</p>
-      ) : (
-        <ul className="divide-y divide-linha">
-          {dados.map((n) => (
-            <li key={n.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
-              <span>
-                <span className="block font-medium text-verde">
-                  {n.numero_formatado} · {n.fornecedor_nome ?? "Sem fornecedor"}
-                </span>
-                <span className="text-sm text-texto-suave">
-                  {dataBR(n.data_entrada)}
-                  {n.numero_nota && ` · NF ${n.numero_nota}`} · {n.qtd_itens} {n.qtd_itens === 1 ? "produto" : "produtos"}
-                </span>
-              </span>
-              <span className="font-semibold text-verde tabular-nums">{moeda(n.total)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Secao>
+    <Planilha<EntradaNotaResumo>
+      rotulo="Entradas por nota (sem pedido)"
+      linhas={dados}
+      chave={(n) => n.id}
+      ordemInicial={{ chave: "data", sentido: -1 }}
+      colunas={[
+        { chave: "numero", rotulo: "Nº", fixa: true, ordenar: (n) => n.numero_formatado, celula: (n) => <span className="font-semibold text-verde">{n.numero_formatado}</span> },
+        { chave: "data", rotulo: "Data", ordenar: (n) => n.data_entrada, celula: (n) => dataBR(n.data_entrada) },
+        {
+          chave: "fornecedor",
+          rotulo: "Fornecedor",
+          larguraMax: "max-w-[16rem]",
+          titulo: (n) => n.fornecedor_nome ?? "Sem fornecedor",
+          ordenar: (n) => n.fornecedor_nome,
+          celula: (n) => n.fornecedor_nome ?? <span className="text-texto-suave">Sem fornecedor</span>,
+        },
+        { chave: "nf", rotulo: "NF", ordenar: (n) => n.numero_nota, celula: (n) => n.numero_nota || <span className="text-texto-suave">—</span> },
+        { chave: "itens", rotulo: "Produtos", num: true, ordenar: (n) => n.qtd_itens, celula: (n) => numero(n.qtd_itens) },
+        { chave: "total", rotulo: "Total", num: true, ordenar: (n) => Number(n.total), celula: (n) => moeda(n.total) },
+      ]}
+      totais={{
+        numero: `${dados.length} ${dados.length === 1 ? "nota" : "notas"}`,
+        total: moeda(dados.reduce((s, n) => s + Number(n.total), 0)),
+      }}
+    />
   );
 }
 

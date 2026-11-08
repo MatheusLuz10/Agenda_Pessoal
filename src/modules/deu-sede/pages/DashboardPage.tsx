@@ -107,7 +107,7 @@ function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: string; de
       <p className={destaque ? "text-xs font-medium tracking-wide text-ouro uppercase" : "text-xs font-medium tracking-wide text-texto-suave uppercase"}>
         {rotulo}
       </p>
-      <p className={destaque ? "mt-1 text-2xl font-bold text-offwhite tabular-nums" : "mt-1 text-xl font-bold text-verde tabular-nums"}>{valor}</p>
+      <p className={destaque ? "mt-1 text-2xl font-bold text-creme tabular-nums" : "mt-1 text-xl font-bold text-verde tabular-nums"}>{valor}</p>
     </div>
   );
 }

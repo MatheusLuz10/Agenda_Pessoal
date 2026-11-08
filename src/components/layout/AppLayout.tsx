@@ -33,7 +33,7 @@ export function AppLayout() {
           <button
             type="button"
             onClick={() => signOut()}
-            className="flex size-10 shrink-0 items-center justify-center rounded-xl text-offwhite/90 hover:bg-verde-600"
+            className="flex size-10 shrink-0 items-center justify-center rounded-xl text-creme/90 hover:bg-verde-600"
             aria-label="Sair"
           >
             <LogOut className="size-5" />
@@ -43,15 +43,15 @@ export function AppLayout() {
       rodape={
         isSupabaseConfigured ? (
           <>
-            <p className="truncate text-offwhite/60" title={session?.user.email ?? ""}>
+            <p className="truncate text-creme/60" title={session?.user.email ?? ""}>
               {session?.user.email}
             </p>
-            <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-offwhite/85 hover:text-offwhite">
+            <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
               <LogOut className="size-4" /> Sair
             </button>
           </>
         ) : (
-          <p className="flex items-center gap-2 text-offwhite/60">
+          <p className="flex items-center gap-2 text-creme/60">
             <FlaskConical className="size-4" /> Modo de teste local
           </p>
         )

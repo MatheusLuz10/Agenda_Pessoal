@@ -58,7 +58,10 @@
 
 .dark {
   color-scheme: dark;
-  --offwhite: #fff7cc;
+  /* bg-offwhite (e /50, /60, hover...) vira um tom escuro: fundos creme
+     translúcidos ficavam claros com texto claro em cima. Texto sobre o
+     verde da marca usa text-creme, que não muda com o tema. */
+  --offwhite: #202a22;
   --fundo: #101712;
   --superficie: #19221b;
   --linha: #344238;
@@ -135,6 +138,8 @@
   --color-amarelo: #fed502;
   --color-ouro: #ffe45c;
   --color-offwhite: var(--offwhite);
+  /* texto claro sobre o verde da marca (menu, botões verdes): igual nos dois temas */
+  --color-creme: #fff7cc;
   --color-marrom: #684318;
 
   --color-fundo: var(--fundo);
@@ -175,12 +180,21 @@
   color: #b6d6bd;
 }
 
-.dark .text-marrom {
-  color: #e8c98b;
+/* Sobre amarelo o texto continua no verde-escuro da marca (12,6:1). O
+   verde-claro acima é para fundo escuro: sobre amarelo dava 1,1:1 (item
+   ativo do menu, botões principais, contadores). */
+.dark .bg-amarelo,
+.dark .bg-amarelo.text-verde,
+.dark .bg-amarelo .text-verde,
+.dark .bg-amarelo\/60,
+.dark .bg-amarelo\/60.text-verde,
+.dark .active\:bg-amarelo:active,
+.dark .bg-primary.text-verde {
+  color: #001f07;
 }
 
-.dark .bg-offwhite {
-  background-color: #202a22;
+.dark .text-marrom {
+  color: #e8c98b;
 }
 
 .dark .bg-white {

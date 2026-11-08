@@ -6,7 +6,7 @@ type Tone = "neutro" | "amarelo" | "verde" | "marrom" | "perigo";
 const tones: Record<Tone, string> = {
   neutro: "bg-offwhite text-verde",
   amarelo: "bg-amarelo/20 text-marrom",
-  verde: "bg-verde text-offwhite",
+  verde: "bg-verde text-creme",
   marrom: "bg-marrom/15 text-marrom",
   perigo: "bg-perigo/10 text-perigo",
 };

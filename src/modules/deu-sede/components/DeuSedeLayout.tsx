@@ -60,21 +60,21 @@ export function DeuSedeLayout() {
         acaoCabecalho={
           <Link
             to={AGENDA_HOME}
-            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-offwhite/90 hover:bg-verde-600"
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-creme/90 hover:bg-verde-600"
           >
             <ArrowLeft className="size-4" /> Calendário
           </Link>
         }
         rodape={
           <>
-            <Link to={AGENDA_HOME} className="flex h-10 items-center gap-2 font-medium text-offwhite/85 hover:text-offwhite">
+            <Link to={AGENDA_HOME} className="flex h-10 items-center gap-2 font-medium text-creme/85 hover:text-creme">
               <CalendarDays className="size-4" /> Voltar para o Calendário
             </Link>
-            <p className="mt-1 truncate text-offwhite/60" title={userLabel}>
+            <p className="mt-1 truncate text-creme/60" title={userLabel}>
               {userLabel}
             </p>
             {mode === "supabase" && (
-              <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-offwhite/85 hover:text-offwhite">
+              <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
                 <LogOut className="size-4" /> Sair
               </button>
             )}
@@ -84,7 +84,7 @@ export function DeuSedeLayout() {
           <>
             <Link
               to={AGENDA_HOME}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-verde text-sm font-semibold text-offwhite"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-verde text-sm font-semibold text-creme"
             >
               <CalendarDays className="size-4" /> Voltar ao Calendário
             </Link>

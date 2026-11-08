@@ -2,7 +2,7 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { cn } from "@/lib/utils";
 
 const base =
-  "w-full rounded-xl border border-linha bg-white px-3 text-base text-verde placeholder:text-texto-suave/60 focus:border-amarelo focus:outline-none disabled:bg-offwhite/60 disabled:text-texto-suave";
+  "w-full rounded-xl border border-linha bg-white px-3 text-base text-verde placeholder:text-texto-suave/90 focus:border-amarelo focus:outline-none disabled:bg-offwhite/60 disabled:text-texto-suave";
 
 const TIPOS_SEM_LIMITE_TEXTO = new Set(["number", "date", "time", "datetime-local", "month", "week", "color", "range", "file", "checkbox", "radio", "hidden"]);
 

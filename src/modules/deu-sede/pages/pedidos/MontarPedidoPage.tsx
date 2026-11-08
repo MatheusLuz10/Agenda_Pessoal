@@ -387,7 +387,7 @@ export function MontarPedidoPage() {
                   </p>
                 </div>
               ))}
-              <p className="flex justify-between rounded-xl bg-verde px-4 py-3 text-lg font-bold text-offwhite">
+              <p className="flex justify-between rounded-xl bg-verde px-4 py-3 text-lg font-bold text-creme">
                 <span>Total geral da compra</span>
                 <span className="tabular-nums">{moeda(totalGeral)}</span>
               </p>

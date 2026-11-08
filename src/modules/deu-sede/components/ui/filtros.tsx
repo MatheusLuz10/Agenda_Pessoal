@@ -22,7 +22,7 @@ export function CampoBusca({
         onChange={(e) => aoMudar(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="h-11 w-full rounded-xl border border-linha bg-white pr-10 pl-9 text-base text-verde placeholder:text-texto-suave/70 focus:border-amarelo focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+        className="h-11 w-full rounded-xl border border-linha bg-white pr-10 pl-9 text-base text-verde placeholder:text-texto-suave/90 focus:border-amarelo focus:outline-none [&::-webkit-search-cancel-button]:hidden"
       />
       {valor && (
         <button

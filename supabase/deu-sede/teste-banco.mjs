@@ -536,5 +536,29 @@ cotHoje?.data_cotacao === hojeBr
   : bad("data da cotação", `${cotHoje?.data_cotacao} ≠ ${hojeBr} (hoje em Brasília)`);
 await asSuper();
 
+console.log("\n24) Excluir produtos (um ou vários)");
+await as(ADMIN);
+const semUso1 = await rpcOk("cadastra produto nunca usado (1)", "salvar_produto", { nome: "Produto Sem Uso 1", categoria_id: catBebida });
+const semUso2 = await rpcOk("cadastra produto nunca usado (2)", "salvar_produto", { nome: "Produto Sem Uso 2", categoria_id: catRefri });
+await rpcOk("vínculo com fornecedor SEM preço no produto sem uso", "salvar_fornecedor_produto", {
+  fornecedor_id: fa.id, produto_id: semUso2.id, tipo_embalagem: "fardo", unidades_por_embalagem: 6 });
+const comPreco = await rpcOk("cadastra produto só com preço registrado", "salvar_produto", { nome: "Produto Com Preço", categoria_id: catRefri });
+await rpcOk("preço registrado vira histórico de preço", "salvar_fornecedor_produto", {
+  fornecedor_id: fa.id, produto_id: comPreco.id, tipo_embalagem: "fardo", unidades_por_embalagem: 6, preco_atual: 30 });
+await rpcErr("lista vazia é barrada", "excluir_produtos", { ids: [] }, /Escolha ao menos um produto/);
+const exc = await rpcOk("exclui 4 de uma vez", "excluir_produtos", { ids: [semUso1.id, semUso2.id, comPreco.id, brahma.id] });
+exc?.excluidos.length === 2 && exc.inativados.length === 2 && exc.inativados.includes("Cerveja Teste Lata 269 ml") && exc.inativados.includes("Produto Com Preço")
+  ? pass("sem uso: excluídos; com histórico (compras ou preço registrado): só desativados") : bad("resultado excluir", JSON.stringify(exc));
+const cadExc = await rpc("cadastros");
+!cadExc.produtos.some((x) => [semUso1.id, semUso2.id].includes(x.id)) && !cadExc.fornecedor_produtos.some((v) => v.produto_id === semUso2.id)
+  ? pass("produtos sem uso e seus preços por fornecedor sumiram") : bad("ainda existem");
+const brahmaDepois = cadExc.produtos.find((x) => x.id === brahma.id);
+brahmaDepois && brahmaDepois.ativo === false ? pass("produto com histórico continua (inativo) e o histórico fica intacto") : bad("brahma", JSON.stringify(brahmaDepois));
+(await rpc("historico_produto", { produto_id: brahma.id })).length > 0 ? pass("histórico de preço do produto desativado preservado") : bad("histórico sumiu");
+await rpcOk("reativa o produto", "definir_ativo", { tabela: "produtos", id: brahma.id, ativo: true });
+await as(LEITOR);
+await rpcErr("perfil 'consulta' não exclui produto", "excluir_produtos", { ids: [refri.id] }, /não tem permissão/);
+await asSuper();
+
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

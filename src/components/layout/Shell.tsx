@@ -118,7 +118,7 @@ export function Shell({
                 className={({ isActive }) =>
                   cn(
                     "flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
-                    isActive ? "bg-amarelo text-verde" : "text-offwhite/85 hover:bg-verde-600 hover:text-offwhite",
+                    isActive ? "bg-amarelo text-verde" : "text-creme/85 hover:bg-verde-600 hover:text-creme",
                   )
                 }
               >
@@ -140,7 +140,7 @@ export function Shell({
           {voltarPara && (
             <Link
               to={voltarPara}
-              className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-xl text-offwhite hover:bg-verde-600"
+              className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-xl text-creme hover:bg-verde-600"
               aria-label="Voltar"
             >
               <ArrowLeft className="size-5" />

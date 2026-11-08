@@ -52,6 +52,7 @@ export type FuncaoRPC =
   | "listar_vendas"
   | "resumo_vendas"
   | "importar_produtos"
+  | "excluir_produtos"
   | "config_senha"
   | "verificar_senha"
   | "salvar_seguranca";

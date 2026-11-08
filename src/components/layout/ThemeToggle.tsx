@@ -16,8 +16,8 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
       className={cn(
         "flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors",
         compact
-          ? "size-10 text-offwhite/90 hover:bg-verde-600 hover:text-offwhite"
-          : "h-10 w-full px-3 text-offwhite/85 hover:bg-verde-600 hover:text-offwhite",
+          ? "size-10 text-creme/90 hover:bg-verde-600 hover:text-creme"
+          : "h-10 w-full px-3 text-creme/85 hover:bg-verde-600 hover:text-creme",
       )}
     >
       <Icon className="size-4" />

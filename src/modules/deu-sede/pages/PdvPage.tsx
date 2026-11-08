@@ -60,7 +60,7 @@ export function PdvPage() {
               onClick={() => setAba(valor)}
               className={cn(
                 "h-9 rounded-lg px-4 text-sm font-semibold transition-colors",
-                aba === valor ? "bg-verde text-offwhite shadow-sm" : "text-texto-suave hover:text-verde",
+                aba === valor ? "bg-verde text-creme shadow-sm" : "text-texto-suave hover:text-verde",
               )}
             >
               {rotulo}
@@ -317,7 +317,7 @@ function Vender() {
                   onClick={() => setForma(f.valor)}
                   className={cn(
                     "h-11 rounded-xl border text-sm font-medium",
-                    forma === f.valor ? "border-verde bg-verde text-offwhite" : "border-linha bg-superficie text-verde",
+                    forma === f.valor ? "border-verde bg-verde text-creme" : "border-linha bg-superficie text-verde",
                   )}
                 >
                   {f.rotulo}
@@ -353,7 +353,7 @@ function Vender() {
         <button
           type="button"
           onClick={() => carrinhoRef.current?.scrollIntoView({ behavior: "smooth" })}
-          className="fixed inset-x-4 bottom-4 z-20 flex h-12 items-center justify-between rounded-xl bg-verde px-4 font-semibold text-offwhite shadow-lg lg:hidden"
+          className="fixed inset-x-4 bottom-4 z-20 flex h-12 items-center justify-between rounded-xl bg-verde px-4 font-semibold text-creme shadow-lg lg:hidden"
         >
           <span>Carrinho ({carrinho.length})</span>
           <span className="tabular-nums">{moeda(t.total)}</span>
@@ -574,7 +574,7 @@ function Tile({ rotulo, valor, destaque }: { rotulo: string; valor: string; dest
   return (
     <div className={destaque ? "rounded-xl bg-verde px-4 py-3" : "rounded-xl border border-linha bg-superficie px-4 py-3"}>
       <p className={destaque ? "text-xs font-medium tracking-wide text-ouro uppercase" : "text-xs font-medium tracking-wide text-texto-suave uppercase"}>{rotulo}</p>
-      <p className={destaque ? "mt-1 text-2xl font-bold text-offwhite tabular-nums" : "mt-1 text-xl font-bold text-verde tabular-nums"}>{valor}</p>
+      <p className={destaque ? "mt-1 text-2xl font-bold text-creme tabular-nums" : "mt-1 text-xl font-bold text-verde tabular-nums"}>{valor}</p>
     </div>
   );
 }

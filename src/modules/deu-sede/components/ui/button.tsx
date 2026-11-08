@@ -7,10 +7,10 @@ type Size = "md" | "lg" | "icone" | "sm";
 
 const variants: Record<Variant, string> = {
   primario: "bg-amarelo text-verde hover:bg-ouro font-semibold",
-  secundario: "bg-verde text-offwhite hover:bg-verde-700 font-semibold",
+  secundario: "bg-verde text-creme hover:bg-verde-700 font-semibold",
   contorno: "border border-linha bg-superficie text-verde hover:bg-offwhite font-medium",
   fantasma: "text-verde hover:bg-offwhite font-medium",
-  perigo: "bg-perigo text-white hover:opacity-90 font-semibold",
+  perigo: "bg-perigo text-destructive-foreground hover:opacity-90 font-semibold",
 };
 
 // Botões grandes por padrão (mín. 44px de altura) para uso no celular.
