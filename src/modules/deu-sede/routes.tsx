@@ -16,6 +16,7 @@ import { CotacaoDetalhePage } from "@/modules/deu-sede/pages/cotacoes/CotacaoDet
 import { ComparacaoPage } from "@/modules/deu-sede/pages/ComparacaoPage";
 import { PedidosPage } from "@/modules/deu-sede/pages/pedidos/PedidosPage";
 import { MontarPedidoPage } from "@/modules/deu-sede/pages/pedidos/MontarPedidoPage";
+import { PedidoSimplesPage } from "@/modules/deu-sede/pages/pedidos/PedidoSimplesPage";
 import { PedidoDetalhePage } from "@/modules/deu-sede/pages/pedidos/PedidoDetalhePage";
 import { RecebimentosPage } from "@/modules/deu-sede/pages/recebimentos/RecebimentosPage";
 import { RegistrarRecebimentoPage } from "@/modules/deu-sede/pages/recebimentos/RegistrarRecebimentoPage";
@@ -43,7 +44,9 @@ export const deuSedeRoutes = (
     <Route path="cotacoes/:id/editar" element={<CotacaoFormPage />} />
     <Route path="comparacao" element={<ComparacaoPage />} />
     <Route path="pedidos" element={<PedidosPage />} />
-    <Route path="pedidos/montar" element={<MontarPedidoPage />} />
+    <Route path="pedidos/montar" element={<PedidoSimplesPage />} />
+    {/* vários fornecedores de uma vez, vindo da Comparação de preços ou de uma cotação */}
+    <Route path="pedidos/montar-comparacao" element={<MontarPedidoPage />} />
     <Route path="pedidos/:id" element={<PedidoDetalhePage />} />
     <Route path="recebimentos" element={<RecebimentosPage />} />
     <Route path="recebimentos/novo/:pedidoId" element={<RegistrarRecebimentoPage />} />

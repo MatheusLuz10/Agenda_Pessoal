@@ -93,7 +93,7 @@ export function ComparacaoPage() {
         ]),
       ),
     );
-    navigate(rota("pedidos", "montar"));
+    navigate(rota("pedidos", "montar-comparacao"));
   }
 
   if (erro) return <Aviso tom="erro">{erro}</Aviso>;

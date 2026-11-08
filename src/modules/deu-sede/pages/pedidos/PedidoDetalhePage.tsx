@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CalendarClock, ClipboardCopy, MessageCircle, PackageCheck, XCircle } from "lucide-react";
+import { CalendarClock, ClipboardCopy, FileDown, MessageCircle, PackageCheck, XCircle } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
 import { Badge } from "@/modules/deu-sede/components/ui/badge";
@@ -23,6 +23,7 @@ import {
 } from "@/modules/deu-sede/domain/status";
 import { dataBR, dataHoraBR, descreverEmbalagem, moeda, moedaUnitaria, numero } from "@/modules/deu-sede/domain/formatos";
 import { linkWhatsapp, mensagemPedido, numeroWhatsapp } from "@/modules/deu-sede/domain/whatsapp";
+import { gerarPdfPedido } from "@/modules/deu-sede/pedidoPdf";
 
 // Mudanças de status feitas por botão nesta tela (recebimento e
 // conclusão têm fluxo próprio; envio tem o fluxo do WhatsApp).
@@ -199,9 +200,14 @@ export function PedidoDetalhePage() {
           <Secao
             titulo="Mensagem para o fornecedor"
             acoes={
-              <Button size="sm" variant="contorno" onClick={copiarMensagem}>
-                <ClipboardCopy className="size-4" /> {copiado ? "Copiada!" : "Copiar"}
-              </Button>
+              <>
+                <Button size="sm" variant="contorno" onClick={copiarMensagem}>
+                  <ClipboardCopy className="size-4" /> {copiado ? "Copiada!" : "Copiar"}
+                </Button>
+                <Button size="sm" variant="contorno" onClick={() => gerarPdfPedido(p)}>
+                  <FileDown className="size-4" /> PDF
+                </Button>
+              </>
             }
           >
             <pre className="max-h-72 overflow-auto rounded-xl bg-offwhite/60 p-3 text-sm whitespace-pre-wrap text-verde">{mensagem}</pre>

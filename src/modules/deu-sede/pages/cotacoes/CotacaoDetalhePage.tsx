@@ -66,7 +66,7 @@ export function CotacaoDetalhePage() {
         },
       },
     );
-    navigate(rota("pedidos", "montar"));
+    navigate(rota("pedidos", "montar-comparacao"));
   }
 
   return (

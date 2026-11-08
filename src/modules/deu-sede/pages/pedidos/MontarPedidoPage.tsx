@@ -231,7 +231,7 @@ export function MontarPedidoPage() {
   return (
     <>
       <PageHeader
-        title="Montar pedido"
+        title="Montar pedido pela comparação"
         description="Monte a lista de compras e escolha o fornecedor de cada produto. Itens de fornecedores diferentes viram pedidos separados."
         actions={<BotaoColarLista aoClicar={() => setColarAberto(true)} />}
       />
