@@ -284,7 +284,8 @@ await rpcOk("desativa produto e reativa", "definir_ativo", { tabela: "produtos",
 await rpc("definir_ativo", { tabela: "produtos", id: refri.id, ativo: true });
 
 console.log("\n12) Etapa 3 — cotações");
-const hoje = new Date().toISOString().slice(0, 10);
+// "hoje" como o app manda (data de Brasília), não a data em UTC.
+const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 const cotA = await rpcOk("#3 cotação do A (recebida)", "salvar_cotacao", {
   fornecedor_id: fa.id, data_cotacao: hoje, frete: 30, status: "recebida", itens: [
     { produto_id: brahma.id, quantidade_embalagens: 20, preco_embalagem: 39.9 },
@@ -514,6 +515,25 @@ await as(SEM_PERFIL);
 const vazio = await rpc("cadastros");
 vazio.produtos.length === 0 && (await rpc("meu_acesso")) === null ? pass("sem perfil: funções não devolvem nada") : bad("sem perfil leu");
 await rpcErr("sem perfil não registra recebimento", "registrar_recebimento", { pedido_id: pedB.id }, /não tem permissão/);
+await asSuper();
+
+console.log("\n23) Datas no horário de Brasília (o Supabase roda em UTC)");
+await asSuper();
+const semFuso = await one(`select count(*)::int as n, string_agg(p.proname, ', ') as nomes
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'deusede' and p.prokind = 'f'
+    and (p.prolang = (select oid from pg_language where lanname = 'plpgsql')
+         or p.prosrc ~* '(current_date|current_timestamp|localtime|now\\(|date_trunc|to_char|::date)')
+    and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c ilike 'timezone=%')`);
+semFuso.n === 0 ? pass("toda função que grava ou calcula data roda no horário de Brasília") : bad("funções sem fuso:", semFuso.nomes);
+await db.exec("set timezone = 'UTC'");
+await as(ADMIN);
+const cotHoje = await rpcOk("cotação sem data informada", "salvar_cotacao", {
+  fornecedor_id: fa.id, itens: [{ produto_id: brahma.id, quantidade_embalagens: 1, preco_embalagem: 1 }] });
+const hojeBr = (await one("select (now() at time zone 'America/Sao_Paulo')::date::text as d")).d;
+cotHoje?.data_cotacao === hojeBr
+  ? pass(`data da cotação = hoje em Brasília (${hojeBr}), mesmo com o banco em UTC`)
+  : bad("data da cotação", `${cotHoje?.data_cotacao} ≠ ${hojeBr} (hoje em Brasília)`);
 await asSuper();
 
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);
