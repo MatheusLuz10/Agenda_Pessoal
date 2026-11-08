@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleCheck, ClipboardCopy, FileDown, MessageCircle, ShoppingCart } from "lucide-react";
+import { CircleCheck, ClipboardCopy, FileDown, MessageCircle, Minus, Plus, ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
@@ -208,7 +208,7 @@ export function PedidoSimplesPage() {
                 </label>
               </div>
               <div className="overflow-hidden rounded-xl border border-linha">
-                <div className="hidden grid-cols-[auto_minmax(0,1fr)_7.5rem_5.5rem_7rem] gap-x-3 border-b border-linha bg-fundo px-3 py-2 text-xs font-semibold tracking-wide text-texto-suave uppercase sm:grid">
+                <div className="hidden grid-cols-[auto_minmax(0,1fr)_7.5rem_9rem_7rem] gap-x-3 border-b border-linha bg-fundo px-3 py-2 text-xs font-semibold tracking-wide text-texto-suave uppercase sm:grid">
                   <span className="w-5" />
                   <span>Produto</span>
                   <span>Valor/emb.</span>
@@ -223,7 +223,7 @@ export function PedidoSimplesPage() {
                       <li
                         key={p.id}
                         className={cn(
-                          "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:grid-cols-[auto_minmax(0,1fr)_7.5rem_5.5rem_7rem]",
+                          "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:grid-cols-[auto_minmax(0,1fr)_7.5rem_9rem_7rem]",
                           m ? "bg-offwhite" : "bg-superficie",
                         )}
                       >
@@ -240,7 +240,7 @@ export function PedidoSimplesPage() {
                             {[p.codigo, descreverEmbalagem(b.tipo, b.unidades), b.origem].filter(Boolean).join(" · ")}
                           </p>
                         </div>
-                        <div className="col-start-2 grid grid-cols-[1fr_5rem_auto] items-center gap-2 sm:contents">
+                        <div className="col-start-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:contents">
                           <Input
                             aria-label={`Valor por embalagem de ${p.nome}`}
                             inputMode="decimal"
@@ -249,15 +249,19 @@ export function PedidoSimplesPage() {
                             value={m?.preco ?? paraCampo(b.preco, 2)}
                             onChange={(e) => marcar(p.id, { qtd: m?.qtd ?? "1", preco: e.target.value })}
                           />
-                          <Input
-                            aria-label={`Quantidade de ${p.nome}`}
-                            inputMode="decimal"
-                            placeholder="0"
-                            className="h-10"
-                            value={m?.qtd ?? ""}
-                            onChange={(e) => marcar(p.id, { ...m, qtd: e.target.value })}
+                          <Contador
+                            nome={p.nome}
+                            valor={m?.qtd ?? ""}
+                            aoMudar={(qtd) => marcar(p.id, qtd === null ? null : { ...m, qtd })}
                           />
-                          <p className="min-w-[5.5rem] text-right font-semibold text-verde tabular-nums">{total === null ? "—" : moeda(total)}</p>
+                          <p
+                            className={cn(
+                              "col-span-2 text-right font-semibold text-verde tabular-nums sm:col-span-1",
+                              total === null && "hidden sm:block",
+                            )}
+                          >
+                            {total === null ? "—" : moeda(total)}
+                          </p>
                         </div>
                       </li>
                     ))}
@@ -310,6 +314,42 @@ export function PedidoSimplesPage() {
         aoConfirmar={realizar}
       />
     </>
+  );
+}
+
+// Quantidade com − e + ao lado (o campo continua editável). "+" num produto
+// não marcado já marca com 1; "−" até zero desmarca.
+function Contador({ nome, valor, aoMudar }: { nome: string; valor: string; aoMudar: (qtd: string | null) => void }) {
+  const n = lerDecimal(valor);
+  const atual = n === null || Number.isNaN(n) ? 0 : n;
+  const botao =
+    "flex size-10 shrink-0 items-center justify-center rounded-xl border border-linha bg-superficie text-verde hover:border-amarelo disabled:opacity-40";
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        className={botao}
+        aria-label={`Diminuir ${nome}`}
+        disabled={atual <= 0}
+        onClick={() => {
+          const novo = arredondar(atual - 1, 3);
+          aoMudar(novo <= 0 ? null : paraCampo(novo));
+        }}
+      >
+        <Minus className="size-4" />
+      </button>
+      <Input
+        aria-label={`Quantidade de ${nome}`}
+        inputMode="decimal"
+        placeholder="0"
+        className="h-10 w-12 min-w-0 px-1 text-center"
+        value={valor}
+        onChange={(e) => aoMudar(e.target.value)}
+      />
+      <button type="button" className={botao} aria-label={`Aumentar ${nome}`} onClick={() => aoMudar(paraCampo(arredondar(atual + 1, 3)))}>
+        <Plus className="size-4" />
+      </button>
+    </div>
   );
 }
 

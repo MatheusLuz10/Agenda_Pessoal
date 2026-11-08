@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ClipboardCopy, ClipboardPaste, Pencil } from "lucide-react";
 import { Button } from "@/modules/deu-sede/components/ui/button";
 import { Badge } from "@/modules/deu-sede/components/ui/badge";
@@ -79,6 +79,7 @@ export function ColarListaDialog({
   candidatos,
   rotuloReferencia = "Preço anterior",
   exigirPreco,
+  topo,
   categoriasNovos,
   aoFechar,
   aoAplicar,
@@ -89,6 +90,8 @@ export function ColarListaDialog({
   candidatos: CandidatoLista[];
   rotuloReferencia?: string;
   exigirPreco?: boolean;
+  /** campos extras no topo da tela de colar (ex.: fornecedor da lista) */
+  topo?: ReactNode;
   /** com as categorias, permite cadastrar produto novo a partir da linha */
   categoriasNovos?: Categoria[];
   aoFechar: () => void;
@@ -336,6 +339,7 @@ export function ColarListaDialog({
       {!linhas ? (
         <div className="flex flex-col gap-3 text-sm">
           <p className="text-texto">{explicacao}</p>
+          {topo}
 <ol className="flex flex-col gap-2.5 rounded-xl border border-linha bg-offwhite/50 p-3">
             <li className="flex items-start gap-2.5">
               <Passo n={1} />
