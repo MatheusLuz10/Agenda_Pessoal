@@ -71,6 +71,14 @@ await db.exec(`
   grant usage on schema public to anon, authenticated;
   grant select, insert on public.service_requests to anon;
   grant usage on all sequences in schema public to anon;
+  -- tabela da Agenda com acesso para qualquer usuário logado (como no Supabase)
+  create table public.calendars (id serial primary key, nome text);
+  alter table public.calendars enable row level security;
+  create policy "authenticated full access calendars" on public.calendars for all to authenticated
+    using (auth.uid() is not null) with check (auth.uid() is not null);
+  grant select, insert, update, delete on public.calendars to authenticated;
+  grant usage on all sequences in schema public to authenticated;
+  insert into public.calendars (nome) values ('Aniversário');
 `);
 
 console.log("\n1) Migração");
@@ -238,7 +246,7 @@ await as(null);
 await expectOk("página pública da Agenda (anônimo) continua gravando", `insert into public.service_requests (descricao) values ('teste')`);
 await expectErr("anônimo não enxerga o esquema deusede", `select 1 from deusede.produtos`, /permission denied/);
 await asSuper();
-const publicas = await one(`select count(*)::int n from pg_tables where schemaname = 'public' and tablename <> 'service_requests'`);
+const publicas = await one(`select count(*)::int n from pg_tables where schemaname = 'public' and tablename not in ('service_requests', 'calendars')`);
 publicas.n === 0 ? pass("nenhuma tabela criada no esquema public da Agenda") : bad("tabelas no public", publicas.n);
 
 // =====================================================================
@@ -576,6 +584,44 @@ auto3?.codigo && auto3.codigo !== proximoLivre ? pass(`o sistema pula o número 
 const limpo = await rpcOk("apagar o código de um produto", "salvar_produto", { id: auto1.id, nome: auto1.nome, categoria_id: catBebida, codigo: "" });
 limpo?.codigo && limpo.codigo !== auto1.codigo ? pass(`código apagado vira um novo (${limpo.codigo})`) : bad("código apagado", limpo?.codigo);
 await rpcErr("código repetido é barrado", "salvar_produto", { nome: "Produto Código Repetido", categoria_id: catBebida, codigo: auto2.codigo }, /código já é usado/);
+await asSuper();
+
+console.log("\n26) Login só de pedidos de compra (papel 'pedidos')");
+const PEDIDOS = "00000000-0000-0000-0000-0000000000dd";
+await asSuper();
+await db.exec(`insert into auth.users (id, email) values ('${PEDIDOS}', 'pedidos@deusede.app');
+  insert into deusede.perfis (id, nome, papel) values ('${PEDIDOS}', 'Pedidos', 'pedidos')`);
+await as(PEDIDOS);
+(await rpc("meu_acesso"))?.papel === "pedidos" ? pass("perfil 'pedidos' reconhecido") : bad("meu_acesso");
+(await rpc("cadastros"))?.produtos?.length > 0 ? pass("vê produtos, fornecedores e preços") : bad("cadastros");
+const lotePed = await rpcOk("gera pedido de compra", "gerar_pedidos", {
+  lote_id: "44444444-4444-4444-4444-444444444444",
+  itens: [{ fornecedor_id: fa.id, produto_id: refri.id, tipo_embalagem: "fardo", unidades_por_embalagem: 6, quantidade_embalagens: 2, preco_embalagem: 30 }],
+  fornecedores: [{ fornecedor_id: fa.id, frete: 0 }] });
+const pedSo = lotePed?.pedidos?.[0];
+pedSo && num(pedSo.valor_total) === 60 ? pass("pedido gerado (2 × 30,00 = 60,00)") : bad("pedido", JSON.stringify(lotePed));
+await rpcOk("marca o pedido como enviado", "mudar_status_pedido", { id: pedSo.id, status: "enviado" });
+await rpcOk("altera observações do pedido", "atualizar_pedido", { id: pedSo.id, observacoes: "entregar de manhã" });
+await rpcErr("não altera produto", "salvar_produto", { nome: "Produto Proibido", categoria_id: catBebida }, /não tem permissão/);
+await rpcErr("não exclui produto", "excluir_produtos", { ids: [refri.id] }, /não tem permissão/);
+await rpcErr("não cadastra fornecedor", "salvar_fornecedor", { nome: "Fornecedor Proibido" }, /não tem permissão/);
+await rpcErr("não dá entrada no estoque", "registrar_entrada_nota", {
+  chave_idempotencia: "55555555-5555-5555-5555-555555555555", itens: [{ produto_id: refri.id, tipo_embalagem: "fardo", unidades_por_embalagem: 6, quantidade_embalagens: 1 }] }, /permissão/);
+const agendaPed = await one("select count(*)::int n from public.calendars");
+agendaPed.n === 0 ? pass("não enxerga a Agenda (calendários)") : bad("agenda visível", agendaPed.n);
+await expectErr("não grava na Agenda", "insert into public.calendars (nome) values ('x')", /row-level security/);
+await as(ADMIN);
+const agendaAdmin = await one("select count(*)::int n from public.calendars");
+agendaAdmin.n === 1 ? pass("o dono continua vendo a Agenda") : bad("agenda do dono", agendaAdmin.n);
+await rpcOk("admin continua gerando pedido", "gerar_pedidos", {
+  lote_id: "66666666-6666-6666-6666-666666666666",
+  itens: [{ fornecedor_id: fa.id, produto_id: refri.id, tipo_embalagem: "fardo", unidades_por_embalagem: 6, quantidade_embalagens: 1, preco_embalagem: 30 }],
+  fornecedores: [{ fornecedor_id: fa.id }] });
+await as(LEITOR);
+await rpcErr("perfil 'consulta' não gera pedido", "gerar_pedidos", {
+  lote_id: "77777777-7777-7777-7777-777777777777",
+  itens: [{ fornecedor_id: fa.id, produto_id: refri.id, tipo_embalagem: "fardo", unidades_por_embalagem: 6, quantidade_embalagens: 1, preco_embalagem: 30 }],
+  fornecedores: [{ fornecedor_id: fa.id }] }, /permissão/);
 await asSuper();
 
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);

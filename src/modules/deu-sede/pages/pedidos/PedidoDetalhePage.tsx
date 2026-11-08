@@ -24,6 +24,7 @@ import {
 import { dataBR, dataHoraBR, descreverEmbalagem, moeda, moedaUnitaria, numero } from "@/modules/deu-sede/domain/formatos";
 import { linkWhatsapp, mensagemPedido, numeroWhatsapp } from "@/modules/deu-sede/domain/whatsapp";
 import { gerarPdfPedido } from "@/modules/deu-sede/pedidoPdf";
+import { useSoPedidos } from "@/modules/deu-sede/soPedidos";
 
 // Mudanças de status feitas por botão nesta tela (recebimento e
 // conclusão têm fluxo próprio; envio tem o fluxo do WhatsApp).
@@ -38,6 +39,7 @@ const BOTOES: Partial<Record<PedidoStatus, string>> = {
 export function PedidoDetalhePage() {
   const { id = "" } = useParams();
   const { dados: p, erro, carregando } = useConsulta<PedidoDetalhe | null>("obter_pedido", { id });
+  const soPedidos = useSoPedidos() === true;
   const [mudanca, setMudanca] = useState<PedidoStatus | null>(null);
   const [confirmarEnvio, setConfirmarEnvio] = useState(false);
   const [cancelar, setCancelar] = useState(false);
@@ -80,7 +82,7 @@ export function PedidoDetalhePage() {
         description={`${p.fornecedor_nome} · ${dataBR(p.data_pedido)}`}
         actions={
           <>
-            {pedidoAceitaRecebimento(p.status) && (
+            {pedidoAceitaRecebimento(p.status) && !soPedidos && (
               <LinkBotao to={rota("recebimentos", "novo", p.id)}>
                 <PackageCheck className="size-4" /> Registrar recebimento
               </LinkBotao>

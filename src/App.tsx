@@ -11,6 +11,7 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { deuSedeRoutes } from "@/modules/deu-sede/routes";
 import { PdvPage } from "@/modules/deu-sede/pages/PdvPage";
 import { SenhaProvider } from "@/modules/deu-sede/senha";
+import { TravaSoPedidos } from "@/modules/deu-sede/acessoPedidos";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 
 // Abas do app: Agenda (calendário independente), Documentos (área em
@@ -29,6 +30,8 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
 
             <Route element={<RequireAuth />}>
+            {/* login "só pedidos de compra": fica preso em /deu-sede/pedidos */}
+            <Route element={<TravaSoPedidos />}>
             {/* DEU SEDE! (gestão de compras): menu próprio, mesmo visual —
                 ver src/modules/deu-sede. */}
             {deuSedeRoutes}
@@ -54,6 +57,7 @@ function App() {
               />
               <Route path="/configuracoes" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/calendarios" replace />} />
+            </Route>
             </Route>
             </Route>
           </Routes>

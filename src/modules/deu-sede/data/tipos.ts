@@ -5,7 +5,7 @@ import type { CotacaoStatus, PedidoStatus } from "@/modules/deu-sede/domain/stat
 
 export type Embalagem = "caixa" | "fardo" | "pack" | "engradado" | "garrafao" | "unidade" | "outro";
 export type UnidadeMedida = "ml" | "l" | "g" | "kg" | "un";
-export type Papel = "admin" | "comprador" | "conferente" | "consulta";
+export type Papel = "admin" | "comprador" | "conferente" | "vendedor" | "consulta" | "pedidos";
 
 export interface Acesso {
   id: string;

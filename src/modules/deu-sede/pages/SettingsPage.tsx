@@ -18,7 +18,9 @@ const PAPEIS: Record<string, string> = {
   admin: "Administrador",
   comprador: "Comprador",
   conferente: "Conferente",
+  vendedor: "Vendedor",
   consulta: "Consulta",
+  pedidos: "Só pedidos de compra",
 };
 
 export function SettingsPage() {

@@ -23,7 +23,9 @@ export function LoginPage() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const { error } = await signIn(email, password);
+    // "pedidos" (sem @) é o usuário do login só de pedidos de compra
+    const usuario = email.trim();
+    const { error } = await signIn(usuario.includes("@") ? usuario : `${usuario.toLowerCase()}@deusede.app`, password);
     setSubmitting(false);
     if (error) setError(error);
   }
@@ -46,10 +48,12 @@ export function LoginPage() {
               </p>
             )}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="login-email">E-mail</Label>
+              <Label htmlFor="login-email">E-mail ou usuário</Label>
               <Input
                 id="login-email"
-                type="email"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoFocus

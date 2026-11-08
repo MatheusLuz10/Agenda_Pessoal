@@ -6,6 +6,7 @@ import { Dialogo } from "@/modules/deu-sede/components/ui/dialogo";
 import { Campo, Input } from "@/modules/deu-sede/components/ui/input";
 import { chamar, executar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import type { Acesso } from "@/modules/deu-sede/data/tipos";
+import { useSoPedidos } from "@/modules/deu-sede/soPedidos";
 import { cn } from "@/lib/utils";
 
 // Senha de 4 dígitos das áreas sensíveis (um app só: o caixa usa o PDV e
@@ -174,10 +175,13 @@ export function useSenha() {
 /** Tela inteira protegida: mostra a senha antes do conteúdo. */
 export function AreaProtegida({ area, children }: { area: AreaSensivel; children: ReactNode }) {
   const { config, erroConfig, liberada, protegida, renovar } = useSenha();
+  // o login de pedidos já entrou com a própria senha e só vê a área de pedidos
+  const soPedidos = useSoPedidos();
   const ok = !!config && liberada(area);
   useEffect(() => {
     if (ok && protegida(area)) renovar();
   }, [ok, area, protegida, renovar]);
+  if (soPedidos) return <>{children}</>;
   if (erroConfig) return <Aviso tom="erro">{erroConfig}</Aviso>;
   if (config === undefined) return <Carregando texto="Verificando senha…" />;
   if (!config) return <Aviso tom="erro">Não foi possível carregar as configurações de senha.</Aviso>;

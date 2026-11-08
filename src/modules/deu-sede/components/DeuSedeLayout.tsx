@@ -6,6 +6,7 @@ import { DEU_SEDE_BASE, MODULES } from "@/modules/deu-sede/config/modules";
 import { useSessaoDeuSede } from "@/modules/deu-sede/sessao";
 import { useConsulta, useRecarregarAoVoltar } from "@/modules/deu-sede/data/cliente";
 import { AreaProtegida, SenhaProvider } from "@/modules/deu-sede/senha";
+import { INICIO_PEDIDOS, useSoPedidos } from "@/modules/deu-sede/soPedidos";
 import type { Acesso } from "@/modules/deu-sede/data/tipos";
 import { Aviso, Carregando } from "@/modules/deu-sede/components/ui/aviso";
 
@@ -50,38 +51,55 @@ function ConteudoProtegido() {
 export function DeuSedeLayout() {
   const { mode, signOut } = useSessaoDeuSede();
   useRecarregarAoVoltar();
+  // login "só pedidos de compra": menu só com Pedidos, sem volta para o Calendário
+  const soPedidos = useSoPedidos() === true;
+  const sair = mode === "supabase" && (
+    <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
+      <LogOut className="size-4" /> Sair
+    </button>
+  );
 
   return (
     <div className="deu-sede">
       <Shell
-        marca={{ titulo: "DEU SEDE!", to: DEU_SEDE_BASE }}
-        itens={MODULES}
+        marca={{ titulo: "DEU SEDE!", to: soPedidos ? INICIO_PEDIDOS : DEU_SEDE_BASE }}
+        itens={soPedidos ? MODULES.filter((m) => m.key === "pedidos") : MODULES}
         rotuloMenu="Menu DEU SEDE!"
         aviso={<AvisoModoLocal />}
         acaoCabecalho={
+          soPedidos ? (
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl text-creme/90 hover:bg-verde-600"
+              aria-label="Sair"
+            >
+              <LogOut className="size-5" />
+            </button>
+          ) : (
           <Link
             to={AGENDA_HOME}
             className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-creme/90 hover:bg-verde-600"
           >
             <ArrowLeft className="size-4" /> Calendário
           </Link>
+          )
         }
         rodape={
           <>
-            <Link to={AGENDA_HOME} className="flex h-10 items-center gap-2 font-medium text-creme/85 hover:text-creme">
-              <CalendarDays className="size-4" /> Voltar para o Calendário
-            </Link>
+            {!soPedidos && (
+              <Link to={AGENDA_HOME} className="flex h-10 items-center gap-2 font-medium text-creme/85 hover:text-creme">
+                <CalendarDays className="size-4" /> Voltar para o Calendário
+              </Link>
+            )}
             <a href={TELEFONE_LINK} className="flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
               <Phone className="size-4" /> {TELEFONE_CONTATO}
             </a>
-            {mode === "supabase" && (
-              <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
-                <LogOut className="size-4" /> Sair
-              </button>
-            )}
+            {sair}
           </>
         }
         extrasMenuMais={
+          soPedidos ? undefined : (
           <>
             <Link
               to={AGENDA_HOME}
@@ -99,6 +117,7 @@ export function DeuSedeLayout() {
               </button>
             )}
           </>
+          )
         }
       >
         <SenhaProvider>

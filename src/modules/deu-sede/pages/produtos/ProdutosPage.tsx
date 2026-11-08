@@ -23,8 +23,17 @@ interface LinhaProduto {
   p: Produto;
   categoria: string;
   estoque: ItemEstoque | undefined;
+  /** custo por unidade (valor da embalagem ÷ unidades) */
   menorCusto: number | null;
+  /** custo da embalagem e qual embalagem (a do preço do fornecedor ou a do produto) */
+  custoEmbalagem: number | null;
+  embalagemCusto: { tipo: Embalagem; unidades: number };
   fornecedores: number;
+}
+
+// "CX", "FD", "PCT"… para o custo da embalagem na linha.
+function rotuloEmbalagemCurto(tipo: Embalagem): string {
+  return ({ caixa: "cx", fardo: "fd", pack: "pct", engradado: "eng", garrafao: "gf", unidade: "un" } as Record<string, string>)[tipo] ?? tipo;
 }
 
 // Produtos em lista enxuta (nome, código, estoque e custo), sem rolagem
@@ -56,17 +65,20 @@ export function ProdutosPage() {
         .map((p) => {
           const precos = (vinculosPorProduto.get(p.id) ?? []).filter((v) => v.ativo && v.preco_unitario !== null);
           const e = estoquePorProduto.get(p.id);
+          const melhor = precos.length ? precos.reduce((a, b) => (Number(b.preco_unitario) < Number(a.preco_unitario) ? b : a)) : null;
+          const custoUn = melhor ? Number(melhor.preco_unitario) : e?.ultimo_custo_unitario != null ? Number(e.ultimo_custo_unitario) : null;
+          const embalagemCusto = melhor
+            ? { tipo: melhor.tipo_embalagem, unidades: melhor.unidades_por_embalagem }
+            : { tipo: p.tipo_embalagem, unidades: p.unidades_por_embalagem };
           return {
             p,
             categoria: categorias.get(p.categoria_id)?.nome ?? "—",
             estoque: e,
             // menor preço atual entre os fornecedores; sem fornecedor com preço,
             // o custo da última entrada (nota colada ou recebimento)
-            menorCusto: precos.length
-              ? Math.min(...precos.map((v) => Number(v.preco_unitario)))
-              : e?.ultimo_custo_unitario != null
-                ? Number(e.ultimo_custo_unitario)
-                : null,
+            menorCusto: custoUn,
+            custoEmbalagem: melhor?.preco_atual != null ? Number(melhor.preco_atual) : custoUn === null ? null : arredondar(custoUn * embalagemCusto.unidades),
+            embalagemCusto,
             fornecedores: (vinculosPorProduto.get(p.id) ?? []).filter((v) => v.ativo).length,
           };
         })
@@ -338,7 +350,7 @@ export function ProdutosPage() {
                 />
                 <span className="flex-1">Produto</span>
                 <span className="hidden w-20 text-right sm:block">Estoque</span>
-                <span className="w-20 text-right sm:w-24">Custo/un</span>
+                <span className="w-24 text-right sm:w-28">Custo</span>
                 <span className="w-5" />
               </div>
               <ul className="divide-y divide-linha">
@@ -373,7 +385,17 @@ export function ProdutosPage() {
                           <span className={cn("hidden w-20 shrink-0 text-right font-semibold tabular-nums sm:block", saldo < 0 ? "text-perigo" : "text-verde")}>
                             {numero(saldo)} <span className="text-xs font-normal text-texto-suave">un</span>
                           </span>
-                          <span className="w-20 shrink-0 text-right font-semibold text-verde tabular-nums sm:w-24">{moedaUnitaria(l.menorCusto)}</span>
+                          <span className="w-24 shrink-0 text-right tabular-nums sm:w-28">
+                            <span className="block font-semibold text-verde">
+                              {moedaUnitaria(l.menorCusto)}
+                              {l.menorCusto !== null && <span className="text-xs font-normal text-texto-suave">/un</span>}
+                            </span>
+                            {l.custoEmbalagem !== null && l.embalagemCusto.unidades > 1 && (
+                              <span className="block text-xs text-texto-suave">
+                                {moeda(l.custoEmbalagem)}/{rotuloEmbalagemCurto(l.embalagemCusto.tipo)} {l.embalagemCusto.unidades}
+                              </span>
+                            )}
+                          </span>
                           <ChevronDown className={cn("size-5 shrink-0 text-texto-suave transition-transform", aberto && "rotate-180")} />
                         </button>
                       </div>
@@ -388,8 +410,20 @@ export function ProdutosPage() {
                                 ["Embalagem", descreverEmbalagem(p.tipo_embalagem, p.unidades_por_embalagem)],
                                 ["Estoque", `${numero(saldo)} un · ${numero(l.estoque?.saldo_embalagens ?? 0, 2)} emb.`],
                                 ["Mínimo", p.estoque_minimo === null ? "—" : `${numero(p.estoque_minimo)} emb.${l.estoque?.abaixo_minimo ? " (abaixo)" : ""}`],
-                                ["Custo/un", moedaUnitaria(l.menorCusto)],
-                                ["Venda/un", moedaUnitaria(p.preco_venda)],
+                                [
+                                  `Custo ${descreverEmbalagem(l.embalagemCusto.tipo, l.embalagemCusto.unidades).toLowerCase()}`,
+                                  l.custoEmbalagem === null ? "—" : moeda(l.custoEmbalagem),
+                                ],
+                                ["Custo por unidade", l.menorCusto === null ? "—" : `${moedaUnitaria(l.menorCusto)}${l.embalagemCusto.unidades > 1 ? ` (÷ ${l.embalagemCusto.unidades})` : ""}`],
+                                ["Venda por unidade", moedaUnitaria(p.preco_venda)],
+                                [
+                                  `Venda ${descreverEmbalagem(p.tipo_embalagem, p.unidades_por_embalagem).toLowerCase()}`,
+                                  p.preco_venda_embalagem !== null
+                                    ? moeda(p.preco_venda_embalagem)
+                                    : p.preco_venda !== null
+                                      ? moeda(arredondar(Number(p.preco_venda) * p.unidades_por_embalagem))
+                                      : "—",
+                                ],
                                 ["Fornecedores", numero(l.fornecedores)],
                                 ["Situação", p.ativo ? "Ativo" : "Inativo"],
                               ] as const
