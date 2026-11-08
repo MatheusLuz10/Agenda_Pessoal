@@ -8,6 +8,8 @@ import { Input, Select, Textarea } from "@/modules/deu-sede/components/ui/input"
 import {
   associar,
   converterParaEmbalagem,
+  ehCodigoDeBarras,
+  embalagemDaUnidade,
   INSTRUCAO_IA,
   interpretarLista,
   precoMudou,
@@ -61,18 +63,6 @@ interface LinhaEditavel {
 }
 
 const NOVO = "__novo__";
-
-/** CX -> caixa, FD -> fardo, PCT -> pack, UN -> unidade… */
-function embalagemDoTexto(t: string | null): Embalagem {
-  const x = (t ?? "").toLowerCase().replace(/\./g, "");
-  if (/^(cx|caixa)/.test(x)) return "caixa";
-  if (/^(fd|fardo)/.test(x)) return "fardo";
-  if (/^(pct|pacote|pack|pk)/.test(x)) return "pack";
-  if (/^(eng|engradado)/.test(x)) return "engradado";
-  if (/^(gf|garraf)/.test(x)) return "garrafao";
-  if (/^(un|und|unid)/.test(x)) return "unidade";
-  return "caixa";
-}
 
 // "Colar lista": cola o texto (ex.: lista gerada por IA a partir da nota),
 // confere o que foi reconhecido e aplica no formulário. Nada é gravado
@@ -142,8 +132,8 @@ export function ColarListaDialog({
         const a = associar(l, candidatos);
         const c = a.candidatoId ? porId.get(a.candidatoId) : undefined;
         const conv = converterParaEmbalagem(l, c?.unidadesPorEmbalagem ?? 1);
-        const embalagem = embalagemDoTexto(l.unidade);
-        const unidadesNovo = embalagem === "unidade" ? 1 : l.unidadesPorEmbalagem;
+        const embalagem = embalagemDaUnidade(l.unidade);
+        const unidadesNovo = embalagem.tipo === "unidade" ? 1 : (l.unidadesPorEmbalagem ?? embalagem.unidades);
         return {
           linha: l.linha,
           texto: l.texto,
@@ -156,10 +146,12 @@ export function ColarListaDialog({
           quantidade: paraCampo(conv.quantidade),
           valor: paraCampo(conv.valorUnitario, 2),
           convertido: conv.convertido,
-          codigo: l.codigo,
+          // só código de barras vai para o cadastro: código interno do
+          // fornecedor ("924") pode ser outro produto em outro fornecedor
+          codigo: ehCodigoDeBarras(l.codigo) ? l.codigo : null,
           novoNome: l.descricao,
           novoCategoria: sugerirCategoria(l.descricao, ativas) ?? categoriaPadrao,
-          novoEmbalagem: embalagem,
+          novoEmbalagem: embalagem.tipo,
           novoUnidades: unidadesNovo ? String(unidadesNovo) : "",
         };
       }),
@@ -177,12 +169,20 @@ export function ColarListaDialog({
   const chaveNome = (l: LinhaEditavel) => normalizarBusca(l.novoNome).replace(/\s+/g, " ");
   const novoRepetido = novos.find((l, i) => novos.findIndex((x) => chaveNome(x) === chaveNome(l)) !== i);
   const codigoRepetido = novos.find((l, i) => l.codigo && novos.findIndex((x) => x.codigo?.trim().toLowerCase() === l.codigo!.trim().toLowerCase()) !== i);
+  const semUnidades = novos.filter((l) => {
+    const u = Number(l.novoUnidades);
+    return !Number.isInteger(u) || u <= 0;
+  });
 
   async function aplicar() {
     if (usadas.length === 0) return setErro("Escolha o produto de ao menos uma linha.");
     if (repetidos.length) return setErro("O mesmo produto foi escolhido em duas linhas. Ajuste ou ignore uma delas.");
     if (novoRepetido) return setErro(`O produto novo "${novoRepetido.novoNome}" aparece em duas linhas. Junte as quantidades em uma linha ou ignore uma delas.`);
     if (codigoRepetido) return setErro(`O código ${codigoRepetido.codigo} aparece em dois produtos novos. Ajuste ou ignore uma das linhas.`);
+    if (semUnidades.length > 1)
+      return setErro(
+        `Informe quantas unidades vêm na embalagem de ${semUnidades.length} produtos novos (campos em vermelho): linhas ${semUnidades.map((l) => l.linha).join(", ")}.`,
+      );
     for (const l of usadas) {
       const q = lerDecimal(l.quantidade);
       const v = lerDecimal(l.valor);
@@ -289,6 +289,12 @@ export function ColarListaDialog({
             {existentes.length} {existentes.length === 1 ? "reconhecido" : "reconhecidos"}
             {categoriasNovos && ` · ${novos.length} ${novos.length === 1 ? "novo para cadastrar" : "novos para cadastrar"}`}
             {` · ${linhas.length - usadas.length} ${linhas.length - usadas.length === 1 ? "ignorado" : "ignorados"}`}
+            {semUnidades.length > 0 && (
+              <span className="text-perigo">
+                {" "}
+                · {semUnidades.length} sem unidades por embalagem (a nota não informa)
+              </span>
+            )}
           </p>
           <ul className="flex flex-col gap-2">
             {linhas.map((l, i) => {
