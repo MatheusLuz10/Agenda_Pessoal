@@ -32,7 +32,8 @@ const nova = (): Linha => ({ chave: crypto.randomUUID(), produto_id: "", tipo_em
 export function EntradaNotaPage() {
   const { dados, produtos, vinculosPorFornecedor } = useCadastros();
   const [chave, setChave] = useState(() => crypto.randomUUID());
-  const [fornecedorId, setFornecedorId] = useState("");
+  // null = ainda não escolheu: com um só fornecedor ativo, ele já vem marcado
+  const [fornecedorEscolhido, setFornecedorId] = useState<string | null>(null);
   const [numeroNota, setNumeroNota] = useState("");
   const [data, setData] = useState(hojeISO());
   const [linhas, setLinhas] = useState<Linha[]>([nova()]);
@@ -41,6 +42,8 @@ export function EntradaNotaPage() {
   const [atualizarPrecos, setAtualizarPrecos] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [feita, setFeita] = useState<{ numero_formatado: string; total: number } | null>(null);
+  const fornecedoresAtivos = (dados?.fornecedores ?? []).filter((f) => f.ativo);
+  const fornecedorId = fornecedorEscolhido ?? (fornecedoresAtivos.length === 1 ? fornecedoresAtivos[0].id : "");
   const pendentes = useConsulta<PedidoResumo[]>("listar_pedidos", fornecedorId ? { aguardando_recebimento: true, fornecedor_id: fornecedorId } : null);
 
   if (!dados) return <Carregando />;
@@ -78,6 +81,10 @@ export function EntradaNotaPage() {
       }
       return r.length ? r : [nova()];
     });
+    // a entrada (e o custo de cada produto) só fica gravada ao confirmar:
+    // a confirmação abre logo, sem precisar descer até o fim da lista
+    setErro(null);
+    if (prontos.length) setConfirmar(true);
   }
 
   function revisar() {
@@ -164,9 +171,7 @@ export function EntradaNotaPage() {
               {(id) => (
                 <Select id={id} value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)}>
                   <option value="">Sem fornecedor</option>
-                  {dados.fornecedores
-                    .filter((f) => f.ativo)
-                    .map((f) => (
+                  {fornecedoresAtivos.map((f) => (
                       <option key={f.id} value={f.id}>
                         {f.nome}
                       </option>
@@ -267,7 +272,10 @@ export function EntradaNotaPage() {
         </Secao>
 
         {erro && <Aviso tom="erro">{erro}</Aviso>}
-        <div className="flex justify-end">
+        <div className="sticky bottom-20 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-linha bg-superficie p-3 shadow-lg lg:bottom-4">
+          <p className="text-verde">
+            {usadas.length} {usadas.length === 1 ? "produto" : "produtos"} · <strong className="text-lg tabular-nums">Total {moeda(total)}</strong>
+          </p>
           <Button size="lg" onClick={revisar}>
             Dar entrada no estoque
           </Button>
@@ -291,6 +299,10 @@ export function EntradaNotaPage() {
           <div className="flex flex-col gap-2">
             <p>
               {usadas.length} {usadas.length === 1 ? "produto" : "produtos"} · total {moeda(total)}
+            </p>
+            <p className="text-sm">
+              As quantidades entram no estoque e o valor de cada produto fica guardado como custo
+              {fornecedorId ? ` e como preço de ${dados.fornecedores.find((f) => f.id === fornecedorId)?.nome ?? "fornecedor"} (usado no Montar pedido)` : ""}.
             </p>
             {mudancas.length > 0 && fornecedorId && (
               <div className="rounded-xl border border-amarelo/50 bg-amarelo/15 p-3 text-marrom">
