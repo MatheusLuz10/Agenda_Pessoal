@@ -96,11 +96,15 @@ export function ColarListaDialog({
   const [confirmouPrecos, setConfirmouPrecos] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  // linhas de produto novo que chegaram sem unidades por embalagem: ficam
+  // no painel do topo até aplicar (não somem enquanto a pessoa digita)
+  const [faltavam, setFaltavam] = useState<number[]>([]);
   const porId = new Map(candidatos.map((c) => [c.id, c]));
 
   function fechar() {
     setTexto("");
     setLinhas(null);
+    setFaltavam([]);
     setIgnoradas([]);
     setConfirmouPrecos(false);
     setErro(null);
@@ -127,8 +131,7 @@ export function ColarListaDialog({
     setIgnoradas(r.ignoradas);
     const ativas = (categoriasNovos ?? []).filter((c) => c.ativo);
     const categoriaPadrao = ativas.find((c) => c.nome === "Outros")?.id ?? ativas[0]?.id ?? "";
-    setLinhas(
-      r.linhas.map((l) => {
+    const analisadas: LinhaEditavel[] = r.linhas.map((l) => {
         const a = associar(l, candidatos);
         const c = a.candidatoId ? porId.get(a.candidatoId) : undefined;
         const conv = converterParaEmbalagem(l, c?.unidadesPorEmbalagem ?? 1);
@@ -154,8 +157,9 @@ export function ColarListaDialog({
           novoEmbalagem: embalagem.tipo,
           novoUnidades: unidadesNovo ? String(unidadesNovo) : "",
         };
-      }),
-    );
+    });
+    setLinhas(analisadas);
+    setFaltavam(analisadas.filter((l) => l.candidatoId === NOVO && !l.novoUnidades).map((l) => l.linha));
   }
 
   const mudar = (i: number, campo: Partial<LinhaEditavel>) =>
@@ -296,6 +300,62 @@ export function ColarListaDialog({
               </span>
             )}
           </p>
+          {(() => {
+            // Painel único para o que a nota não informa: preencher tudo
+            // aqui, sem procurar campo vermelho entre dezenas de linhas.
+            const pendentes = linhas
+              .map((l, i) => ({ l, i }))
+              .filter(({ l }) => faltavam.includes(l.linha) && l.candidatoId === NOVO);
+            if (pendentes.length === 0) return null;
+            return (
+              <section aria-label="Unidades por embalagem dos produtos novos" className="rounded-xl border border-perigo/40 bg-perigo/5 p-3">
+                <p className="font-semibold text-verde">
+                  Quantas unidades vêm em cada embalagem?{" "}
+                  <span className={semUnidades.length ? "text-perigo" : "text-sucesso"}>
+                    {semUnidades.length ? `faltam ${semUnidades.length}` : "tudo preenchido ✓"}
+                  </span>
+                </p>
+                <p className="mt-0.5 text-xs text-texto-suave">
+                  A nota não informa. Toque no número ou digite outro. Só precisa uma vez: na próxima nota, o produto já vem certo.
+                </p>
+                <ul className="mt-2 flex flex-col divide-y divide-linha">
+                  {pendentes.map(({ l, i }) => (
+                    <li key={l.linha} className="flex flex-wrap items-center gap-1.5 py-2">
+                      <span className="w-full text-sm font-medium break-words text-verde sm:w-auto sm:flex-1">
+                        {l.novoNome}{" "}
+                        <span className="font-normal text-texto-suave">
+                          · {EMBALAGENS.find((e) => e.valor === l.novoEmbalagem)?.rotulo ?? l.novoEmbalagem}
+                        </span>
+                      </span>
+                      {[6, 12, 15, 24].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          aria-pressed={l.novoUnidades === String(n)}
+                          onClick={() => mudar(i, { novoUnidades: String(n) })}
+                          className={
+                            l.novoUnidades === String(n)
+                              ? "h-9 min-w-10 rounded-lg border border-amarelo bg-amarelo px-2 text-sm font-semibold text-verde"
+                              : "h-9 min-w-10 rounded-lg border border-linha bg-white px-2 text-sm font-semibold text-verde hover:border-amarelo"
+                          }
+                        >
+                          {n}
+                        </button>
+                      ))}
+                      <Input
+                        aria-label={`Unidades por embalagem de ${l.novoNome}`}
+                        inputMode="numeric"
+                        placeholder="outro"
+                        value={l.novoUnidades}
+                        onChange={(e) => mudar(i, { novoUnidades: e.target.value.replace(/\D/g, "") })}
+                        className="h-9 w-20"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })()}
           <ul className="flex flex-col gap-2">
             {linhas.map((l, i) => {
               const c = porId.get(l.candidatoId);
