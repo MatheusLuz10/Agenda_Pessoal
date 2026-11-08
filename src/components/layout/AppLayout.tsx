@@ -1,8 +1,9 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { FlaskConical, LogOut } from "lucide-react";
+import { FlaskConical, LogOut, Phone } from "lucide-react";
 import { Shell } from "@/components/layout/Shell";
 import { AssistantWidget } from "@/components/assistant/AssistantWidget";
 import { NAV_ITEMS } from "@/config/navigation";
+import { TELEFONE_CONTATO, TELEFONE_LINK } from "@/config/contato";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
@@ -19,7 +20,7 @@ function destinoVoltar(pathname: string): string | null {
 // Esqueleto principal da Distribuidora DEU SEDE! (Shell).
 export function AppLayout() {
   const { pathname } = useLocation();
-  const { session, signOut } = useAuth();
+  const { signOut } = useAuth();
 
   return (
     <Shell
@@ -43,17 +44,22 @@ export function AppLayout() {
       rodape={
         isSupabaseConfigured ? (
           <>
-            <p className="truncate text-creme/60" title={session?.user.email ?? ""}>
-              {session?.user.email}
-            </p>
+            <a href={TELEFONE_LINK} className="flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
+              <Phone className="size-4" /> {TELEFONE_CONTATO}
+            </a>
             <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
               <LogOut className="size-4" /> Sair
             </button>
           </>
         ) : (
-          <p className="flex items-center gap-2 text-creme/60">
-            <FlaskConical className="size-4" /> Modo de teste local
-          </p>
+          <>
+            <a href={TELEFONE_LINK} className="flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
+              <Phone className="size-4" /> {TELEFONE_CONTATO}
+            </a>
+            <p className="mt-1 flex items-center gap-2 text-creme/60">
+              <FlaskConical className="size-4" /> Modo de teste local
+            </p>
+          </>
         )
       }
     >

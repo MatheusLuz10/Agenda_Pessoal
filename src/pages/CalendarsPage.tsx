@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
+import { MarcaDagua } from "@/components/layout/MarcaDagua";
 import { BIRTHDAY_CALENDAR_NAME, useAgenda } from "@/contexts/AgendaContext";
 import { getTaskTimeStatus, todayISO } from "@/lib/date";
 
-// Tela "/calendarios" — só o calendário mensal, com as tarefas de todos os
-// calendários marcadas nos dias. Não há mais lista de calendários (nem
-// opção de criar calendário) nem lista de tarefas nesta tela.
+// Tela "/calendarios" — só o calendário mensal (com a marca d'água da
+// distribuidora), com as tarefas de todos os calendários marcadas nos
+// dias, e uma frase embaixo. Não há lista de calendários (nem opção de
+// criar calendário) nem lista de tarefas nesta tela.
 export function CalendarsPage() {
   const { tasks, getCalendarById } = useAgenda();
   const [gridYear, setGridYear] = useState(Number(todayISO().slice(0, 4)));
@@ -32,9 +34,10 @@ export function CalendarsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight">AGENDA</h1>
+      <h1 className="text-center text-2xl font-semibold tracking-tight">CALENDÁRIO</h1>
 
-      <Card>
+      <Card className="relative isolate overflow-hidden">
+        <MarcaDagua imgClassName="h-[85%] max-h-80" />
         <CardContent className="pt-5">
           <MonthGrid
             year={gridYear}
@@ -49,6 +52,8 @@ export function CalendarsPage() {
           />
         </CardContent>
       </Card>
+
+      <p className="text-center text-base text-muted-foreground">Pai nosso que estás no céu...</p>
     </div>
   );
 }

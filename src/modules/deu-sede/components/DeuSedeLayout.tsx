@@ -1,6 +1,7 @@
 import { Link, Outlet } from "react-router-dom";
-import { ArrowLeft, CalendarDays, FlaskConical, LogOut } from "lucide-react";
+import { ArrowLeft, CalendarDays, FlaskConical, LogOut, Phone } from "lucide-react";
 import { Shell } from "@/components/layout/Shell";
+import { TELEFONE_CONTATO, TELEFONE_LINK } from "@/config/contato";
 import { DEU_SEDE_BASE, MODULES } from "@/modules/deu-sede/config/modules";
 import { useSessaoDeuSede } from "@/modules/deu-sede/sessao";
 import { useConsulta, useRecarregarAoVoltar } from "@/modules/deu-sede/data/cliente";
@@ -47,7 +48,7 @@ function ConteudoProtegido() {
 }
 
 export function DeuSedeLayout() {
-  const { mode, userLabel, signOut } = useSessaoDeuSede();
+  const { mode, signOut } = useSessaoDeuSede();
   useRecarregarAoVoltar();
 
   return (
@@ -70,9 +71,9 @@ export function DeuSedeLayout() {
             <Link to={AGENDA_HOME} className="flex h-10 items-center gap-2 font-medium text-creme/85 hover:text-creme">
               <CalendarDays className="size-4" /> Voltar para o Calendário
             </Link>
-            <p className="mt-1 truncate text-creme/60" title={userLabel}>
-              {userLabel}
-            </p>
+            <a href={TELEFONE_LINK} className="flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
+              <Phone className="size-4" /> {TELEFONE_CONTATO}
+            </a>
             {mode === "supabase" && (
               <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
                 <LogOut className="size-4" /> Sair
@@ -94,7 +95,7 @@ export function DeuSedeLayout() {
                 onClick={() => signOut()}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-linha text-sm font-medium text-verde"
               >
-                <LogOut className="size-4" /> Sair ({userLabel})
+                <LogOut className="size-4" /> Sair
               </button>
             )}
           </>

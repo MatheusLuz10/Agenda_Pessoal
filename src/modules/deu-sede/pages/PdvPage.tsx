@@ -17,6 +17,7 @@ import { contemBusca, dataHoraBR, descreverEmbalagem, descreverQuantidade, lerDe
 import { DEU_SEDE_BASE } from "@/modules/deu-sede/config/modules";
 import { useSenha } from "@/modules/deu-sede/senha";
 import { cn } from "@/lib/utils";
+import { MarcaDagua } from "@/components/layout/MarcaDagua";
 
 const ROTULO_FORMA = Object.fromEntries(FORMAS_PAGAMENTO.map((f) => [f.valor, f.rotulo])) as Record<FormaPagamento, string>;
 
@@ -24,15 +25,7 @@ export function PdvPage() {
   const [aba, setAba] = useState<"vender" | "vendas">("vender");
   return (
     <div className="relative isolate flex h-full min-h-0 flex-col overflow-hidden bg-fundo">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden">
-        <div className="relative h-[20rem] w-[22rem] overflow-hidden">
-          <img
-            src="/imagem%20ponto/Banner%20promocional%20de%20bebidas%20geladas.png"
-            alt=""
-            className="absolute left-0 top-1/2 h-full max-w-none -translate-y-1/2 opacity-[0.035] mix-blend-multiply dark:mix-blend-screen"
-          />
-        </div>
-      </div>
+      <MarcaDagua />
       <header className="relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-linha bg-superficie px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Link
