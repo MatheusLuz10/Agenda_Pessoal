@@ -118,7 +118,7 @@ O critério #14 (alterar num aparelho e ver no outro) depende do Supabase: com o
 
 ## 7. Ativar o banco real
 
-1. Supabase da Agenda → **SQL Editor** → rode, em ordem, os arquivos `supabase/deu-sede/0001…0007`.
+1. Supabase da Agenda → **SQL Editor** → rode, em ordem, os arquivos `supabase/deu-sede/0001…0011`.
 2. **Project Settings → Data API → Exposed schemas**: adicione `deusede`.
 3. Crie o `.env.local` da Agenda com `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Seu usuário (o mais antigo do projeto) já é admin do DEU SEDE!.
 
