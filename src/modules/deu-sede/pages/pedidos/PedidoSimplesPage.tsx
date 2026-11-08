@@ -65,7 +65,10 @@ export function PedidoSimplesPage() {
   const [confirmar, setConfirmar] = useState(false);
   const [feito, setFeito] = useState<PedidoDetalhe | null>(null);
   const envio = useEnvio();
-  const { fornecedorId, marcados, observacoes } = rascunho;
+  const { marcados, observacoes } = rascunho;
+  // com um só fornecedor ativo, ele já vem escolhido
+  const unicoAtivo = cad?.fornecedores.filter((f) => f.ativo);
+  const fornecedorId = rascunho.fornecedorId || (unicoAtivo?.length === 1 ? unicoAtivo[0].id : "");
 
   useEffect(() => {
     try {
