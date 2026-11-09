@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleCheck, ClipboardCopy, FileDown, MessageCircle, Minus, Plus, ShoppingCart } from "lucide-react";
+import { CircleCheck, ClipboardCopy, FileDown, List, MessageCircle, Minus, Plus, ShoppingCart, X } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
@@ -63,6 +63,7 @@ export function PedidoSimplesPage() {
   const [soMarcados, setSoMarcados] = useState(false);
   const [lote, setLote] = useState(() => crypto.randomUUID());
   const [confirmar, setConfirmar] = useState(false);
+  const [verEscolhidos, setVerEscolhidos] = useState(false);
   const [feito, setFeito] = useState<PedidoDetalhe | null>(null);
   const envio = useEnvio();
   const { marcados, observacoes } = rascunho;
@@ -276,14 +277,55 @@ export function PedidoSimplesPage() {
         </Secao>
 
         {envio.erro && <Aviso tom="erro">{envio.erro}</Aviso>}
-        <div className="sticky bottom-20 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-linha bg-superficie p-3 shadow-lg lg:bottom-4">
-          <p className="text-verde">
-            {escolhidas.length} {escolhidas.length === 1 ? "produto" : "produtos"} ·{" "}
-            <strong className="text-lg tabular-nums">Total {moeda(totalGeral)}</strong>
-          </p>
-          <Button size="lg" onClick={revisar} disabled={envio.enviando}>
-            <ShoppingCart className="size-5" /> Realizar pedido
-          </Button>
+        <div className="sticky bottom-20 z-10 rounded-xl border border-linha bg-superficie shadow-lg lg:bottom-4">
+          {/* "Mostrar produtos": confere o que foi marcado antes de realizar o pedido */}
+          {verEscolhidos && (
+            <div className="border-b border-linha px-3 pt-3 pb-2">
+              <p className="mb-1 text-sm font-semibold text-verde">Produtos do pedido</p>
+              {escolhidas.length === 0 ? (
+                <p className="pb-1 text-sm text-texto-suave">Nenhum produto marcado ainda.</p>
+              ) : (
+                <ul className="flex max-h-64 flex-col divide-y divide-linha overflow-y-auto" aria-label="Produtos do pedido">
+                  {escolhidas.map((l) => (
+                    <li key={l.p.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                      <span className="min-w-0 break-words text-verde">
+                        <strong className="tabular-nums">{l.qtd === null || Number.isNaN(l.qtd) ? "?" : paraCampo(l.qtd)} ×</strong> {l.p.nome}{" "}
+                        <span className="text-texto-suave">
+                          ({descreverEmbalagem(l.b.tipo, l.b.unidades).toLowerCase()} · {moeda(l.preco)})
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1">
+                        <span className="font-semibold text-verde tabular-nums">{moeda(l.total)}</span>
+                        <button
+                          type="button"
+                          aria-label={`Tirar ${l.p.nome} do pedido`}
+                          title="Tirar do pedido"
+                          className="flex size-8 items-center justify-center rounded-lg text-texto-suave hover:bg-offwhite hover:text-perigo"
+                          onClick={() => marcar(l.p.id, null)}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+            <p className="text-verde">
+              {escolhidas.length} {escolhidas.length === 1 ? "produto" : "produtos"} ·{" "}
+              <strong className="text-lg tabular-nums">Total {moeda(totalGeral)}</strong>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="contorno" size="lg" aria-expanded={verEscolhidos} onClick={() => setVerEscolhidos((v) => !v)}>
+                <List className="size-5" /> {verEscolhidos ? "Esconder produtos" : "Mostrar produtos"}
+              </Button>
+              <Button size="lg" onClick={revisar} disabled={envio.enviando}>
+                <ShoppingCart className="size-5" /> Realizar pedido
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 

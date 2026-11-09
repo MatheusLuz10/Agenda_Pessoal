@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Minus, Plus, Printer, ScanBarcode, Trash2 } from "lucide-react";
+import { ArrowLeft, Minus, Plus, Printer, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
 import { Button } from "@/modules/deu-sede/components/ui/button";
 import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
@@ -85,14 +85,19 @@ function Vender() {
   const carrinhoRef = useRef<HTMLDivElement>(null);
 
   const categorias = useMemo(() => [...new Map((produtos ?? []).map((p) => [p.categoria_id, p.categoria_nome])).entries()], [produtos]);
-  const filtrados = useMemo(
+  // Lista de produtos: com estoque primeiro, depois os que têm preço (até 100).
+  const encontrados = useMemo(
     () =>
       (produtos ?? [])
         .filter((p) => contemBusca(busca, p.nome, p.codigo, p.marca) && (!categoria || p.categoria_id === categoria))
-        .sort((a, b) => Number(Number(b.saldo_unidades) > 0) - Number(Number(a.saldo_unidades) > 0))
-        .slice(0, 60),
+        .sort(
+          (a, b) =>
+            Number(Number(b.saldo_unidades) > 0) - Number(Number(a.saldo_unidades) > 0) ||
+            Number(b.preco_venda !== null) - Number(a.preco_venda !== null),
+        ),
     [produtos, busca, categoria],
   );
+  const filtrados = encontrados.slice(0, 100);
   const t = totaisCarrinho(carrinho, lerDecimal(desconto) ?? 0, forma, lerDecimal(recebido));
 
   function adicionar(p: ProdutoPdv, unidade: "unidade" | "embalagem") {
@@ -158,9 +163,10 @@ function Vender() {
   if (!produtos) return <Carregando />;
 
   return (
-    // Produtos em no máximo 3 colunas; o espaço que sobra vai para o carrinho
-    // (mais largo e com letra maior, para o cliente acompanhar).
-    <div className="relative z-20 grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[12rem_minmax(0,1fr)_25rem] lg:grid-rows-1 xl:grid-cols-[12rem_minmax(0,1fr)_29rem] 2xl:grid-cols-[13rem_minmax(0,1fr)_36rem]">
+    // Categorias à esquerda, carrinho no meio (grande, para o cliente
+    // acompanhar) e a lista simples de produtos à direita. No celular a ordem
+    // é categorias, produtos e carrinho (com atalho fixo embaixo).
+    <div className="relative z-20 grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[11rem_minmax(0,1fr)_22rem] lg:grid-rows-1 xl:grid-cols-[12rem_minmax(0,1fr)_26rem] 2xl:grid-cols-[13rem_minmax(0,1fr)_30rem]">
       <nav className="border-b border-linha bg-superficie px-3 py-2 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-3 lg:py-5" aria-label="Categorias de produtos">
         <p className="hidden px-3 pb-3 text-xs font-bold tracking-widest text-texto-suave uppercase lg:block">Categorias</p>
         <ul className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
@@ -183,30 +189,32 @@ function Vender() {
       </nav>
 
       <div className="grid min-h-0 overflow-y-auto lg:contents">
-        {/* ---------- Produtos ---------- */}
-        <section className="flex min-w-0 flex-col gap-3 p-3 sm:p-4 lg:min-h-0 lg:overflow-y-auto">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="relative sm:flex-1" onKeyDown={aoTeclarBusca}>
-              <CampoBusca valor={busca} aoMudar={setBusca} placeholder="Produto ou código (Enter adiciona)" />
-            </div>
+        {/* ---------- Produtos: lista simples, à direita ---------- */}
+        <section
+          aria-label="Produtos"
+          className="flex min-w-0 flex-col gap-2 p-3 sm:p-4 lg:col-start-3 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-linha lg:bg-superficie"
+        >
+          <div onKeyDown={aoTeclarBusca}>
+            <CampoBusca valor={busca} aoMudar={setBusca} placeholder="Produto ou código (Enter adiciona)" />
           </div>
           {filtrados.length === 0 ? (
             <Vazio icone={ScanBarcode} titulo="Nenhum produto encontrado" />
           ) : (
-            <ul className="grid content-start gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <ul className="divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie">
               {filtrados.map((p) => {
                 const pu = precoTabela(p, "unidade");
                 const pe = p.unidades_por_embalagem > 1 ? precoTabela(p, "embalagem") : null;
                 const semSaldo = Number(p.saldo_unidades) <= 0;
                 return (
-                  <li key={p.produto_id} className={cn("flex flex-col gap-2 rounded-xl border bg-superficie p-3", semSaldo ? "border-linha opacity-60" : "border-linha")}>
-                    <div className="min-w-0">
-                      <p className="text-sm leading-tight font-semibold text-verde">{p.nome}</p>
+                  <li key={p.produto_id} className={cn("flex items-center gap-2 px-3 py-2", semSaldo && "opacity-60")}>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-tight font-semibold break-words text-verde">{p.nome}</p>
                       <p className="text-xs text-texto-suave">
                         Estoque: {descreverQuantidade(p.saldo_unidades, p.unidades_por_embalagem, p.tipo_embalagem)}
+                        {pu === null && <span className="font-medium text-marrom"> · sem preço</span>}
                       </p>
                     </div>
-                    <div className="mt-auto flex flex-wrap gap-1.5">
+                    <div className="flex shrink-0 flex-col items-end gap-1">
                       <Button size="sm" variant={semSaldo ? "contorno" : "primario"} onClick={() => adicionar(p, "unidade")} disabled={semSaldo}>
                         <Plus className="size-3.5" /> 1 un {pu !== null ? `· ${moeda(pu)}` : ""}
                       </Button>
@@ -216,130 +224,163 @@ function Vender() {
                         </Button>
                       )}
                     </div>
-                    {pu === null && <span className="text-xs font-medium text-marrom">Sem preço de venda cadastrado</span>}
                   </li>
                 );
               })}
             </ul>
           )}
+          {encontrados.length > filtrados.length && (
+            <p className="px-1 text-xs text-texto-suave">
+              Mostrando {filtrados.length} de {encontrados.length}. Use a busca para achar os outros.
+            </p>
+          )}
         </section>
 
-        {/* ---------- Carrinho ---------- */}
-        <div ref={carrinhoRef} className="border-t border-linha bg-superficie p-3 sm:p-4 lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l">
-        <Secao titulo="Carrinho" descricao={carrinho.length ? `${carrinho.length} ${carrinho.length === 1 ? "item" : "itens"}` : "Toque nos produtos para adicionar."}>
-          <ul className="flex flex-col gap-2">
-            {carrinho.map((i) => {
-              const preco = precoItem(i);
-              return (
-                <li key={i.chave} className="rounded-xl border border-linha p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-base leading-tight font-semibold text-verde">{i.produto.nome}</span>
-                    <button type="button" aria-label={`Tirar ${i.produto.nome}`} className="text-texto-suave hover:text-perigo" onClick={() => setCarrinho((c) => c.filter((x) => x.chave !== i.chave))}>
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <div className="flex items-center rounded-lg border border-linha">
-                      <button type="button" aria-label="Menos" className="flex size-9 items-center justify-center" onClick={() => i.quantidade > 1 && mudar(i.chave, { quantidade: i.quantidade - 1 })}>
-                        <Minus className="size-4" />
+        {/* ---------- Carrinho: no meio, com letra grande para o cliente ---------- */}
+        <div
+          ref={carrinhoRef}
+          role="region"
+          aria-label="Carrinho"
+          className="flex min-w-0 flex-col border-t border-linha bg-superficie lg:col-start-2 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:border-t-0"
+        >
+          <div className="flex items-baseline justify-between gap-3 border-b border-linha px-4 py-3 sm:px-6">
+            <h2 className="text-xl font-bold text-verde sm:text-2xl">Carrinho</h2>
+            <span className="text-sm text-texto-suave">
+              {carrinho.length ? `${carrinho.length} ${carrinho.length === 1 ? "item" : "itens"}` : "vazio"}
+            </span>
+          </div>
+
+          {carrinho.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center text-texto-suave">
+              <ShoppingCart className="size-10" aria-hidden />
+              <p className="text-base">Toque nos produtos da lista para adicionar.</p>
+            </div>
+          ) : (
+            <ul className="flex-1 divide-y divide-linha px-4 sm:px-6">
+              {carrinho.map((i) => {
+                const preco = precoItem(i);
+                return (
+                  <li key={i.chave} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+                    <span className="min-w-[10rem] flex-1 text-lg leading-tight font-semibold break-words text-verde">{i.produto.nome}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center rounded-lg border border-linha">
+                        <button type="button" aria-label="Menos" className="flex size-10 items-center justify-center" onClick={() => i.quantidade > 1 && mudar(i.chave, { quantidade: i.quantidade - 1 })}>
+                          <Minus className="size-4" />
+                        </button>
+                        <input
+                          aria-label={`Quantidade de ${i.produto.nome}`}
+                          inputMode="decimal"
+                          maxLength={80}
+                          className="h-10 w-14 border-x border-linha text-center text-base font-semibold"
+                          value={paraCampo(i.quantidade)}
+                          onChange={(e) => {
+                            const q = lerDecimal(e.target.value);
+                            if (q !== null && !Number.isNaN(q) && q > 0) mudar(i.chave, { quantidade: q });
+                          }}
+                        />
+                        <button type="button" aria-label="Mais" className="flex size-10 items-center justify-center" onClick={() => mudar(i.chave, { quantidade: i.quantidade + 1 })}>
+                          <Plus className="size-4" />
+                        </button>
+                      </div>
+                      {i.produto.unidades_por_embalagem > 1 && (
+                        <Select
+                          aria-label="Vender por"
+                          className="h-10 w-auto text-sm"
+                          value={i.unidade_venda}
+                          onChange={(e) => mudar(i.chave, { unidade_venda: e.target.value as "unidade" | "embalagem", preco_manual: null })}
+                        >
+                          <option value="unidade">un</option>
+                          <option value="embalagem">{descreverEmbalagem(i.produto.tipo_embalagem, i.produto.unidades_por_embalagem).toLowerCase()}</option>
+                        </Select>
+                      )}
+                    </div>
+                    <div className="ml-auto flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="min-w-[7rem] text-right"
+                        onClick={async () => (await pedirSenha("pdv_desconto")) && setEditandoPreco(i)}
+                        title="Alterar o preço (pede senha)"
+                      >
+                        <span className={cn("block text-xl font-bold tabular-nums", preco === null ? "text-perigo" : "text-verde")}>
+                          {preco === null ? "Definir preço" : moeda(subtotalItem(i))}
+                        </span>
+                        {preco !== null && (
+                          <span className="block text-sm text-texto-suave">
+                            {moeda(preco)} cada {i.preco_manual !== null && "(manual)"}
+                          </span>
+                        )}
                       </button>
-                      <input
-                        aria-label={`Quantidade de ${i.produto.nome}`}
-                        inputMode="decimal"
-                        maxLength={80}
-                        className="h-9 w-12 border-x border-linha text-center text-sm"
-                        value={paraCampo(i.quantidade)}
-                        onChange={(e) => {
-                          const q = lerDecimal(e.target.value);
-                          if (q !== null && !Number.isNaN(q) && q > 0) mudar(i.chave, { quantidade: q });
-                        }}
-                      />
-                      <button type="button" aria-label="Mais" className="flex size-9 items-center justify-center" onClick={() => mudar(i.chave, { quantidade: i.quantidade + 1 })}>
-                        <Plus className="size-4" />
+                      <button
+                        type="button"
+                        aria-label={`Tirar ${i.produto.nome}`}
+                        className="flex size-10 items-center justify-center rounded-lg text-texto-suave hover:bg-offwhite hover:text-perigo"
+                        onClick={() => setCarrinho((c) => c.filter((x) => x.chave !== i.chave))}
+                      >
+                        <Trash2 className="size-5" />
                       </button>
                     </div>
-                    {i.produto.unidades_por_embalagem > 1 && (
-                      <Select
-                        aria-label="Vender por"
-                        className="h-9 w-auto text-sm"
-                        value={i.unidade_venda}
-                        onChange={(e) => mudar(i.chave, { unidade_venda: e.target.value as "unidade" | "embalagem", preco_manual: null })}
-                      >
-                        <option value="unidade">un</option>
-                        <option value="embalagem">{descreverEmbalagem(i.produto.tipo_embalagem, i.produto.unidades_por_embalagem).toLowerCase()}</option>
-                      </Select>
-                    )}
-                    <button
-                      type="button"
-                      className="ml-auto text-right"
-                      onClick={async () => (await pedirSenha("pdv_desconto")) && setEditandoPreco(i)}
-                      title="Alterar o preço (pede senha)"
-                    >
-                      <span className={cn("block text-lg font-bold tabular-nums", preco === null ? "text-perigo" : "text-verde")}>
-                        {preco === null ? "Definir preço" : moeda(subtotalItem(i))}
-                      </span>
-                      {preco !== null && (
-                        <span className="block text-sm text-texto-suave">
-                          {moeda(preco)} cada {i.preco_manual !== null && "(manual)"}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-          <div className="mt-4 flex flex-col gap-3">
-            {descontoLiberado ? (
-              <Campo rotulo="Desconto (R$)">{(id) => <Input id={id} inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} />}</Campo>
-            ) : (
-              <button
-                type="button"
-                className="self-start text-sm font-medium text-marrom underline"
-                onClick={async () => (await pedirSenha("pdv_desconto")) && setDescontoLiberado(true)}
-              >
-                Dar desconto
-              </button>
-            )}
-            <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Forma de pagamento">
-              {FORMAS_PAGAMENTO.map((f) => (
-                <button
-                  key={f.valor}
-                  type="button"
-                  role="radio"
-                  aria-checked={forma === f.valor}
-                  onClick={() => setForma(f.valor)}
-                  className={cn(
-                    "h-11 rounded-xl border text-sm font-medium",
-                    forma === f.valor ? "border-verde bg-verde text-creme" : "border-linha bg-superficie text-verde",
-                  )}
-                >
-                  {f.rotulo}
-                </button>
-              ))}
+          {/* Pagamento e total (no computador grande fica preso embaixo) */}
+          <div className="border-t border-linha bg-superficie px-4 py-4 sm:px-6 xl:sticky xl:bottom-0">
+            <div className="grid gap-4 xl:grid-cols-2 xl:gap-6">
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Forma de pagamento">
+                  {FORMAS_PAGAMENTO.map((f) => (
+                    <button
+                      key={f.valor}
+                      type="button"
+                      role="radio"
+                      aria-checked={forma === f.valor}
+                      onClick={() => setForma(f.valor)}
+                      className={cn(
+                        "h-11 rounded-xl border text-sm font-medium",
+                        forma === f.valor ? "border-verde bg-verde text-creme" : "border-linha bg-superficie text-verde",
+                      )}
+                    >
+                      {f.rotulo}
+                    </button>
+                  ))}
+                </div>
+                {forma === "dinheiro" && (
+                  <Campo rotulo="Valor recebido (R$)" ajuda={t.troco !== null ? `Troco: ${moeda(t.troco)}` : undefined}>
+                    {(id) => <Input id={id} inputMode="decimal" value={recebido} onChange={(e) => setRecebido(e.target.value)} />}
+                  </Campo>
+                )}
+                <Campo rotulo="Cliente (opcional)">{(id) => <Input id={id} value={cliente} onChange={(e) => setCliente(e.target.value)} />}</Campo>
+                {descontoLiberado ? (
+                  <Campo rotulo="Desconto (R$)">{(id) => <Input id={id} inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} />}</Campo>
+                ) : (
+                  <button
+                    type="button"
+                    className="self-start text-sm font-medium text-marrom underline"
+                    onClick={async () => (await pedirSenha("pdv_desconto")) && setDescontoLiberado(true)}
+                  >
+                    Dar desconto
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col gap-3 xl:justify-end">
+                <dl className="grid gap-1.5 rounded-xl bg-offwhite/60 p-4 text-base">
+                  <div className="flex justify-between"><dt>Subtotal</dt><dd className="tabular-nums">{moeda(t.subtotal)}</dd></div>
+                  {t.desconto > 0 && <div className="flex justify-between"><dt>Desconto</dt><dd className="tabular-nums">− {moeda(t.desconto)}</dd></div>}
+                  <div className="flex items-baseline justify-between text-2xl font-bold text-verde sm:text-3xl"><dt>Total</dt><dd className="tabular-nums">{moeda(t.total)}</dd></div>
+                  {t.troco !== null && <div className="flex justify-between text-lg font-semibold text-sucesso"><dt>Troco</dt><dd className="tabular-nums">{moeda(t.troco)}</dd></div>}
+                </dl>
+                {t.semSaldo.length > 0 && (
+                  <Aviso tom="atencao">Estoque insuficiente: {t.semSaldo.map((s) => s.produto.nome).join(", ")}.</Aviso>
+                )}
+                {erro && <Aviso tom="erro">{erro}</Aviso>}
+                <Button size="lg" onClick={finalizar} disabled={finalizando || carrinho.length === 0}>
+                  {finalizando ? "Finalizando…" : `Finalizar venda · ${moeda(t.total)}`}
+                </Button>
+              </div>
             </div>
-            {forma === "dinheiro" && (
-              <Campo rotulo="Valor recebido (R$)" ajuda={t.troco !== null ? `Troco: ${moeda(t.troco)}` : undefined}>
-                {(id) => <Input id={id} inputMode="decimal" value={recebido} onChange={(e) => setRecebido(e.target.value)} />}
-              </Campo>
-            )}
-            <Campo rotulo="Cliente (opcional)">{(id) => <Input id={id} value={cliente} onChange={(e) => setCliente(e.target.value)} />}</Campo>
-            <dl className="grid gap-1.5 rounded-xl bg-offwhite/60 p-4 text-base">
-              <div className="flex justify-between"><dt>Subtotal</dt><dd className="tabular-nums">{moeda(t.subtotal)}</dd></div>
-              {t.desconto > 0 && <div className="flex justify-between"><dt>Desconto</dt><dd className="tabular-nums">− {moeda(t.desconto)}</dd></div>}
-              <div className="flex items-baseline justify-between text-2xl font-bold text-verde sm:text-3xl"><dt>Total</dt><dd className="tabular-nums">{moeda(t.total)}</dd></div>
-              {t.troco !== null && <div className="flex justify-between text-lg font-semibold text-sucesso"><dt>Troco</dt><dd className="tabular-nums">{moeda(t.troco)}</dd></div>}
-            </dl>
-            {t.semSaldo.length > 0 && (
-              <Aviso tom="atencao">Estoque insuficiente: {t.semSaldo.map((s) => s.produto.nome).join(", ")}.</Aviso>
-            )}
-            {erro && <Aviso tom="erro">{erro}</Aviso>}
-            <Button size="lg" onClick={finalizar} disabled={finalizando || carrinho.length === 0}>
-              {finalizando ? "Finalizando…" : `Finalizar venda · ${moeda(t.total)}`}
-            </Button>
           </div>
-        </Secao>
         </div>
       </div>
 

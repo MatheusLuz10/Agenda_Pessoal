@@ -106,6 +106,21 @@ export function invalidar() {
   ouvintes.forEach((f) => f());
 }
 
+// Troca de usuário (sair e entrar com outro login na mesma aba): nada do
+// login anterior pode continuar na tela, nem "quem sou eu" (meu_acesso) —
+// senão o login de pedidos herdava o menu do administrador.
+let usuarioAtual: string | null | undefined;
+let geracaoUsuario = 0;
+supabase?.auth.onAuthStateChange((_evento, sessao) => {
+  const id = sessao?.user?.id ?? null;
+  if (usuarioAtual !== undefined && id !== usuarioAtual) {
+    geracaoUsuario++;
+    // fora do aviso do Supabase (ele segura a sessão enquanto avisa)
+    setTimeout(invalidar, 0);
+  }
+  usuarioAtual = id;
+});
+
 function assinar(f: () => void) {
   ouvintes.add(f);
   return () => {
@@ -135,7 +150,8 @@ interface Estado<T> {
 export function useConsulta<T>(fn: FuncaoRPC, payload: object | null = {}) {
   const v = useSyncExternalStore(assinar, () => versao);
   const parametros = payload === null ? null : JSON.stringify(payload);
-  const base = parametros === null ? "" : `${fn}|${parametros}`;
+  // com o usuário na chave, a troca de login não mostra dados do anterior
+  const base = parametros === null ? "" : `${geracaoUsuario}|${fn}|${parametros}`;
   const chave = base ? `${v}|${base}` : "";
   const [estado, setEstado] = useState<Estado<T>>({ base: "", chave: "" });
 
