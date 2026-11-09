@@ -5,7 +5,7 @@ import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
 import { CampoBusca } from "@/modules/deu-sede/components/ui/filtros";
-import { Campo, Input, Select } from "@/modules/deu-sede/components/ui/input";
+import { Campo, Input, Interruptor, Select } from "@/modules/deu-sede/components/ui/input";
 import { Confirmar } from "@/modules/deu-sede/components/ui/dialogo";
 import { BotaoColarLista, ColarListaDialog, type CandidatoLista, type LinhaAplicada } from "@/modules/deu-sede/components/ColarListaDialog";
 import { rota } from "@/modules/deu-sede/config/modules";
@@ -18,6 +18,16 @@ import { cn } from "@/lib/utils";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 type FiltroEstoque = "todos" | "com" | "sem" | "abaixo";
+/** Onde a margem de venda é aplicada: todos os ativos, uma categoria ou os marcados. */
+type EscopoMargem = "todos" | "categoria" | "selecionados";
+
+const semPrecoDeVenda = (p: Produto) => p.preco_venda === null && p.preco_venda_embalagem === null;
+
+/** Margem atual sobre o custo (%), ou null sem preço de venda ou sem custo. */
+function margemAtual(p: Produto, custoUn: number | null): number | null {
+  if (p.preco_venda === null || custoUn === null || custoUn <= 0) return null;
+  return (Number(p.preco_venda) / custoUn - 1) * 100;
+}
 
 interface LinhaProduto {
   p: Produto;
@@ -56,6 +66,9 @@ export function ProdutosPage() {
   const [fornecedorEscolhido, setFornecedorLista] = useState("");
   const [precificando, setPrecificando] = useState(false);
   const [margem, setMargem] = useState("30");
+  const [escopoMargem, setEscopoMargem] = useState<EscopoMargem>("todos");
+  const [categoriaMargem, setCategoriaMargem] = useState("");
+  const [soSemPreco, setSoSemPreco] = useState(false);
 
   const estoquePorProduto = useMemo(() => new Map((estoque.dados ?? []).map((e) => [e.produto_id, e])), [estoque.dados]);
 
@@ -154,30 +167,57 @@ export function ProdutosPage() {
     }
   }
 
-  // Preço de venda dos marcados = custo por unidade + margem (%). Produto sem
-  // custo (sem preço de fornecedor nem entrada) fica de fora e é avisado.
+  // Margem de venda: preço de venda por unidade = custo por unidade + margem
+  // (%), em todos os produtos ativos, numa categoria ou nos marcados. Produto
+  // sem custo (sem preço de fornecedor nem entrada) fica de fora e é avisado.
+  const alvoMargem = (
+    escopoMargem === "selecionados"
+      ? marcados
+      : todas.filter((l) => l.p.ativo && (escopoMargem === "todos" || (!!categoriaMargem && l.p.categoria_id === categoriaMargem)))
+  ).filter((l) => !soSemPreco || semPrecoDeVenda(l.p));
+  const alvoComCusto = alvoMargem.filter((l) => l.menorCusto !== null);
+  const alvoSemCusto = alvoMargem.filter((l) => l.menorCusto === null);
+  const alvoTrocaPreco = alvoComCusto.filter((l) => !semPrecoDeVenda(l.p)).length;
+
+  function abrirMargem(escopo: EscopoMargem) {
+    setResultado(null);
+    setEscopoMargem(escopo);
+    if (escopo === "categoria" && !categoriaMargem) setCategoriaMargem(categoria);
+    setPrecificando(true);
+  }
+
   async function aplicarMargem() {
     const m = lerDecimal(margem);
     if (m === null || Number.isNaN(m) || m < 0) throw new Error("Informe a margem em % (ex.: 30).");
+    if (escopoMargem === "categoria" && !categoriaMargem) throw new Error("Escolha a categoria.");
+    if (alvoComCusto.length === 0) throw new Error("Nenhum produto com custo para calcular o preço.");
     let feitos = 0;
-    const semCusto: string[] = [];
     try {
-      for (const l of marcados) {
-        if (l.menorCusto === null) {
-          semCusto.push(l.p.nome);
-          continue;
-        }
-        await chamar("salvar_produto", { ...l.p, preco_venda: arredondar(l.menorCusto * (1 + m / 100)), preco_venda_embalagem: null });
-        feitos++;
+      // alguns de cada vez, para não demorar com centenas de produtos
+      for (let i = 0; i < alvoComCusto.length; i += 6) {
+        await Promise.all(
+          alvoComCusto.slice(i, i + 6).map(async (l) => {
+            await chamar("salvar_produto", { ...l.p, preco_venda: arredondar(l.menorCusto! * (1 + m / 100)), preco_venda_embalagem: null });
+            feitos++;
+          }),
+        );
       }
     } finally {
       invalidar();
     }
-    const fora = semCusto.length
-      ? ` Ficaram de fora ${semCusto.length} sem custo: ${semCusto.slice(0, 5).join(", ")}${semCusto.length > 5 ? "…" : ""}.`
+    const onde =
+      escopoMargem === "categoria" ? ` na categoria ${categorias.get(categoriaMargem)?.nome ?? ""}` : escopoMargem === "todos" ? " em todos os produtos ativos" : "";
+    const fora = alvoSemCusto.length
+      ? ` Ficaram de fora ${alvoSemCusto.length} sem custo: ${alvoSemCusto
+          .slice(0, 5)
+          .map((l) => l.p.nome)
+          .join(", ")}${alvoSemCusto.length > 5 ? "…" : ""}.`
       : "";
-    setResultado({ tom: semCusto.length ? "atencao" : "sucesso", texto: `${feitos} ${feitos === 1 ? "preço de venda definido" : "preços de venda definidos"} (custo + ${numero(m)}%).${fora}` });
-    setSelecionados(new Set());
+    setResultado({
+      tom: alvoSemCusto.length ? "atencao" : "sucesso",
+      texto: `Margem de ${numero(m)}% aplicada${onde}: ${feitos} ${feitos === 1 ? "preço de venda definido" : "preços de venda definidos"}.${fora}`,
+    });
+    if (escopoMargem === "selecionados") setSelecionados(new Set());
     setPrecificando(false);
   }
 
@@ -246,6 +286,11 @@ export function ProdutosPage() {
         actions={
           <>
             <BotaoColarLista aoClicar={() => setColar(true)} />
+            {!!dados?.produtos.length && (
+              <Button variant="contorno" onClick={() => abrirMargem(selecionados.size ? "selecionados" : categoria ? "categoria" : "todos")}>
+                <Tag className="size-4" /> Margem de venda
+              </Button>
+            )}
             <LinkBotao to={rota("produtos", "novo")}>
               <Plus className="size-4" /> Novo produto
             </LinkBotao>
@@ -308,8 +353,8 @@ export function ProdutosPage() {
                   <Pencil className="size-4" /> Editar
                 </LinkBotao>
               )}
-              <Button variant="contorno" size="sm" onClick={() => setPrecificando(true)}>
-                <Tag className="size-4" /> Preço de venda
+              <Button variant="contorno" size="sm" onClick={() => abrirMargem("selecionados")}>
+                <Tag className="size-4" /> Margem de venda
               </Button>
               <Button variant="contorno" size="sm" onClick={alternarAtivo}>
                 {algumAtivo ? <EyeOff className="size-4" /> : <Eye className="size-4" />} {algumAtivo ? "Desativar" : "Reativar"}
@@ -417,6 +462,14 @@ export function ProdutosPage() {
                                 ["Custo por unidade", l.menorCusto === null ? "—" : `${moedaUnitaria(l.menorCusto)}${l.embalagemCusto.unidades > 1 ? ` (÷ ${l.embalagemCusto.unidades})` : ""}`],
                                 ["Venda por unidade", moedaUnitaria(p.preco_venda)],
                                 [
+                                  "Margem",
+                                  (() => {
+                                    const mg = margemAtual(p, l.menorCusto);
+                                    // inteiro: o preço vai a centavos, então 25% pode voltar como 25,07%
+                                    return mg === null ? "—" : `${numero(mg, 0)}%`;
+                                  })(),
+                                ],
+                                [
                                   `Venda ${descreverEmbalagem(p.tipo_embalagem, p.unidades_por_embalagem).toLowerCase()}`,
                                   p.preco_venda_embalagem !== null
                                     ? moeda(p.preco_venda_embalagem)
@@ -499,15 +552,43 @@ export function ProdutosPage() {
       />
       <Confirmar
         aberto={precificando}
-        titulo={`Preço de venda de ${marcados.length} ${marcados.length === 1 ? "produto" : "produtos"}`}
+        titulo="Margem de venda"
         mensagem={
           <div className="flex flex-col gap-3">
             <p>O preço de venda por unidade (usado no PDV) vira o custo por unidade mais a margem.</p>
+            <Campo rotulo="Aplicar em">
+              {(id) => (
+                <Select id={id} value={escopoMargem} onChange={(e) => setEscopoMargem(e.target.value as EscopoMargem)}>
+                  <option value="todos">Todos os produtos ativos</option>
+                  <option value="categoria">Uma categoria</option>
+                  {marcados.length > 0 && (
+                    <option value="selecionados">
+                      {marcados.length} {marcados.length === 1 ? "produto selecionado" : "produtos selecionados"}
+                    </option>
+                  )}
+                </Select>
+              )}
+            </Campo>
+            {escopoMargem === "categoria" && (
+              <Campo rotulo="Categoria">
+                {(id) => (
+                  <Select id={id} value={categoriaMargem} onChange={(e) => setCategoriaMargem(e.target.value)}>
+                    <option value="">Escolha…</option>
+                    {(dados?.categorias ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Campo>
+            )}
             <Campo rotulo="Margem sobre o custo (%)">
               {(id) => <Input id={id} inputMode="decimal" value={margem} onChange={(e) => setMargem(e.target.value)} className="w-32" />}
             </Campo>
+            <Interruptor ligado={soSemPreco} aoMudar={setSoSemPreco} rotulo="Só nos produtos sem preço de venda" />
             {(() => {
-              const ex = marcados.find((l) => l.menorCusto !== null);
+              const ex = alvoComCusto[0];
               const m = lerDecimal(margem);
               if (!ex || m === null || Number.isNaN(m)) return null;
               return (
@@ -516,14 +597,20 @@ export function ProdutosPage() {
                 </p>
               );
             })()}
-            {marcados.some((l) => l.menorCusto === null) && (
+            {(escopoMargem !== "categoria" || categoriaMargem) && (
+              <p className="text-sm font-medium text-verde">
+                {alvoComCusto.length} {alvoComCusto.length === 1 ? "produto recebe" : "produtos recebem"} o preço
+                {alvoTrocaPreco > 0 && ` (${alvoTrocaPreco} já ${alvoTrocaPreco === 1 ? "tinha preço e será trocado" : "tinham preço e serão trocados"})`}.
+              </p>
+            )}
+            {alvoSemCusto.length > 0 && (
               <p className="text-sm text-marrom">
-                {marcados.filter((l) => l.menorCusto === null).length} sem custo ficam de fora (cole a lista de preços do fornecedor antes).
+                {alvoSemCusto.length} sem custo {alvoSemCusto.length === 1 ? "fica" : "ficam"} de fora (cole a lista de preços do fornecedor antes).
               </p>
             )}
           </div>
         }
-        textoConfirmar="Definir preços"
+        textoConfirmar="Aplicar margem"
         aoFechar={() => setPrecificando(false)}
         aoConfirmar={aplicarMargem}
       />
