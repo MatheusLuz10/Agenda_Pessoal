@@ -11,7 +11,7 @@ import { Secao } from "@/modules/deu-sede/components/ui/secao";
 import { FiltroPeriodo } from "@/modules/deu-sede/components/FiltroPeriodo";
 import { chamar, executar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import type { FormaPagamento, ProdutoPdv, ResumoVendas, Venda, VendaResumo } from "@/modules/deu-sede/data/tipos";
-import { FORMAS_PAGAMENTO, precoItem, precoTabela, subtotalItem, totaisCarrinho, type ItemCarrinho } from "@/modules/deu-sede/domain/pdv";
+import { FORMAS_PAGAMENTO, precoItem, precoTabela, subtotalItem, totaisCarrinho, unidadesDoItem, type ItemCarrinho } from "@/modules/deu-sede/domain/pdv";
 import { periodoDoAtalho, type Periodo } from "@/modules/deu-sede/domain/periodo";
 import { contemBusca, dataHoraBR, descreverEmbalagem, descreverQuantidade, lerDecimal, moeda, numero, paraCampo } from "@/modules/deu-sede/domain/formatos";
 import { DEU_SEDE_BASE } from "@/modules/deu-sede/config/modules";
@@ -68,7 +68,7 @@ export function PdvPage() {
 
 function Vender() {
   const { dados: produtos, erro: erroProdutos } = useConsulta<ProdutoPdv[]>("pdv_produtos");
-  const { pedirSenha } = useSenha();
+  const { pedirSenha, confirmarComSenha } = useSenha();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("");
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
@@ -109,6 +109,17 @@ function Vender() {
     });
   }
   const mudar = (chaveItem: string, c: Partial<ItemCarrinho>) => setCarrinho((xs) => xs.map((x) => (x.chave === chaveItem ? { ...x, ...c } : x)));
+
+  // Cancelar item (tirar do carrinho) ou diminuir a quantidade pede a senha
+  // do administrador toda vez. Aumentar não pede.
+  async function mudarItem(i: ItemCarrinho, c: Partial<ItemCarrinho>) {
+    if (unidadesDoItem({ ...i, ...c }) < unidadesDoItem(i) && !(await confirmarComSenha(`Diminuir a quantidade de ${i.produto.nome}`))) return;
+    mudar(i.chave, c);
+  }
+  async function cancelarItem(i: ItemCarrinho) {
+    if (!(await confirmarComSenha(`Cancelar o item ${i.produto.nome}`))) return;
+    setCarrinho((c) => c.filter((x) => x.chave !== i.chave));
+  }
 
   function aoTeclarBusca(e: React.KeyboardEvent) {
     if (e.key !== "Enter") return;
@@ -267,20 +278,15 @@ function Vender() {
                     <span className="min-w-[10rem] flex-1 text-lg leading-tight font-semibold break-words text-verde">{i.produto.nome}</span>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center rounded-lg border border-linha">
-                        <button type="button" aria-label="Menos" className="flex size-10 items-center justify-center" onClick={() => i.quantidade > 1 && mudar(i.chave, { quantidade: i.quantidade - 1 })}>
+                        <button
+                          type="button"
+                          aria-label="Menos"
+                          className="flex size-10 items-center justify-center"
+                          onClick={() => i.quantidade > 1 && void mudarItem(i, { quantidade: i.quantidade - 1 })}
+                        >
                           <Minus className="size-4" />
                         </button>
-                        <input
-                          aria-label={`Quantidade de ${i.produto.nome}`}
-                          inputMode="decimal"
-                          maxLength={80}
-                          className="h-10 w-14 border-x border-linha text-center text-base font-semibold"
-                          value={paraCampo(i.quantidade)}
-                          onChange={(e) => {
-                            const q = lerDecimal(e.target.value);
-                            if (q !== null && !Number.isNaN(q) && q > 0) mudar(i.chave, { quantidade: q });
-                          }}
-                        />
+                        <QuantidadeItem item={i} aoMudar={(q) => void mudarItem(i, { quantidade: q })} />
                         <button type="button" aria-label="Mais" className="flex size-10 items-center justify-center" onClick={() => mudar(i.chave, { quantidade: i.quantidade + 1 })}>
                           <Plus className="size-4" />
                         </button>
@@ -290,7 +296,7 @@ function Vender() {
                           aria-label="Vender por"
                           className="h-10 w-auto text-sm"
                           value={i.unidade_venda}
-                          onChange={(e) => mudar(i.chave, { unidade_venda: e.target.value as "unidade" | "embalagem", preco_manual: null })}
+                          onChange={(e) => void mudarItem(i, { unidade_venda: e.target.value as "unidade" | "embalagem", preco_manual: null })}
                         >
                           <option value="unidade">un</option>
                           <option value="embalagem">{descreverEmbalagem(i.produto.tipo_embalagem, i.produto.unidades_por_embalagem).toLowerCase()}</option>
@@ -315,9 +321,10 @@ function Vender() {
                       </button>
                       <button
                         type="button"
-                        aria-label={`Tirar ${i.produto.nome}`}
+                        aria-label={`Cancelar ${i.produto.nome} (pede senha)`}
+                        title="Cancelar item (pede a senha do administrador)"
                         className="flex size-10 items-center justify-center rounded-lg text-texto-suave hover:bg-offwhite hover:text-perigo"
-                        onClick={() => setCarrinho((c) => c.filter((x) => x.chave !== i.chave))}
+                        onClick={() => void cancelarItem(i)}
                       >
                         <Trash2 className="size-5" />
                       </button>
@@ -411,6 +418,31 @@ function Vender() {
       )}
       {comprovante && <Comprovante venda={comprovante} aoFechar={() => setComprovante(null)} />}
     </div>
+  );
+}
+
+// Quantidade digitada: vale ao sair do campo (ou Enter), para que diminuir
+// peça a senha uma vez só e não a cada tecla.
+function QuantidadeItem({ item, aoMudar }: { item: ItemCarrinho; aoMudar: (q: number) => void }) {
+  const [texto, setTexto] = useState<string | null>(null);
+  function confirmar() {
+    if (texto === null) return;
+    const q = lerDecimal(texto);
+    setTexto(null);
+    if (q !== null && !Number.isNaN(q) && q > 0 && q !== item.quantidade) aoMudar(q);
+  }
+  return (
+    <input
+      aria-label={`Quantidade de ${item.produto.nome}`}
+      inputMode="decimal"
+      maxLength={80}
+      className="h-10 w-14 border-x border-linha text-center text-base font-semibold"
+      value={texto ?? paraCampo(item.quantidade)}
+      onFocus={() => setTexto(paraCampo(item.quantidade))}
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={confirmar}
+      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+    />
   );
 }
 

@@ -87,6 +87,18 @@ interface ContextoSenha {
   renovar: () => void;
   /** Para ações: resolve true se liberado (pede a senha se precisar). */
   pedirSenha: (area: AreaSensivel) => Promise<boolean>;
+  /**
+   * Pede a senha SEMPRE (ex.: cancelar item no PDV), mesmo com a tela já
+   * liberada, e não libera as outras áreas por 10 minutos.
+   */
+  confirmarComSenha: (motivo: string) => Promise<boolean>;
+}
+
+interface PedidoSenha {
+  area: AreaSensivel;
+  /** texto do que está sendo autorizado (só na confirmação avulsa) */
+  motivo?: string;
+  resolver: (ok: boolean) => void;
 }
 
 const Contexto = createContext<ContextoSenha | null>(null);
@@ -95,7 +107,7 @@ export function SenhaProvider({ children }: { children: ReactNode }) {
   const { dados: config, erro: erroConfig } = useConsulta<ConfigSenha | null>("config_senha");
   const [ate, setAte] = useState(lerAte);
   const [agora, setAgora] = useState(() => Date.now());
-  const [pedido, setPedido] = useState<{ area: AreaSensivel; resolver: (ok: boolean) => void } | null>(null);
+  const [pedido, setPedido] = useState<PedidoSenha | null>(null);
 
   // relógio de 15 s para expirar a liberação
   useEffect(() => {
@@ -140,20 +152,36 @@ export function SenhaProvider({ children }: { children: ReactNode }) {
     [liberada, protegida, renovar],
   );
 
+  const confirmarComSenha = useCallback(
+    (motivo: string) =>
+      new Promise<boolean>((resolver) => {
+        // um pedido por vez: se já havia outro aberto, ele é recusado
+        setPedido((anterior) => {
+          anterior?.resolver(false);
+          return { area: "pdv", motivo, resolver };
+        });
+      }),
+    [],
+  );
+
   return (
-    <Contexto.Provider value={{ config: cfg, erroConfig, desbloqueado: desbloqueado && !!cfg?.definida, protegida, liberada, desbloquear, bloquear, renovar, pedirSenha }}>
+    <Contexto.Provider
+      value={{ config: cfg, erroConfig, desbloqueado: desbloqueado && !!cfg?.definida, protegida, liberada, desbloquear, bloquear, renovar, pedirSenha, confirmarComSenha }}
+    >
       {children}
       {pedido && (
         <Dialogo
           aberto
-          titulo="Área protegida"
+          titulo={pedido.motivo ? "Senha do administrador" : "Área protegida"}
           aoFechar={() => {
             pedido.resolver(false);
             setPedido(null);
           }}
         >
+          {pedido.motivo && <p className="mb-4 text-center text-base font-semibold text-verde">{pedido.motivo}</p>}
           <EntradaSenha
             area={pedido.area}
+            soConferir={!!pedido.motivo}
             aoLiberar={() => {
               pedido.resolver(true);
               setPedido(null);
@@ -202,7 +230,7 @@ export function AreaProtegida({ area, children }: { area: AreaSensivel; children
 }
 
 /** Teclado de 4 dígitos (também aceita o teclado do computador). */
-function EntradaSenha({ area, aoLiberar }: { area: AreaSensivel; aoLiberar?: () => void }) {
+function EntradaSenha({ area, aoLiberar, soConferir }: { area: AreaSensivel; aoLiberar?: () => void; soConferir?: boolean }) {
   const { config, desbloquear } = useSenha();
   const { dados: acesso } = useConsulta<Acesso | null>("meu_acesso");
   const [pin, setPin] = useState("");
@@ -220,7 +248,8 @@ function EntradaSenha({ area, aoLiberar }: { area: AreaSensivel; aoLiberar?: () 
     if (Date.now() < bloqueadoAte) return;
     setVerificando(true);
     try {
-      const ok = await desbloquear(valor);
+      // soConferir: autoriza só esta ação, sem liberar as áreas por 10 minutos
+      const ok = soConferir ? (await chamar<{ ok: boolean }>("verificar_senha", { pin: valor })).ok : await desbloquear(valor);
       if (ok) {
         setErro(null);
         aoLiberar?.();
