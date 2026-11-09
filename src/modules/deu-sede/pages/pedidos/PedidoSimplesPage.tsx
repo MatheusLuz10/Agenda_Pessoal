@@ -327,6 +327,7 @@ export function PedidoSimplesPage() {
             <>
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <CampoBusca valor={busca} aoMudar={setBusca} placeholder="Pesquisar produto ou código" className="sm:flex-1" />
+                <div className="flex flex-wrap items-center gap-x-4">
                 <label className="flex h-11 items-center gap-2 text-sm font-medium text-verde">
                   <input
                     type="checkbox"
@@ -340,6 +341,7 @@ export function PedidoSimplesPage() {
                   <input type="checkbox" className="size-5 accent-verde" checked={soMarcados} onChange={(e) => setSoMarcados(e.target.checked)} />
                   Só os marcados ({escolhidas.length})
                 </label>
+                </div>
               </div>
               <div className="overflow-hidden rounded-xl border border-linha">
                 <div className="hidden grid-cols-[auto_minmax(0,1fr)_7.5rem_9rem_7rem] gap-x-3 border-b border-linha bg-fundo px-3 py-2 text-xs font-semibold tracking-wide text-texto-suave uppercase sm:grid">
@@ -415,7 +417,7 @@ export function PedidoSimplesPage() {
               {escolhidas.length === 0 ? (
                 <p className="pb-1 text-sm text-texto-suave">Nenhum produto marcado ainda.</p>
               ) : (
-                <ul className="flex max-h-64 flex-col divide-y divide-linha overflow-y-auto" aria-label="Produtos do pedido">
+                <ul className="flex max-h-[40vh] flex-col divide-y divide-linha overflow-y-auto sm:max-h-64" aria-label="Produtos do pedido">
                   {escolhidas.map((l) => (
                     <li key={l.p.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
                       <span className="min-w-0 break-words text-verde">
@@ -442,20 +444,35 @@ export function PedidoSimplesPage() {
               )}
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3">
-            <p className="text-verde">
-              {escolhidas.length} {escolhidas.length === 1 ? "produto" : "produtos"} ·{" "}
-              <strong className="text-lg tabular-nums">Total {moeda(totalGeral)}</strong>
+          {/* celular: uma linha só (resumo + botão de ícone + Realizar); computador: com os rótulos */}
+          <div className="flex items-center justify-between gap-2 p-2 sm:flex-wrap sm:gap-3 sm:p-3">
+            <p className="min-w-0 leading-tight text-verde">
+              <span className="block text-xs sm:inline sm:text-base">
+                {escolhidas.length} {escolhidas.length === 1 ? "produto" : "produtos"}
+                <span className="hidden sm:inline"> · </span>
+              </span>
+              <strong className="text-base tabular-nums sm:text-lg">
+                <span className="hidden sm:inline">Total </span>
+                {moeda(totalGeral)}
+              </strong>
             </p>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="contorno" size="lg" aria-expanded={verEscolhidos} onClick={() => {
+            <div className="flex shrink-0 gap-2">
+              <Button
+                variant="contorno"
+                className="h-11 px-3 sm:h-13 sm:px-6 sm:text-base"
+                aria-label={verEscolhidos ? "Esconder produtos" : "Mostrar produtos"}
+                title={verEscolhidos ? "Esconder produtos" : "Mostrar produtos"}
+                aria-expanded={verEscolhidos}
+                onClick={() => {
                   if (!verEscolhidos) registrarAtividade("pedidos", "mostrou_produtos", `Abriu a lista dos produtos marcados (${escolhidas.length})`);
                   setVerEscolhidos((v) => !v);
-                }}>
-                <List className="size-5" /> {verEscolhidos ? "Esconder produtos" : "Mostrar produtos"}
+                }}
+              >
+                <List className="size-5" />
+                <span className="hidden sm:inline">{verEscolhidos ? "Esconder produtos" : "Mostrar produtos"}</span>
               </Button>
-              <Button size="lg" onClick={revisar} disabled={envio.enviando}>
-                <ShoppingCart className="size-5" /> Realizar pedido
+              <Button className="h-11 px-4 sm:h-13 sm:px-6 sm:text-base" aria-label="Realizar pedido" onClick={revisar} disabled={envio.enviando}>
+                <ShoppingCart className="size-5" /> Realizar<span className="hidden sm:inline"> pedido</span>
               </Button>
             </div>
           </div>
