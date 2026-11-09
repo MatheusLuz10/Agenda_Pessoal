@@ -194,13 +194,16 @@ function Vender() {
           aria-label="Produtos"
           className="flex min-w-0 flex-col gap-2 p-3 sm:p-4 lg:col-start-3 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-linha lg:bg-superficie"
         >
-          <div onKeyDown={aoTeclarBusca}>
+          <div className="shrink-0" onKeyDown={aoTeclarBusca}>
             <CampoBusca valor={busca} aoMudar={setBusca} placeholder="Produto ou código (Enter adiciona)" />
           </div>
           {filtrados.length === 0 ? (
             <Vazio icone={ScanBarcode} titulo="Nenhum produto encontrado" />
           ) : (
-            <ul className="divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie">
+            // shrink-0: sem ele a lista (com overflow-hidden por causa da borda
+            // arredondada) encolhia até caber na coluna e cortava os produtos
+            // em vez de deixar a coluna rolar
+            <ul className="shrink-0 divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie">
               {filtrados.map((p) => {
                 const pu = precoTabela(p, "unidade");
                 const pe = p.unidades_por_embalagem > 1 ? precoTabela(p, "embalagem") : null;
