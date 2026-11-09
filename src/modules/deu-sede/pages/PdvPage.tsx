@@ -82,6 +82,7 @@ function Vender() {
   const [erro, setErro] = useState<string | null>(null);
   const [comprovante, setComprovante] = useState<Venda | null>(null);
   const [editandoPreco, setEditandoPreco] = useState<ItemCarrinho | null>(null);
+  const [pixGrande, setPixGrande] = useState(false);
   const carrinhoRef = useRef<HTMLDivElement>(null);
 
   const categorias = useMemo(() => [...new Map((produtos ?? []).map((p) => [p.categoria_id, p.categoria_nome])).entries()], [produtos]);
@@ -356,6 +357,23 @@ function Vender() {
                     </button>
                   ))}
                 </div>
+                {/* PIX: QR code da distribuidora para o cliente ler */}
+                {forma === "pix" && (
+                  <div className="flex items-center gap-3 rounded-xl border border-linha p-3">
+                    <span className="shrink-0 rounded-lg bg-white p-1.5">
+                      <img src="/pix-qrcode.png" alt="QR code do PIX da Distribuidora DEU SEDE!" width={400} height={400} className="size-32" />
+                    </span>
+                    <div className="flex min-w-0 flex-col gap-1 text-sm">
+                      <p className="font-semibold text-verde">Pague com PIX</p>
+                      <p className="text-texto">
+                        Leia o QR code e pague <strong className="tabular-nums">{moeda(t.total)}</strong>.
+                      </p>
+                      <button type="button" className="self-start text-sm font-medium text-marrom underline" onClick={() => setPixGrande(true)}>
+                        Mostrar grande
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {forma === "dinheiro" && (
                   <Campo rotulo="Valor recebido (R$)" ajuda={t.troco !== null ? `Troco: ${moeda(t.troco)}` : undefined}>
                     {(id) => <Input id={id} inputMode="decimal" value={recebido} onChange={(e) => setRecebido(e.target.value)} />}
@@ -417,6 +435,17 @@ function Vender() {
         />
       )}
       {comprovante && <Comprovante venda={comprovante} aoFechar={() => setComprovante(null)} />}
+      {pixGrande && (
+        <Dialogo aberto titulo="Pague com PIX" aoFechar={() => setPixGrande(false)}>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <span className="rounded-2xl bg-white p-3">
+              <img src="/pix-qrcode.png" alt="QR code do PIX da Distribuidora DEU SEDE!" width={400} height={400} className="size-[min(72vw,20rem)]" />
+            </span>
+            <p className="text-base text-texto">Leia o QR code no app do banco e pague:</p>
+            <p className="text-3xl font-bold text-verde tabular-nums">{moeda(t.total)}</p>
+          </div>
+        </Dialogo>
+      )}
     </div>
   );
 }

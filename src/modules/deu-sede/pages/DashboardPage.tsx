@@ -9,7 +9,7 @@ import { FiltroPeriodo } from "@/modules/deu-sede/components/FiltroPeriodo";
 import { periodoDoAtalho, type Periodo } from "@/modules/deu-sede/domain/periodo";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { useConsulta } from "@/modules/deu-sede/data/cliente";
-import type { Painel, VariacaoPreco } from "@/modules/deu-sede/data/tipos";
+import type { Painel, PainelFinanceiro, VariacaoPreco } from "@/modules/deu-sede/data/tipos";
 import { dataBR, mesCurto, moeda, moedaUnitaria, numero, percentual } from "@/modules/deu-sede/domain/formatos";
 
 const COR = "var(--color-dado)";
@@ -17,6 +17,8 @@ const COR = "var(--color-dado)";
 export function DashboardPage() {
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoDoAtalho("mes"));
   const { dados: d, erro } = useConsulta<Painel>("painel", { de: periodo.de, ate: periodo.ate });
+  // lucro e caixa (migração 0016); se ainda não existir no banco, o painel segue sem eles
+  const { dados: fin } = useConsulta<PainelFinanceiro>("painel_financeiro", { de: periodo.de, ate: periodo.ate });
 
   return (
     <>
@@ -28,6 +30,33 @@ export function DashboardPage() {
       {!d && !erro && <Carregando />}
       {d && (
         <div className="grid gap-5">
+          {fin && (
+            <div className="grid gap-2">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <Numero rotulo="Lucro total" valor={moeda(fin.lucro_total)} detalhe={`vendas desde o início: ${moeda(fin.vendas_total)}`} destaque />
+                <Numero rotulo="Lucro no período" valor={moeda(fin.lucro_periodo)} detalhe={`vendas no período: ${moeda(fin.vendas_periodo)}`} />
+                {fin.saldo_caixa !== null && (
+                  <Link to={rota("contas")} className="contents">
+                    <Numero rotulo="Saldo do caixa" valor={moeda(fin.saldo_caixa)} negativo={fin.saldo_caixa < 0} />
+                  </Link>
+                )}
+                {fin.contas_vencidas !== null && (
+                  <Link to={rota("contas")} className="contents">
+                    <Numero
+                      rotulo="Contas vencidas"
+                      valor={moeda(fin.contas_vencidas)}
+                      detalhe={`${fin.qtd_contas_vencidas ?? 0} ${fin.qtd_contas_vencidas === 1 ? "parcela" : "parcelas"} · em aberto ${moeda(fin.contas_em_aberto)}`}
+                      negativo={(fin.qtd_contas_vencidas ?? 0) > 0}
+                    />
+                  </Link>
+                )}
+              </div>
+              <p className="text-xs text-texto-suave">
+                Lucro = vendas do PDV − custo dos produtos vendidos.
+                {fin.itens_sem_custo > 0 && ` ${fin.itens_sem_custo} ${fin.itens_sem_custo === 1 ? "item vendido estava" : "itens vendidos estavam"} sem custo e entram com lucro cheio.`}
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Numero rotulo="Total comprado" valor={moeda(d.total_comprado)} destaque />
             <Numero rotulo="Valor já recebido" valor={moeda(d.total_recebido)} />
@@ -101,13 +130,22 @@ export function DashboardPage() {
   );
 }
 
-function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: string; destaque?: boolean }) {
+function Numero({ rotulo, valor, destaque, detalhe, negativo }: { rotulo: string; valor: string; destaque?: boolean; detalhe?: string; negativo?: boolean }) {
   return (
     <div className={destaque ? "rounded-xl bg-verde px-4 py-3" : "rounded-xl border border-linha bg-superficie px-4 py-3"}>
       <p className={destaque ? "text-xs font-medium tracking-wide text-ouro uppercase" : "text-xs font-medium tracking-wide text-texto-suave uppercase"}>
         {rotulo}
       </p>
-      <p className={destaque ? "mt-1 text-2xl font-bold text-creme tabular-nums" : "mt-1 text-xl font-bold text-verde tabular-nums"}>{valor}</p>
+      <p
+        className={
+          destaque
+            ? `mt-1 text-2xl font-bold tabular-nums ${negativo ? "text-red-300" : "text-creme"}`
+            : `mt-1 text-xl font-bold tabular-nums ${negativo ? "text-perigo" : "text-verde"}`
+        }
+      >
+        {valor}
+      </p>
+      {detalhe && <p className={destaque ? "text-xs text-creme/80" : "text-xs text-texto-suave"}>{detalhe}</p>}
     </div>
   );
 }

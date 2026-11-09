@@ -624,5 +624,167 @@ await rpcErr("perfil 'consulta' não gera pedido", "gerar_pedidos", {
   fornecedores: [{ fornecedor_id: fa.id }] }, /permissão/);
 await asSuper();
 
+console.log("\n27) Financeiro: caixa, contas a pagar, lucro e entrada manual de estoque");
+await as(ADMIN);
+const fin0 = await rpcOk("lista de contas a pagar abre", "contas_pagar", {});
+const somaVendas = await one("select coalesce(sum(total), 0) - coalesce(sum(total) filter (where status = 'cancelada'), 0) n from deusede.vendas");
+Math.abs(num(fin0?.saldo_caixa) - num(somaVendas.n)) < 0.005
+  ? pass(`vendas que já existiam entraram no caixa (saldo R$ ${num(fin0.saldo_caixa).toFixed(2)})`) : bad("caixa inicial", `${fin0?.saldo_caixa} x ${somaVendas.n}`);
+const saldoCaixa = async () => num((await rpc("contas_pagar", {})).saldo_caixa);
+let caixa = await saldoCaixa();
+
+// venda entra, venda cancelada sai
+const vendaFin = await rpcOk("venda no PIX", "registrar_venda", { forma_pagamento: "pix", itens: [{ produto_id: brahma.id, quantidade: 2 }] });
+(await saldoCaixa()) === Math.round((caixa + num(vendaFin.total)) * 100) / 100 ? pass(`venda de R$ ${num(vendaFin.total).toFixed(2)} entra no caixa (PIX também)`) : bad("venda no caixa", await saldoCaixa());
+await rpcOk("cancela a venda", "cancelar_venda", { id: vendaFin.id, motivo: "Teste do caixa" });
+(await saldoCaixa()) === caixa ? pass("venda cancelada sai do caixa") : bad("estorno da venda no caixa", await saldoCaixa());
+
+// lançamento avulso no caixa: pode ficar negativo
+await rpcErr("lançamento no caixa sem descrição", "movimentar_caixa", { tipo: "saida", valor: 10 }, /descrição/);
+await rpcOk("retirada de R$ 5.000,00", "movimentar_caixa", { tipo: "saida", valor: 5000, descricao: "Retirada de teste" });
+caixa = Math.round((caixa - 5000) * 100) / 100;
+(await saldoCaixa()) === caixa && caixa < 0 ? pass(`caixa fica negativo (R$ ${caixa.toFixed(2)})`) : bad("caixa negativo", await saldoCaixa());
+await rpcOk("saldo inicial de R$ 10.000,00", "movimentar_caixa", { tipo: "entrada", valor: 10000, descricao: "Saldo inicial" });
+caixa = Math.round((caixa + 10000) * 100) / 100;
+
+// conta avulsa à vista: paga na hora
+await rpcErr("conta sem valor", "lancar_conta_pagar", { descricao: "Energia", forma: "a_vista" }, /valor/);
+const energia = await rpcOk("conta de energia à vista R$ 150,00", "lancar_conta_pagar", { descricao: "Energia elétrica", valor_total: 150, forma: "a_vista" });
+energia?.status === "paga" && energia.parcelas.length === 1 && energia.parcelas[0].status === "paga"
+  ? pass("à vista: conta já nasce paga") : bad("à vista", JSON.stringify(energia?.status));
+caixa = Math.round((caixa - 150) * 100) / 100;
+num(energia?.saldo_caixa) === caixa ? pass("à vista sai do caixa na hora (− 150,00)") : bad("à vista no caixa", energia?.saldo_caixa);
+
+// conta parcelada: 3 × 33,33 + centavo na última, mensal
+const aluguel = await rpcOk("aluguel R$ 100,00 em 3 parcelas", "lancar_conta_pagar", {
+  descricao: "Aluguel do galpão", valor_total: 100, forma: "parcelado", parcelas: 3, primeiro_vencimento: "2026-01-31", fornecedor_id: fa.id });
+const pa = aluguel?.parcelas ?? [];
+pa.map((x) => num(x.valor)).join("|") === "33.33|33.33|33.34" ? pass("parcelas 33,33 + 33,33 + 33,34 = 100,00") : bad("valores", pa.map((x) => x.valor).join("|"));
+pa.map((x) => x.vencimento).join("|") === "2026-01-31|2026-02-28|2026-03-31" ? pass("vencimentos mensais (31/01, 28/02, 31/03)") : bad("vencimentos", pa.map((x) => x.vencimento).join("|"));
+aluguel?.fornecedor_nome === fa.nome ? pass("guarda o fornecedor da conta") : bad("fornecedor", aluguel?.fornecedor_nome);
+(await saldoCaixa()) === caixa ? pass("parcelado não mexe no caixa ao lançar") : bad("parcelado mexeu no caixa");
+const fin1 = await rpc("contas_pagar", {});
+num(fin1.vencidas) >= 100 && fin1.qtd_vencidas >= 3 ? pass("parcelas de 2026 em diante: vencidas aparecem no resumo") : bad("vencidas", JSON.stringify([fin1.vencidas, fin1.qtd_vencidas]));
+const pago1 = await rpcOk("paga a 1ª parcela", "pagar_parcela", { parcela_id: pa[0].id });
+caixa = Math.round((caixa - 33.33) * 100) / 100;
+num(pago1?.saldo_caixa) === caixa && pago1.status === "aberta" ? pass("parcela paga sai do caixa; conta continua em aberto") : bad("pagar parcela", JSON.stringify([pago1?.saldo_caixa, pago1?.status]));
+await rpcErr("pagar de novo a mesma parcela", "pagar_parcela", { parcela_id: pa[0].id }, /já foi paga/);
+const desfeito = await rpcOk("desfaz o pagamento", "estornar_parcela", { parcela_id: pa[0].id });
+caixa = Math.round((caixa + 33.33) * 100) / 100;
+num(desfeito?.saldo_caixa) === caixa && desfeito.parcelas[0].status === "aberta" ? pass("pagamento desfeito volta para o caixa") : bad("estornar", desfeito?.saldo_caixa);
+for (const x of pa) await rpc("pagar_parcela", { parcela_id: x.id });
+caixa = Math.round((caixa - 100) * 100) / 100;
+(await rpc("obter_conta_pagar", { id: aluguel.id }))?.status === "paga" ? pass("todas pagas -> conta Paga") : bad("conta paga");
+await rpcErr("cancelar conta sem motivo", "cancelar_conta_pagar", { id: aluguel.id }, /motivo/);
+const canc = await rpcOk("cancela a conta paga", "cancelar_conta_pagar", { id: aluguel.id, motivo: "Lançada em duplicidade" });
+caixa = Math.round((caixa + 100) * 100) / 100;
+canc?.status === "cancelada" && num(canc.saldo_caixa) === caixa ? pass("conta cancelada: o que foi pago volta para o caixa") : bad("cancelar conta", JSON.stringify([canc?.status, canc?.saldo_caixa]));
+
+// pedido de compra -> contas a pagar
+await as(PEDIDOS);
+await rpcErr("login de pedidos não vê as contas", "contas_pagar", {}, /acesso/);
+await rpcErr("login de pedidos não vê lucro nem caixa", "painel_financeiro", {}, /acesso ao financeiro/);
+await rpcErr("login de pedidos não lança conta avulsa", "lancar_conta_pagar", { descricao: "Conta proibida", valor_total: 10, forma: "a_vista" }, /permissão/);
+const contaPed = await rpcOk("login de pedidos lança o pedido parcelado em 2x", "lancar_conta_pagar", {
+  pedido_id: pedSo.id, forma: "parcelado", parcelas: 2, primeiro_vencimento: "2030-01-10" });
+num(contaPed?.valor_total) === 60 && contaPed.parcelas.length === 2 && contaPed.pedido_id === pedSo.id && /PED-/.test(contaPed.descricao)
+  ? pass(`conta do pedido: R$ 60,00 em 2x ("${contaPed.descricao}")`) : bad("conta do pedido", JSON.stringify(contaPed));
+await rpcErr("o mesmo pedido não entra duas vezes", "lancar_conta_pagar", { pedido_id: pedSo.id, forma: "a_vista" }, /já está em contas a pagar/);
+await rpcErr("login de pedidos não paga parcela", "pagar_parcela", { parcela_id: contaPed.parcelas[0].id }, /permissão/);
+await expectErr("função interna de pagamento fechada para o app", "select deusede.pagar_parcela_interno($1::uuid, current_date)", /permission denied|permissão/, [contaPed.parcelas[0].id]);
+await as(ADMIN);
+(await rpc("obter_conta_pagar", { pedido_id: pedSo.id }))?.id === contaPed.id ? pass("acha a conta pelo pedido") : bad("conta pelo pedido");
+await rpcOk("cancela o pedido", "mudar_status_pedido", { id: pedSo.id, status: "cancelado", motivo: "Fornecedor sem estoque" });
+(await rpc("obter_conta_pagar", { id: contaPed.id }))?.status === "cancelada" ? pass("pedido cancelado cancela a conta dele") : bad("conta do pedido cancelado");
+(await saldoCaixa()) === caixa ? pass("conta parcelada sem pagamento: caixa não muda") : bad("caixa após cancelar pedido");
+
+// pedido à vista sai do caixa; cancelado, volta
+const lotePv = await rpcOk("novo pedido de R$ 90,00", "gerar_pedidos", {
+  lote_id: "88888888-8888-8888-8888-888888888888",
+  itens: [{ fornecedor_id: fa.id, produto_id: refri.id, tipo_embalagem: "fardo", unidades_por_embalagem: 6, quantidade_embalagens: 3, preco_embalagem: 30 }],
+  fornecedores: [{ fornecedor_id: fa.id }] });
+const pedPv = lotePv.pedidos[0];
+const contaPv = await rpcOk("pedido à vista", "lancar_conta_pagar", { pedido_id: pedPv.id, forma: "a_vista" });
+caixa = Math.round((caixa - 90) * 100) / 100;
+contaPv?.status === "paga" && num(contaPv.saldo_caixa) === caixa ? pass("pedido à vista: paga e sai do caixa (− 90,00)") : bad("pedido à vista", JSON.stringify([contaPv?.status, contaPv?.saldo_caixa]));
+await rpcOk("cancela o pedido à vista", "mudar_status_pedido", { id: pedPv.id, status: "cancelado", motivo: "Pedido errado" });
+caixa = Math.round((caixa + 90) * 100) / 100;
+(await saldoCaixa()) === caixa ? pass("pedido à vista cancelado: o dinheiro volta para o caixa") : bad("estorno pedido à vista", await saldoCaixa());
+
+// extrato
+const ext = await rpcOk("extrato do caixa", "caixa", {});
+num(ext?.saldo) === caixa && num(ext.movimentos[0]?.saldo_apos) === caixa ? pass("extrato: saldo após o último lançamento = saldo do caixa") : bad("extrato", JSON.stringify([ext?.saldo, ext?.movimentos?.[0]]));
+ext?.movimentos.some((m) => m.origem === "vendas" && m.descricao === "Vendas do PDV" && m.quantidade >= 2) ? pass("vendas do PDV aparecem somadas por dia") : bad("vendas agrupadas");
+
+// painel: lucro = vendas − custo do vendido
+const pf = await rpcOk("painel financeiro", "painel_financeiro", {});
+const lucroBanco = await one("select coalesce(sum(total - coalesce(custo_total, 0)), 0) l from deusede.vendas where status = 'concluida'");
+num(pf?.lucro_total) === num(lucroBanco.l) && num(pf.saldo_caixa) === caixa
+  ? pass(`lucro total = vendas − custo do vendido (R$ ${num(pf.lucro_total).toFixed(2)}); saldo do caixa no painel`) : bad("painel financeiro", JSON.stringify(pf));
+
+// o caixa é um extrato: não se altera nem apaga
+await asSuper();
+await expectErr("lançamento do caixa não se altera (nem superusuário)", "update deusede.caixa_movimentos set valor = 1", /não podem ser alterados/);
+await expectErr("conta a pagar não se apaga", "delete from deusede.contas_pagar", /não podem ser apagadas/);
+await as(ADMIN);
+await expectErr("app não grava direto no caixa", "insert into deusede.caixa_movimentos (origem, valor, descricao) values ('entrada_manual', 1, 'x')", /permission denied|row-level security/);
+await as(LEITOR);
+(await rpc("contas_pagar", {}))?.saldo_caixa !== undefined ? pass("perfil 'consulta' vê as contas") : bad("consulta vê contas");
+await rpcErr("perfil 'consulta' não paga conta", "movimentar_caixa", { tipo: "entrada", valor: 1, descricao: "Teste" }, /permissão/);
+
+// avisos do menu (bolinha vermelha)
+await as(ADMIN);
+await rpcOk("parcela vencida para o aviso", "lancar_conta_pagar", { descricao: "Conta vencida (aviso)", valor_total: 10, forma: "parcelado", parcelas: 1, primeiro_vencimento: "2025-01-10" });
+const av = await rpcOk("avisos do menu", "avisos", {});
+av && av.contas >= 1 && typeof av.pedidos === "number" && typeof av.estoque === "number" && typeof av.produtos === "number"
+  ? pass(`avisos: contas ${av.contas}, pedidos ${av.pedidos}, recebimentos ${av.recebimentos}, estoque ${av.estoque}, cotações ${av.cotacoes}, produtos ${av.produtos}`)
+  : bad("avisos", JSON.stringify(av));
+await as(PEDIDOS);
+const avP = await rpcOk("avisos do login de pedidos", "avisos", {});
+avP && avP.contas === 0 && avP.estoque === 0 && typeof avP.pedidos === "number" ? pass("login de pedidos só recebe o aviso de pedidos") : bad("avisos pedidos", JSON.stringify(avP));
+
+// entrada manual de estoque
+await as(ADMIN);
+const antesRefri = await saldoDe(refri.id);
+const entr = await rpcOk("entrada manual: 2 fardos a R$ 30,00 o fardo", "registrar_movimento_estoque", {
+  produto_id: refri.id, tipo: "entrada", quantidade: 2, unidade: "embalagem", custo: 30, motivo: "Compra no atacarejo" });
+(await saldoDe(refri.id)) === antesRefri + 12 ? pass(`estoque sobe 12 unidades (${antesRefri} -> ${antesRefri + 12})`) : bad("entrada manual", await saldoDe(refri.id));
+const movEntr = (await rpc("movimentos_estoque", { produto_id: refri.id })).find((m) => m.origem === "entrada_manual");
+movEntr && num(movEntr.custo_unitario) === 5 ? pass("custo por unidade = 30 ÷ 6 = 5,00") : bad("custo entrada manual", JSON.stringify(movEntr));
+entr && num(entr.ultimo_custo_unitario) === 5 ? pass("último custo do produto atualizado") : bad("último custo", entr?.ultimo_custo_unitario);
+await rpcErr("entrada sem quantidade", "registrar_movimento_estoque", { produto_id: refri.id, tipo: "entrada" }, /quantidade/);
+await as(PEDIDOS);
+await rpcErr("login de pedidos não mexe no estoque", "registrar_movimento_estoque", { produto_id: refri.id, tipo: "entrada", quantidade: 1 }, /permissão/);
+await asSuper();
+
+console.log("\n28) Registros (logs) do que cada login faz");
+await as(PEDIDOS);
+await rpcErr("registrar sem itens", "registrar_atividade", {}, /Nada para registrar/);
+const reg = await rpcOk("login de pedidos registra marcar/desmarcar", "registrar_atividade", { itens: [
+  { area: "pedidos", acao: "marcou_produto", descricao: "Marcou Refrigerante Teste 2 L", detalhes: { produto_id: refri.id, quantidade: "1" } },
+  { area: "pedidos", acao: "desmarcou_produto", descricao: "Desmarcou Refrigerante Teste 2 L", detalhes: { produto_id: refri.id }, momento: new Date(Date.now() - 60000).toISOString() },
+  { area: "acesso", acao: "entrou", descricao: "Entrou no sistema", momento: "2000-01-01T00:00:00Z" },
+] });
+reg?.registrados === 3 ? pass("3 ações gravadas de uma vez") : bad("registrar", JSON.stringify(reg));
+await rpcErr("login de pedidos não lê os registros", "listar_atividades", {}, /administrador ou comprador/);
+const vistoPeloPedidos = await one("select count(*)::int n from deusede.atividades");
+vistoPeloPedidos.n === 0 ? pass("login de pedidos não lê a tabela de registros (RLS)") : bad("RLS registros", vistoPeloPedidos.n);
+await expectErr("app não grava direto na tabela de registros", "insert into deusede.atividades (area, acao, descricao) values ('x', 'y', 'z')", /permission denied|row-level security/);
+await as(ADMIN);
+const logs = await rpcOk("admin lê os registros", "listar_atividades", { usuario_id: PEDIDOS });
+const doPed = logs?.registros ?? [];
+doPed.some((r) => r.acao === "marcou_produto" && r.usuario_nome === "Pedidos" && r.papel === "pedidos" && r.detalhes.produto_id === refri.id)
+  ? pass("registro guarda quem fez (nome e papel) e os detalhes") : bad("registro", JSON.stringify(doPed[0]));
+doPed.some((r) => r.origem === "historico" && /Pedido PED-/.test(r.descricao))
+  ? pass("junta o histórico dos pedidos do mesmo login") : bad("histórico junto", JSON.stringify(doPed.map((r) => r.descricao)));
+const iMarc = doPed.findIndex((r) => r.acao === "marcou_produto");
+const iDesm = doPed.findIndex((r) => r.acao === "desmarcou_produto");
+iMarc >= 0 && iDesm > iMarc ? pass("ordem pela hora da ação (mais recente primeiro)") : bad("ordem", `${iMarc} ${iDesm}`);
+const entrou = doPed.find((r) => r.acao === "entrou");
+entrou && new Date(entrou.quando).getFullYear() >= 2026 ? pass("hora absurda do aparelho vira a hora do servidor") : bad("momento", entrou?.quando);
+(await rpc("listar_atividades", { usuario_id: ADMIN, area: "acesso" })).registros.length === 0 ? pass("filtra por usuário e área") : bad("filtro");
+await asSuper();
+await expectErr("registro não se altera (nem superusuário)", "update deusede.atividades set descricao = 'x'", /não podem ser alterados/);
+
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

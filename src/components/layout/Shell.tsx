@@ -22,6 +22,17 @@ export interface ItemMenu {
   noCelular?: boolean;
   /** destaque só na página exata (padrão: só para o item inicial da marca) */
   end?: boolean;
+  /** quantos avisos a aba tem: mostra a bolinha vermelha */
+  alerta?: number;
+}
+
+function Bolinha({ n, className }: { n?: number; className?: string }) {
+  if (!n) return null;
+  return (
+    <span className={cn("size-2.5 shrink-0 rounded-full bg-red-500 ring-2 ring-red-500/25", className)} title={`${n} ${n === 1 ? "aviso" : "avisos"}`}>
+      <span className="sr-only">({n} {n === 1 ? "aviso" : "avisos"})</span>
+    </span>
+  );
 }
 
 interface Marca {
@@ -98,6 +109,8 @@ export function Shell({
 
   const naBarra = itens.length <= 5 ? itens : itens.filter((i) => i.noCelular).slice(0, 4);
   const temMais = naBarra.length < itens.length || !!extrasMenuMais;
+  // avisos das abas que só aparecem no "Mais"
+  const alertaMais = itens.filter((i) => !naBarra.includes(i)).reduce((s, i) => s + (i.alerta ?? 0), 0);
   const colunas = naBarra.length + (temMais ? 1 : 0);
 
   return (
@@ -123,7 +136,8 @@ export function Shell({
                 }
               >
                 <Icon className="size-5 shrink-0" />
-                {m.label}
+                <span className="min-w-0 flex-1">{m.label}</span>
+                <Bolinha n={m.alerta} />
               </NavLink>
             );
           })}
@@ -189,8 +203,9 @@ export function Shell({
                 >
                   {({ isActive }) => (
                     <>
-                      <span className={cn("flex h-7 w-12 items-center justify-center rounded-full", isActive && "bg-amarelo")}>
+                      <span className={cn("relative flex h-7 w-12 items-center justify-center rounded-full", isActive && "bg-amarelo")}>
                         <Icon className="size-5" />
+                        <Bolinha n={m.alerta} className="absolute top-0 right-2" />
                       </span>
                       {m.shortLabel}
                     </>
@@ -208,8 +223,9 @@ export function Shell({
                 aria-haspopup="dialog"
                 aria-expanded={maisAberto}
               >
-                <span className="flex h-7 w-12 items-center justify-center rounded-full">
+                <span className="relative flex h-7 w-12 items-center justify-center rounded-full">
                   <Menu className="size-5" />
+                  <Bolinha n={alertaMais} className="absolute top-0 right-2" />
                 </span>
                 Mais
               </button>
@@ -250,7 +266,10 @@ export function Shell({
                         )
                       }
                     >
-                      <Icon className="size-5" />
+                      <span className="relative">
+                        <Icon className="size-5" />
+                        <Bolinha n={m.alerta} className="absolute -top-1 -right-2" />
+                      </span>
                       {m.label}
                     </NavLink>
                   </li>

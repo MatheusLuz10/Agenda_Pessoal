@@ -13,7 +13,9 @@ import { LinhaDoTempo } from "@/modules/deu-sede/components/LinhaDoTempo";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { executar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useEnvio } from "@/modules/deu-sede/data/hooks";
-import type { PedidoDetalhe } from "@/modules/deu-sede/data/tipos";
+import type { ContaPagar, PainelFinanceiro, PedidoDetalhe } from "@/modules/deu-sede/data/tipos";
+import { EscolhaPagamentoCampos } from "@/modules/deu-sede/components/EscolhaPagamento";
+import { erroEscolha, escolhaInicial, payloadEscolha, situacaoVencimento } from "@/modules/deu-sede/domain/financeiro";
 import {
   PEDIDO_STATUS_LABEL,
   pedidoAceitaRecebimento,
@@ -259,6 +261,7 @@ export function PedidoDetalhePage() {
               ]}
             />
           </Secao>
+          {!soPedidos && <ContaDoPedido pedido={p} />}
           <Secao titulo="Histórico">
             <LinhaDoTempo eventos={p.eventos} />
           </Secao>
@@ -345,5 +348,67 @@ function EditarEntrega({ pedido, aoFechar }: { pedido: PedidoDetalhe; aoFechar: 
         {erro && <Aviso tom="erro">{erro}</Aviso>}
       </div>
     </Dialogo>
+  );
+}
+
+// O pedido em Contas a pagar: situação do pagamento ou botão para lançar
+// (pedidos montados pela comparação de preços, ou se o lançamento falhou).
+function ContaDoPedido({ pedido }: { pedido: PedidoDetalhe }) {
+  const { dados: conta, erro } = useConsulta<ContaPagar | null>("obter_conta_pagar", { pedido_id: pedido.id });
+  const fin = useConsulta<PainelFinanceiro>("painel_financeiro", {});
+  const [lancando, setLancando] = useState(false);
+  const [pagamento, setPagamento] = useState(escolhaInicial);
+  const proxima = conta?.parcelas.find((x) => x.status === "aberta");
+  const podeLancar = pedido.status !== "cancelado" && (conta === null || conta?.status === "cancelada");
+
+  return (
+    <Secao
+      titulo="Contas a pagar"
+      acoes={
+        <Link to={rota("contas")} className="text-sm font-medium text-marrom underline">
+          Ver contas
+        </Link>
+      }
+    >
+      {erro && <Aviso tom="erro">{erro}</Aviso>}
+      {conta === undefined && !erro && <Carregando />}
+      {conta && (
+        <Dados
+          itens={[
+            ["Pagamento", conta.forma === "a_vista" ? "À vista" : `Parcelado em ${conta.parcelas.length}x`],
+            ["Situação", conta.status === "paga" ? "Paga" : conta.status === "cancelada" ? `Cancelada${conta.motivo_cancelamento ? ` (${conta.motivo_cancelamento})` : ""}` : "Em aberto"],
+            ["Pago", moeda(conta.valor_pago)],
+            ["Em aberto", conta.status === "cancelada" ? null : moeda(conta.valor_aberto)],
+            ["Próximo vencimento", proxima ? `${dataBR(proxima.vencimento)} · ${moeda(proxima.valor)} (${situacaoVencimento(proxima.vencimento).texto.toLowerCase()})` : null],
+          ]}
+        />
+      )}
+      {conta === null && <p className="text-sm text-texto-suave">{pedido.status === "cancelado" ? "Pedido cancelado: não vai para contas a pagar." : "Este pedido ainda não está em contas a pagar."}</p>}
+      {podeLancar && (
+        <Button className="mt-3" variant="contorno" onClick={() => setLancando(true)}>
+          Lançar pagamento ({moeda(pedido.valor_total)})
+        </Button>
+      )}
+      <Confirmar
+        aberto={lancando}
+        titulo="Lançar pagamento do pedido"
+        mensagem={
+          <div className="flex flex-col gap-2">
+            <p>
+              {pedido.numero_formatado} · {pedido.fornecedor_nome} · <strong>{moeda(pedido.valor_total)}</strong>
+            </p>
+            <EscolhaPagamentoCampos valor={pagamento} aoMudar={setPagamento} total={pedido.valor_total} saldoCaixa={fin.dados?.saldo_caixa} />
+          </div>
+        }
+        textoConfirmar="Lançar"
+        aoFechar={() => setLancando(false)}
+        aoConfirmar={async () => {
+          const e = erroEscolha(pagamento, pedido.valor_total);
+          if (e) throw new Error(e);
+          await executar("lancar_conta_pagar", { pedido_id: pedido.id, ...payloadEscolha(pagamento) });
+          setPagamento(escolhaInicial());
+        }}
+      />
+    </Secao>
   );
 }

@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { PackagePlus, Warehouse } from "lucide-react";
+import { ChevronDown, PackagePlus, Warehouse } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
-import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
 import { CampoBusca, Segmentado } from "@/modules/deu-sede/components/ui/filtros";
 import { Select } from "@/modules/deu-sede/components/ui/input";
@@ -16,6 +15,7 @@ import { useCadastros } from "@/modules/deu-sede/data/hooks";
 import type { EntradaNotaResumo, ItemEstoque, MovimentoEstoque } from "@/modules/deu-sede/data/tipos";
 import { contemBusca, dataBR, dataHoraBR, descreverEmbalagem, descreverQuantidade, moeda, moedaUnitaria, numero } from "@/modules/deu-sede/domain/formatos";
 import { useSenha } from "@/modules/deu-sede/senha";
+import { cn } from "@/lib/utils";
 
 type Aba = "saldo" | "movimentos" | "entradas";
 type Filtro = "com_saldo" | "abaixo" | "todos";
@@ -52,8 +52,14 @@ export function EstoquePage() {
   );
 }
 
+const alternar = (conjunto: Set<string>, id: string) => {
+  const novo = new Set(conjunto);
+  if (novo.has(id)) novo.delete(id);
+  else novo.add(id);
+  return novo;
+};
+
 function Saldo() {
-  const navigate = useNavigate();
   const { dados, erro } = useConsulta<ItemEstoque[]>("estoque");
   const { dados: cad } = useCadastros();
   const { pedirSenha } = useSenha();
@@ -61,6 +67,7 @@ function Saldo() {
   const [categoria, setCategoria] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("com_saldo");
   const [movendo, setMovendo] = useState<ItemEstoque | null>(null);
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
 
   const lista = useMemo(
     () =>
@@ -113,99 +120,94 @@ function Saldo() {
           {filtro === "com_saldo" ? "Nenhum produto com estoque. Registre um recebimento ou uma entrada por nota." : "Mude a busca ou o filtro."}
         </Vazio>
       ) : (
-        <Planilha<ItemEstoque>
-          rotulo="Saldo de estoque por produto"
-          linhas={lista}
-          chave={(e) => e.produto_id}
-          aoAbrir={(e) => navigate(rota("produtos", e.produto_id))}
-          ordemInicial={{ chave: "produto", sentido: 1 }}
-          destaqueLinha={(e) => (e.abaixo_minimo ? "[&>td:first-child]:shadow-[inset_4px_0_0_var(--color-amarelo)]" : undefined)}
-          colunas={[
-            {
-              chave: "produto",
-              rotulo: "Produto",
-              fixa: true,
-              larguraMax: "max-w-[11rem] sm:max-w-[20rem]",
-              titulo: (e) => e.produto_nome,
-              ordenar: (e) => e.produto_nome,
-              celula: (e) => (
-                <Link to={rota("produtos", e.produto_id)} onClick={(ev) => ev.stopPropagation()} className="font-semibold text-verde hover:underline">
-                  {e.produto_nome}
-                </Link>
-              ),
-            },
-            { chave: "codigo", rotulo: "Código", ordenar: (e) => e.codigo, celula: (e) => e.codigo || <span className="text-texto-suave">—</span> },
-            { chave: "categoria", rotulo: "Categoria", ordenar: (e) => e.categoria_nome, celula: (e) => e.categoria_nome },
-            {
-              chave: "embalagem",
-              rotulo: "Embalagem",
-              ordenar: (e) => e.unidades_por_embalagem,
-              celula: (e) => descreverEmbalagem(e.tipo_embalagem, e.unidades_por_embalagem),
-            },
-            {
-              chave: "emb",
-              rotulo: "Saldo emb.",
-              num: true,
-              ordenar: (e) => Number(e.saldo_embalagens),
-              classe: (e) => (Number(e.saldo_unidades) < 0 ? "font-bold text-perigo" : "font-bold text-verde"),
-              celula: (e) => numero(e.saldo_embalagens, 2),
-            },
-            {
-              chave: "un",
-              rotulo: "Saldo un",
-              num: true,
-              ordenar: (e) => Number(e.saldo_unidades),
-              classe: (e) => (Number(e.saldo_unidades) < 0 ? "text-perigo" : undefined),
-              celula: (e) => numero(e.saldo_unidades),
-            },
-            {
-              chave: "minimo",
-              rotulo: "Mínimo emb.",
-              num: true,
-              ordenar: (e) => e.estoque_minimo,
-              celula: (e) => (e.estoque_minimo === null ? <span className="text-texto-suave">—</span> : numero(e.estoque_minimo)),
-            },
-            { chave: "custo", rotulo: "Últ. custo/un", num: true, ordenar: (e) => e.ultimo_custo_unitario, celula: (e) => moedaUnitaria(e.ultimo_custo_unitario) },
-            { chave: "valor", rotulo: "Valor em estoque", num: true, ordenar: (e) => Number(e.valor_estimado), celula: (e) => moeda(e.valor_estimado) },
-            { chave: "entrada", rotulo: "Últ. entrada", ordenar: (e) => e.ultima_entrada, celula: (e) => dataBR(e.ultima_entrada) },
-            {
-              chave: "situacao",
-              rotulo: "Situação",
-              ordenar: (e) => (Number(e.saldo_unidades) < 0 ? 0 : e.abaixo_minimo ? 1 : Number(e.saldo_unidades) === 0 ? 2 : 3),
-              celula: (e) =>
-                Number(e.saldo_unidades) < 0 ? (
-                  <Badge tone="perigo">Negativo</Badge>
-                ) : e.abaixo_minimo ? (
-                  <Badge tone="amarelo">Abaixo do mínimo</Badge>
-                ) : Number(e.saldo_unidades) === 0 ? (
-                  <span className="text-texto-suave">Sem estoque</span>
-                ) : (
-                  <span className="text-sucesso">OK</span>
-                ),
-            },
-            {
-              chave: "acao",
-              rotulo: "",
-              celula: (e) => (
-                <Button
-                  size="sm"
-                  variant="contorno"
-                  onClick={async (ev) => {
-                    ev.stopPropagation();
-                    if (await pedirSenha("estoque_ajuste")) setMovendo(e);
-                  }}
-                >
-                  Saída / ajuste
-                </Button>
-              ),
-            },
-          ]}
-          totais={{
-            produto: `${lista.length} ${lista.length === 1 ? "produto" : "produtos"}`,
-            un: numero(lista.reduce((s, e) => s + Number(e.saldo_unidades), 0)),
-            valor: moeda(lista.reduce((s, e) => s + Number(e.valor_estimado), 0)),
-          }}
-        />
+        // lista enxuta (sem rolagem para o lado): tocar no produto mostra o resto
+        <div className="overflow-hidden rounded-xl border border-linha bg-superficie">
+          <div className="flex items-center gap-3 border-b border-linha bg-fundo px-3 py-2 text-xs font-semibold tracking-wide text-texto-suave uppercase">
+            <span className="flex-1">Produto</span>
+            <span className="text-right">Saldo</span>
+            <span className="w-5" />
+          </div>
+          <ul className="divide-y divide-linha" aria-label="Saldo de estoque por produto">
+            {lista
+              .slice()
+              .sort((a, b) => a.produto_nome.localeCompare(b.produto_nome, "pt-BR"))
+              .map((e) => {
+                const aberto = abertos.has(e.produto_id);
+                const saldo = Number(e.saldo_unidades);
+                const situacao = saldo < 0 ? "negativo" : e.abaixo_minimo ? "abaixo" : saldo === 0 ? "zerado" : "ok";
+                return (
+                  <li
+                    key={e.produto_id}
+                    className={cn(situacao === "abaixo" && "shadow-[inset_4px_0_0_var(--color-amarelo)]", situacao === "negativo" && "shadow-[inset_4px_0_0_var(--color-perigo)]")}
+                  >
+                    <button
+                      type="button"
+                      aria-expanded={aberto}
+                      aria-label={`${e.produto_nome}: ${aberto ? "esconder" : "ver"} informações`}
+                      onClick={() => setAbertos((x) => alternar(x, e.produto_id))}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold break-words text-verde">{e.produto_nome}</span>
+                        <span className="block text-xs text-texto-suave">
+                          {[e.codigo, descreverEmbalagem(e.tipo_embalagem, e.unidades_por_embalagem)].filter(Boolean).join(" · ")}
+                          {situacao === "abaixo" && <span className="font-semibold text-marrom"> · abaixo do mínimo</span>}
+                          {situacao === "negativo" && <span className="font-semibold text-perigo"> · negativo</span>}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right tabular-nums">
+                        <span className={cn("block font-bold", saldo < 0 ? "text-perigo" : saldo === 0 ? "text-texto-suave" : "text-verde")}>
+                          {descreverQuantidade(e.saldo_unidades, e.unidades_por_embalagem, e.tipo_embalagem)}
+                        </span>
+                        {e.unidades_por_embalagem > 1 && saldo !== 0 && <span className="block text-xs text-texto-suave">{numero(saldo)} un</span>}
+                      </span>
+                      <ChevronDown className={cn("size-5 shrink-0 text-texto-suave transition-transform", aberto && "rotate-180")} />
+                    </button>
+                    {aberto && (
+                      <div className="border-t border-linha/60 bg-fundo px-3 py-3">
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+                          {(
+                            [
+                              ["Categoria", e.categoria_nome],
+                              ["Saldo em unidades", `${numero(saldo)} un`],
+                              ["Mínimo", e.estoque_minimo === null ? "—" : `${numero(e.estoque_minimo)} emb.`],
+                              ["Último custo/un", moedaUnitaria(e.ultimo_custo_unitario)],
+                              ["Valor em estoque", moeda(e.valor_estimado)],
+                              ["Última entrada", dataBR(e.ultima_entrada)],
+                              ["Situação", situacao === "negativo" ? "Negativo" : situacao === "abaixo" ? "Abaixo do mínimo" : situacao === "zerado" ? "Sem estoque" : "OK"],
+                            ] as const
+                          ).map(([rotulo, valor]) => (
+                            <div key={rotulo} className="min-w-0">
+                              <dt className="text-xs text-texto-suave">{rotulo}</dt>
+                              <dd className="font-medium break-words text-verde">{valor}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="contorno"
+                            onClick={async () => {
+                              if (await pedirSenha("estoque_ajuste")) setMovendo(e);
+                            }}
+                          >
+                            Entrada / saída
+                          </Button>
+                          <LinkBotao to={rota("produtos", e.produto_id)} variant="contorno" size="sm">
+                            Ver produto
+                          </LinkBotao>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+          </ul>
+          <p className="border-t border-linha bg-fundo px-3 py-2 text-sm text-texto-suave">
+            {lista.length} {lista.length === 1 ? "produto" : "produtos"} · {numero(lista.reduce((s, e) => s + Number(e.saldo_unidades), 0))} un ·{" "}
+            {moeda(lista.reduce((s, e) => s + Number(e.valor_estimado), 0))}
+          </p>
+        </div>
       )}
       {movendo && <MovimentoEstoqueDialog item={movendo} aoFechar={() => setMovendo(null)} />}
     </div>
@@ -220,6 +222,7 @@ const ORIGEM: Record<MovimentoEstoque["origem"], string> = {
   estorno_recebimento: "Estorno de recebimento",
   venda: "Venda (PDV)",
   estorno_venda: "Venda cancelada",
+  entrada_manual: "Entrada manual",
 };
 
 export function ListaMovimentos({ movimentos, mostrarProduto = true }: { movimentos: MovimentoEstoque[]; mostrarProduto?: boolean }) {

@@ -346,7 +346,7 @@ export interface MovimentoEstoque {
   unidades_por_embalagem: number;
   tipo_embalagem: Embalagem;
   tipo: "entrada" | "saida" | "ajuste";
-  origem: "recebimento" | "nota" | "saida_manual" | "ajuste_contagem" | "estorno_recebimento" | "venda" | "estorno_venda";
+  origem: "recebimento" | "nota" | "saida_manual" | "ajuste_contagem" | "estorno_recebimento" | "venda" | "estorno_venda" | "entrada_manual";
   quantidade_unidades: number;
   custo_unitario: number | null;
   saldo_apos: number;
@@ -464,4 +464,109 @@ export interface ResumoVendas {
   canceladas: number;
   por_forma: Partial<Record<FormaPagamento, number>>;
   mais_vendidos: { produto_id: string; produto_nome: string; unidades: number; total: number }[];
+}
+
+// ------------------------------------------------------------ Financeiro (0016)
+
+export type FormaConta = "a_vista" | "parcelado";
+export type StatusConta = "aberta" | "paga" | "cancelada";
+
+export interface ParcelaConta {
+  id: string;
+  conta_id: string;
+  numero: number;
+  vencimento: string;
+  valor: number;
+  status: StatusConta;
+  paga_em: string | null;
+}
+
+export interface ContaPagar {
+  id: string;
+  numero: number;
+  numero_formatado: string;
+  descricao: string;
+  fornecedor_id: string | null;
+  fornecedor_nome: string | null;
+  pedido_id: string | null;
+  pedido_numero: string | null;
+  forma: FormaConta;
+  valor_total: number;
+  valor_pago: number;
+  valor_aberto: number;
+  observacoes: string | null;
+  status: StatusConta;
+  motivo_cancelamento: string | null;
+  created_at: string;
+  parcelas: ParcelaConta[];
+  /** devolvido pelas funções que gravam */
+  saldo_caixa?: number;
+}
+
+export interface ContasPagarResumo {
+  saldo_caixa: number;
+  em_aberto: number;
+  qtd_em_aberto: number;
+  vencidas: number;
+  qtd_vencidas: number;
+  vence_7_dias: number;
+  pagas_mes: number;
+  contas: ContaPagar[];
+}
+
+export interface MovimentoCaixa {
+  data: string;
+  origem: "vendas" | "pagamento_conta" | "estorno_pagamento" | "entrada_manual" | "saida_manual";
+  descricao: string;
+  valor: number;
+  quantidade: number;
+  saldo_apos: number;
+}
+
+export interface ExtratoCaixa {
+  de: string;
+  ate: string;
+  saldo: number;
+  saldo_anterior: number;
+  entradas: number;
+  saidas: number;
+  movimentos: MovimentoCaixa[];
+}
+
+export interface PainelFinanceiro {
+  de: string;
+  ate: string;
+  vendas_total: number;
+  lucro_total: number;
+  vendas_periodo: number;
+  lucro_periodo: number;
+  itens_sem_custo: number;
+  /** null para quem não vê o financeiro */
+  saldo_caixa: number | null;
+  contas_vencidas: number | null;
+  qtd_contas_vencidas: number | null;
+  contas_em_aberto: number | null;
+}
+
+// ------------------------------------------------------------ Registros (0017)
+
+export interface Registro {
+  /** "app" = ação anotada pelo app; "historico" = histórico de pedido/cotação/recebimento */
+  origem: "app" | "historico";
+  ordem: number;
+  quando: string;
+  usuario_id: string | null;
+  usuario_nome: string | null;
+  papel: string | null;
+  area: string;
+  acao: string;
+  descricao: string;
+  detalhes: Record<string, unknown>;
+}
+
+export interface ListaRegistros {
+  de: string;
+  ate: string;
+  usuarios: { id: string; nome: string; papel: string }[];
+  registros: Registro[];
 }

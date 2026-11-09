@@ -6,6 +6,7 @@ import { NAV_ITEMS } from "@/config/navigation";
 import { TELEFONE_CONTATO, TELEFONE_LINK } from "@/config/contato";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { totalAvisos, useAvisos } from "@/modules/deu-sede/data/avisos";
 
 // Destino do botão "Voltar" (celular) derivado do próprio caminho, sem
 // depender do histórico do navegador: quem entra direto numa rota
@@ -21,11 +22,14 @@ function destinoVoltar(pathname: string): string | null {
 export function AppLayout() {
   const { pathname } = useLocation();
   const { signOut } = useAuth();
+  // bolinha vermelha em "DEU SEDE! Compras" quando alguma aba de lá tem aviso
+  const avisosDeuSede = totalAvisos(useAvisos());
+  const itens = NAV_ITEMS.map((i) => (i.key === "deu-sede" ? { ...i, alerta: avisosDeuSede } : i));
 
   return (
     <Shell
       marca={{ titulo: "Distribuidora DEU SEDE!", to: "/calendarios" }}
-      itens={NAV_ITEMS}
+      itens={itens}
       rotuloMenu="Menu principal"
       telaCheia={pathname === "/pdv"}
       voltarPara={destinoVoltar(pathname)}

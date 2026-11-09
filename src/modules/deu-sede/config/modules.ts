@@ -8,7 +8,9 @@ import {
   Scale,
   Settings,
   ShoppingCart,
+  ScrollText,
   Store,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -35,6 +37,7 @@ export interface ModuleInfo {
 export const MODULES: ModuleInfo[] = [
   { key: "painel", to: DEU_SEDE_BASE, label: "Painel inicial", shortLabel: "Painel", icon: LayoutDashboard, noCelular: false },
   { key: "pedidos", to: rota("pedidos"), label: "Pedidos de compra", shortLabel: "Pedidos", icon: ShoppingCart, noCelular: true },
+  { key: "contas", to: rota("contas"), label: "Contas a pagar", shortLabel: "Contas", icon: Wallet, noCelular: false },
   { key: "recebimentos", to: rota("recebimentos"), label: "Recebimentos", shortLabel: "Receber", icon: PackageCheck, noCelular: true },
   { key: "estoque", to: rota("estoque"), label: "Estoque", shortLabel: "Estoque", icon: Warehouse, noCelular: true },
   { key: "produtos", to: rota("produtos"), label: "Produtos", shortLabel: "Produtos", icon: Package, noCelular: false },
@@ -43,4 +46,5 @@ export const MODULES: ModuleInfo[] = [
   { key: "comparacao", to: rota("comparacao"), label: "Comparação de preços", shortLabel: "Comparar", icon: Scale, noCelular: false },
   { key: "relatorios", to: rota("relatorios"), label: "Relatórios", shortLabel: "Relatórios", icon: ChartColumn, noCelular: false },
   { key: "configuracoes", to: rota("configuracoes"), label: "Configurações", shortLabel: "Config.", icon: Settings, noCelular: false },
+  { key: "registros", to: rota("registros"), label: "Registros (logs)", shortLabel: "Logs", icon: ScrollText, noCelular: false },
 ];

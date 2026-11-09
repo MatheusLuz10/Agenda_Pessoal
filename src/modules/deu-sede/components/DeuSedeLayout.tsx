@@ -7,6 +7,7 @@ import { useSessaoDeuSede } from "@/modules/deu-sede/sessao";
 import { useConsulta, useRecarregarAoVoltar } from "@/modules/deu-sede/data/cliente";
 import { AreaProtegida, SenhaProvider } from "@/modules/deu-sede/senha";
 import { INICIO_PEDIDOS, useSoPedidos } from "@/modules/deu-sede/soPedidos";
+import { useAvisos } from "@/modules/deu-sede/data/avisos";
 import type { Acesso } from "@/modules/deu-sede/data/tipos";
 import { Aviso, Carregando } from "@/modules/deu-sede/components/ui/aviso";
 
@@ -53,6 +54,11 @@ export function DeuSedeLayout() {
   useRecarregarAoVoltar();
   // login "só pedidos de compra": menu só com Pedidos, sem volta para o Calendário
   const soPedidos = useSoPedidos() === true;
+  const avisos = useAvisos();
+  const itens = (soPedidos ? MODULES.filter((m) => m.key === "pedidos") : MODULES).map((m) => ({
+    ...m,
+    alerta: avisos[m.key as keyof typeof avisos] ?? 0,
+  }));
   const sair = mode === "supabase" && (
     <button type="button" onClick={() => signOut()} className="mt-1 flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
       <LogOut className="size-4" /> Sair
@@ -63,7 +69,7 @@ export function DeuSedeLayout() {
     <div className="deu-sede">
       <Shell
         marca={{ titulo: "DEU SEDE!", to: soPedidos ? INICIO_PEDIDOS : DEU_SEDE_BASE }}
-        itens={soPedidos ? MODULES.filter((m) => m.key === "pedidos") : MODULES}
+        itens={itens}
         rotuloMenu="Menu DEU SEDE!"
         aviso={<AvisoModoLocal />}
         acaoCabecalho={

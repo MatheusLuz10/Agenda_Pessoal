@@ -55,11 +55,35 @@ export type FuncaoRPC =
   | "excluir_produtos"
   | "config_senha"
   | "verificar_senha"
-  | "salvar_seguranca";
+  | "salvar_seguranca"
+  | "contas_pagar"
+  | "obter_conta_pagar"
+  | "lancar_conta_pagar"
+  | "pagar_parcela"
+  | "estornar_parcela"
+  | "cancelar_conta_pagar"
+  | "movimentar_caixa"
+  | "caixa"
+  | "painel_financeiro"
+  | "avisos"
+  | "registrar_atividade"
+  | "listar_atividades";
 
 // Funções que vieram em migrações recentes: o erro diz qual arquivo falta rodar.
 const MIGRACAO_DA_FUNCAO: Partial<Record<FuncaoRPC, string>> = {
   excluir_produtos: "0013_excluir_produtos.sql",
+  contas_pagar: "0016_financeiro.sql",
+  obter_conta_pagar: "0016_financeiro.sql",
+  lancar_conta_pagar: "0016_financeiro.sql",
+  pagar_parcela: "0016_financeiro.sql",
+  estornar_parcela: "0016_financeiro.sql",
+  cancelar_conta_pagar: "0016_financeiro.sql",
+  movimentar_caixa: "0016_financeiro.sql",
+  caixa: "0016_financeiro.sql",
+  painel_financeiro: "0016_financeiro.sql",
+  avisos: "0016_financeiro.sql",
+  registrar_atividade: "0017_registros.sql",
+  listar_atividades: "0017_registros.sql",
 };
 
 function mensagemDeErro(e: unknown, fn?: FuncaoRPC): string {

@@ -10,7 +10,7 @@ import { Dialogo } from "@/modules/deu-sede/components/ui/dialogo";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { executar } from "@/modules/deu-sede/data/cliente";
 import { useCadastros, useEnvio } from "@/modules/deu-sede/data/hooks";
-import type { Categoria, Embalagem, Produto, UnidadeMedida } from "@/modules/deu-sede/data/tipos";
+import type { Categoria, Embalagem, Fornecedor, Produto, UnidadeMedida } from "@/modules/deu-sede/data/tipos";
 import { cn } from "@/lib/utils";
 import { arredondar, descreverEmbalagem, EMBALAGENS, lerDecimal, moeda, moedaUnitaria, paraCampo, UNIDADES_MEDIDA } from "@/modules/deu-sede/domain/formatos";
 
@@ -26,10 +26,28 @@ export function ProdutoFormPage() {
     .filter((v) => v.ativo && v.preco_unitario !== null)
     .map((v) => Number(v.preco_unitario));
   const custoUnitario = custos.length ? Math.min(...custos) : null;
-  return <Formulario key={id ?? "novo"} produto={produto ?? null} categorias={dados.categorias} custoUnitario={custoUnitario} />;
+  return (
+    <Formulario
+      key={id ?? "novo"}
+      produto={produto ?? null}
+      categorias={dados.categorias}
+      fornecedores={dados.fornecedores.filter((f) => f.ativo)}
+      custoUnitario={custoUnitario}
+    />
+  );
 }
 
-function Formulario({ produto, categorias, custoUnitario }: { produto: Produto | null; categorias: Categoria[]; custoUnitario: number | null }) {
+function Formulario({
+  produto,
+  categorias,
+  fornecedores,
+  custoUnitario,
+}: {
+  produto: Produto | null;
+  categorias: Categoria[];
+  fornecedores: Fornecedor[];
+  custoUnitario: number | null;
+}) {
   const navigate = useNavigate();
   const [nome, setNome] = useState(produto?.nome ?? "");
   const [categoriaId, setCategoriaId] = useState(produto?.categoria_id ?? "");
@@ -43,6 +61,9 @@ function Formulario({ produto, categorias, custoUnitario }: { produto: Produto |
   const [ativo, setAtivo] = useState(produto?.ativo ?? true);
   const [vendaUnidade, setVendaUnidade] = useState(paraCampo(produto?.preco_venda, 2));
   const [vendaEmbalagem, setVendaEmbalagem] = useState(paraCampo(produto?.preco_venda_embalagem, 2));
+  // produto novo: já liga a um fornecedor (opcional), com o preço dele
+  const [fornecedorId, setFornecedorId] = useState("");
+  const [precoFornecedor, setPrecoFornecedor] = useState("");
   // margem sobre o custo: digitar a margem calcula o preço e vice-versa
   const margemDe = (venda: number | null) =>
     // inteiro: o preço vai a centavos, então 25% pode voltar como 25,07%
@@ -75,8 +96,10 @@ function Formulario({ produto, categorias, custoUnitario }: { produto: Produto |
     const vendaEmbNum = lerDecimal(vendaEmbalagem);
     if (vendaUnNum !== null && (Number.isNaN(vendaUnNum) || vendaUnNum < 0)) return setErro("Preço de venda por unidade inválido.");
     if (vendaEmbNum !== null && (Number.isNaN(vendaEmbNum) || vendaEmbNum < 0)) return setErro("Preço de venda da embalagem inválido.");
-    const salvo = await enviar(() =>
-      executar<Produto>("salvar_produto", {
+    const precoFornNum = lerDecimal(precoFornecedor);
+    if (fornecedorId && precoFornNum !== null && (Number.isNaN(precoFornNum) || precoFornNum < 0)) return setErro("Preço do fornecedor inválido.");
+    const salvo = await enviar(async () => {
+      const p = await executar<Produto>("salvar_produto", {
         id: produto?.id,
         nome,
         categoria_id: categoriaId,
@@ -92,8 +115,19 @@ function Formulario({ produto, categorias, custoUnitario }: { produto: Produto |
         estoque_minimo: produto?.estoque_minimo ?? null,
         preco_venda: vendaUnNum === null ? null : arredondar(vendaUnNum),
         preco_venda_embalagem: vendaEmbNum === null || unidadesNum <= 1 ? null : arredondar(vendaEmbNum),
-      }),
-    );
+      });
+      if (!produto && fornecedorId) {
+        await executar("salvar_fornecedor_produto", {
+          fornecedor_id: fornecedorId,
+          produto_id: p.id,
+          tipo_embalagem: tipo,
+          unidades_por_embalagem: unidadesNum,
+          preco_atual: precoFornNum === null ? null : arredondar(precoFornNum),
+          ativo: true,
+        });
+      }
+      return p;
+    });
     if (salvo) navigate(rota("produtos", salvo.id), { replace: true });
   }
 
@@ -183,6 +217,33 @@ function Formulario({ produto, categorias, custoUnitario }: { produto: Produto |
               {(id) => <Input id={id} inputMode="numeric" value={unidades} onChange={(e) => setUnidades(e.target.value)} />}
             </Campo>
           </div>
+          {!produto && fornecedores.length > 0 && (
+            <fieldset className="flex flex-col gap-3 rounded-lg border border-linha p-3 sm:p-4">
+              <legend className="px-1 text-sm font-semibold">Fornecedor (opcional)</legend>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Campo rotulo="Fornecedor" ajuda="Quem vende este produto. Dá para ligar outros depois.">
+                  {(id) => (
+                    <Select id={id} value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)}>
+                      <option value="">Nenhum</option>
+                      {fornecedores.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.nome}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Campo>
+                {fornecedorId && (
+                  <Campo
+                    rotulo={`Preço do fornecedor (${descreverEmbalagem(tipo, Number.isInteger(unidadesNum) && unidadesNum > 0 ? unidadesNum : 1).toLowerCase()})`}
+                    ajuda="Opcional. Vira o preço do fornecedor no Montar pedido."
+                  >
+                    {(id) => <Input id={id} inputMode="decimal" placeholder="R$" value={precoFornecedor} onChange={(e) => setPrecoFornecedor(e.target.value)} />}
+                  </Campo>
+                )}
+              </div>
+            </fieldset>
+          )}
           <fieldset className="flex flex-col gap-3 rounded-lg border border-linha p-3 sm:p-4">
             <legend className="px-1 text-sm font-semibold">Preço de venda (PDV)</legend>
             <div className={cn("grid gap-4", custoUnitario !== null ? "sm:grid-cols-3" : "sm:grid-cols-2")}>

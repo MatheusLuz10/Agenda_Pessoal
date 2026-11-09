@@ -23,6 +23,8 @@ import { RegistrarRecebimentoPage } from "@/modules/deu-sede/pages/recebimentos/
 import { EstoquePage } from "@/modules/deu-sede/pages/estoque/EstoquePage";
 import { EntradaNotaPage } from "@/modules/deu-sede/pages/estoque/EntradaNotaPage";
 import { RelatoriosPage } from "@/modules/deu-sede/pages/RelatoriosPage";
+import { ContasPagarPage } from "@/modules/deu-sede/pages/financeiro/ContasPagarPage";
+import { RegistrosPage } from "@/modules/deu-sede/pages/RegistrosPage";
 
 // Rotas da seção DEU SEDE!. Entram no App.tsx dentro do
 // <RequireAuth />, então valem as mesmas regras de login do app
@@ -53,8 +55,10 @@ export const deuSedeRoutes = (
     <Route path="pdv" element={<Navigate to="/pdv" replace />} />
     <Route path="estoque" element={<EstoquePage />} />
     <Route path="estoque/entrada" element={<EntradaNotaPage />} />
+    <Route path="contas" element={<ContasPagarPage />} />
     <Route path="relatorios" element={<RelatoriosPage />} />
     <Route path="configuracoes" element={<SettingsPage />} />
+    <Route path="registros" element={<RegistrosPage />} />
     <Route path="*" element={<NotFoundPage />} />
   </Route>
 );

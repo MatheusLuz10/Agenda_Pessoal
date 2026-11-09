@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CircleCheck, ClipboardCopy, FileDown, List, MessageCircle, Minus, Plus, ShoppingCart, X } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
@@ -11,8 +11,12 @@ import { Secao } from "@/modules/deu-sede/components/ui/secao";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { chamar, executar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useCadastros, useEnvio } from "@/modules/deu-sede/data/hooks";
-import type { Embalagem, ItemEstoque, Oferta, PedidoDetalhe, PedidoResumo, Produto } from "@/modules/deu-sede/data/tipos";
-import { arredondar, contemBusca, descreverEmbalagem, lerDecimal, moeda, paraCampo } from "@/modules/deu-sede/domain/formatos";
+import type { ContaPagar, Embalagem, ItemEstoque, Oferta, PainelFinanceiro, PedidoDetalhe, PedidoResumo, Produto } from "@/modules/deu-sede/data/tipos";
+import { arredondar, contemBusca, dataBR, descreverEmbalagem, lerDecimal, moeda, paraCampo } from "@/modules/deu-sede/domain/formatos";
+import { erroEscolha, escolhaInicial, payloadEscolha } from "@/modules/deu-sede/domain/financeiro";
+import { EscolhaPagamentoCampos } from "@/modules/deu-sede/components/EscolhaPagamento";
+import { useSoPedidos } from "@/modules/deu-sede/soPedidos";
+import { registrarAtividade } from "@/modules/deu-sede/data/atividades";
 import { linkWhatsapp, mensagemPedido, numeroWhatsapp } from "@/modules/deu-sede/domain/whatsapp";
 import { gerarPdfPedido } from "@/modules/deu-sede/pedidoPdf";
 import { cn } from "@/lib/utils";
@@ -64,7 +68,11 @@ export function PedidoSimplesPage() {
   const [lote, setLote] = useState(() => crypto.randomUUID());
   const [confirmar, setConfirmar] = useState(false);
   const [verEscolhidos, setVerEscolhidos] = useState(false);
-  const [feito, setFeito] = useState<PedidoDetalhe | null>(null);
+  const [feito, setFeito] = useState<{ pedido: PedidoDetalhe; conta: ContaPagar | null; erroConta: string | null } | null>(null);
+  // pagamento da compra: vai para Contas a pagar (à vista sai do caixa)
+  const [pagamento, setPagamento] = useState(escolhaInicial);
+  const soPedidos = useSoPedidos();
+  const financeiro = useConsulta<PainelFinanceiro>("painel_financeiro", soPedidos === false ? {} : null);
   const envio = useEnvio();
   const { marcados, observacoes } = rascunho;
   // com um só fornecedor ativo, ele já vem escolhido
@@ -101,19 +109,83 @@ export function PedidoSimplesPage() {
     return { tipo: p.tipo_embalagem, unidades: p.unidades_por_embalagem, preco: null, origem: "sem preço" };
   };
 
+  // ---- Registros (logs): o que foi marcado, desmarcado e alterado
+  const nomeProduto = (id: string) => cad?.produtos.find((x) => x.id === id)?.nome ?? "produto";
+  const mudancas = useRef(new Map<string, { de: string; para: string; relogio: ReturnType<typeof setTimeout> }>());
+  // quantidade e valor mudam a cada toque: anota uma vez só, quando para de mexer
+  function anotarMudanca(id: string, campo: "quantidade" | "valor", de: string, para: string) {
+    const chave = `${id}|${campo}`;
+    const atual = mudancas.current.get(chave);
+    if (atual) clearTimeout(atual.relogio);
+    const inicio = atual?.de ?? de;
+    const relogio = setTimeout(() => {
+      mudancas.current.delete(chave);
+      if (inicio === para) return;
+      const nome = nomeProduto(id);
+      registrarAtividade(
+        "pedidos",
+        campo === "quantidade" ? "alterou_quantidade" : "alterou_valor",
+        `${campo === "quantidade" ? "Quantidade" : "Valor"} de ${nome}: ${inicio || "—"} → ${para || "—"}`,
+        { produto_id: id, produto: nome, de: inicio, para },
+      );
+    }, 1500);
+    mudancas.current.set(chave, { de: inicio, para, relogio });
+  }
+  function anotarMarcacao(id: string, antes: Marcado | undefined, depois: Marcado | null) {
+    const nome = nomeProduto(id);
+    const forn = fornecedores.get(fornecedorId)?.nome ?? null;
+    if (!antes && depois) {
+      registrarAtividade("pedidos", "marcou_produto", `Marcou ${nome}`, { produto_id: id, produto: nome, quantidade: depois.qtd, valor: depois.preco ?? null, fornecedor: forn });
+    } else if (antes && !depois) {
+      registrarAtividade("pedidos", "desmarcou_produto", `Desmarcou ${nome}`, { produto_id: id, produto: nome, quantidade: antes.qtd, fornecedor: forn });
+    } else if (antes && depois) {
+      if (antes.qtd !== depois.qtd) anotarMudanca(id, "quantidade", antes.qtd, depois.qtd);
+      if ((antes.preco ?? "") !== (depois.preco ?? "") && depois.preco !== undefined) anotarMudanca(id, "valor", antes.preco ?? "", depois.preco);
+    }
+  }
+
   const mudar = (campos: Partial<Rascunho>) => setRascunho((r) => ({ ...r, ...campos }));
-  const marcar = (id: string, m: Marcado | null) =>
+  const marcar = (id: string, m: Marcado | null) => {
+    anotarMarcacao(id, marcados[id], m);
     setRascunho((r) => {
       const novos = { ...r.marcados };
       if (m) novos[id] = m;
       else delete novos[id];
       return { ...r, marcados: novos };
     });
+  };
+  // marca (com 1) ou desmarca de uma vez os produtos que estão na lista
+  const marcarVarios = (ids: string[], marcarTodos: boolean) => {
+    const mudados = ids.filter((id) => (marcarTodos ? !marcados[id] : !!marcados[id]));
+    if (mudados.length)
+      registrarAtividade(
+        "pedidos",
+        marcarTodos ? "marcou_todos" : "desmarcou_todos",
+        `${marcarTodos ? "Selecionou" : "Desmarcou"} ${mudados.length} ${mudados.length === 1 ? "produto" : "produtos"} de uma vez${busca ? ` (busca “${busca}”)` : ""}`,
+        { produtos: mudados.slice(0, 300).map(nomeProduto), busca: busca || null },
+      );
+    setRascunho((r) => {
+      const novos = { ...r.marcados };
+      for (const id of ids) {
+        if (!marcarTodos) delete novos[id];
+        else if (!novos[id]) novos[id] = { qtd: "1" };
+      }
+      return { ...r, marcados: novos };
+    });
+  };
+
+  // abriu a tela (uma vez por visita)
+  const abriu = useRef(false);
+  useEffect(() => {
+    if (abriu.current) return;
+    abriu.current = true;
+    registrarAtividade("pedidos", "abriu_montar_pedido", "Abriu o Montar pedido");
+  }, []);
 
   if (erro || ofertas.erro || estoque.erro) return <Aviso tom="erro">{erro ?? ofertas.erro ?? estoque.erro}</Aviso>;
   if (!cad || !ofertas.dados || !estoque.dados) return <Carregando />;
 
-  if (feito) return <PedidoRealizado pedido={feito} aoVoltar={() => setFeito(null)} />;
+  if (feito) return <PedidoRealizado pedido={feito.pedido} conta={feito.conta} erroConta={feito.erroConta} aoVoltar={() => setFeito(null)} />;
 
   const ativos = cad.produtos.filter((p) => p.ativo).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   const linhas = ativos.map((p) => {
@@ -126,6 +198,7 @@ export function PedidoSimplesPage() {
   });
   const visiveis = linhas.filter((l) => (!soMarcados || l.m) && contemBusca(busca, l.p.nome, l.p.codigo, l.p.marca));
   const escolhidas = linhas.filter((l) => l.m);
+  const todosVisiveisMarcados = visiveis.length > 0 && visiveis.every((l) => l.m);
   const totalGeral = arredondar(escolhidas.reduce((s, l) => s + (l.total ?? 0), 0));
   const ativosForn = cad.fornecedores.filter((f) => f.ativo);
   const fornecedor = fornecedores.get(fornecedorId);
@@ -142,23 +215,61 @@ export function PedidoSimplesPage() {
   }
 
   async function realizar() {
-    const r = await executar<{ pedidos: PedidoResumo[] }>("gerar_pedidos", {
-      lote_id: lote,
-      itens: escolhidas.map((l) => ({
-        fornecedor_id: fornecedorId,
-        produto_id: l.p.id,
-        // a cotação só vale se o valor não foi trocado (com ela o banco usa o preço da cotação)
-        cotacao_item_id: l.b.cotacao_item_id && l.preco === l.b.preco ? l.b.cotacao_item_id : undefined,
-        tipo_embalagem: l.b.tipo,
-        unidades_por_embalagem: l.b.unidades,
-        quantidade_embalagens: l.qtd,
-        preco_embalagem: l.preco,
-        desconto_valor: 0,
-      })),
-      fornecedores: [{ fornecedor_id: fornecedorId, frete: 0, desconto_geral: 0, observacoes: observacoes.trim() || undefined }],
-    });
+    const erroPag = erroEscolha(pagamento, totalGeral);
+    if (erroPag) throw new Error(erroPag);
+    const itensLog = escolhidas.map((l) => ({ produto: l.p.nome, quantidade: l.qtd, valor: l.preco, total: l.total }));
+    let r: { pedidos: PedidoResumo[] };
+    try {
+      r = await executar<{ pedidos: PedidoResumo[] }>("gerar_pedidos", {
+        lote_id: lote,
+        itens: escolhidas.map((l) => ({
+          fornecedor_id: fornecedorId,
+          produto_id: l.p.id,
+          // a cotação só vale se o valor não foi trocado (com ela o banco usa o preço da cotação)
+          cotacao_item_id: l.b.cotacao_item_id && l.preco === l.b.preco ? l.b.cotacao_item_id : undefined,
+          tipo_embalagem: l.b.tipo,
+          unidades_por_embalagem: l.b.unidades,
+          quantidade_embalagens: l.qtd,
+          preco_embalagem: l.preco,
+          desconto_valor: 0,
+        })),
+        fornecedores: [{ fornecedor_id: fornecedorId, frete: 0, desconto_geral: 0, observacoes: observacoes.trim() || undefined }],
+      });
+    } catch (e) {
+      registrarAtividade("pedidos", "erro_pedido", `Não conseguiu realizar o pedido: ${(e as Error).message}`, {
+        fornecedor: fornecedor?.nome ?? null,
+        itens: itensLog,
+      });
+      throw e;
+    }
+    // o valor do pedido vai para Contas a pagar; se falhar, o pedido continua
+    // feito e a conta pode ser lançada depois pela tela do pedido
+    let conta: ContaPagar | null = null;
+    let erroConta: string | null = null;
+    try {
+      conta = await executar<ContaPagar>("lancar_conta_pagar", { pedido_id: r.pedidos[0].id, ...payloadEscolha(pagamento) });
+    } catch (e) {
+      erroConta = (e as Error).message;
+    }
     const pedido = await chamar<PedidoDetalhe>("obter_pedido", { id: r.pedidos[0].id });
-    setFeito(pedido);
+    const formaTexto = pagamento.forma === "a_vista" ? "à vista" : `parcelado em ${pagamento.parcelas}x`;
+    registrarAtividade(
+      "pedidos",
+      "realizou_pedido",
+      `Realizou o pedido ${pedido.numero_formatado} — ${pedido.fornecedor_nome} — ${moeda(pedido.valor_total)} (${escolhidas.length} ${escolhidas.length === 1 ? "produto" : "produtos"}, ${formaTexto})`,
+      {
+        pedido_id: pedido.id,
+        pedido: pedido.numero_formatado,
+        fornecedor: pedido.fornecedor_nome,
+        total: pedido.valor_total,
+        pagamento: payloadEscolha(pagamento),
+        conta_a_pagar: conta ? conta.numero_formatado : erroConta ? `não lançada: ${erroConta}` : null,
+        observacoes: observacoes.trim() || null,
+        itens: itensLog,
+      },
+    );
+    setFeito({ pedido, conta, erroConta });
+    setPagamento(escolhaInicial());
     setLote(crypto.randomUUID());
     setRascunho((x) => ({ ...x, marcados: {}, observacoes: "" }));
     setSoMarcados(false);
@@ -180,7 +291,15 @@ export function PedidoSimplesPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Campo rotulo="Fornecedor do pedido" obrigatorio>
                 {(id) => (
-                  <Select id={id} value={fornecedorId} onChange={(e) => mudar({ fornecedorId: e.target.value })}>
+                  <Select
+                    id={id}
+                    value={fornecedorId}
+                    onChange={(e) => {
+                      const nome = fornecedores.get(e.target.value)?.nome;
+                      registrarAtividade("pedidos", "escolheu_fornecedor", nome ? `Escolheu o fornecedor ${nome}` : "Tirou o fornecedor", { fornecedor_id: e.target.value || null, fornecedor: nome ?? null });
+                      mudar({ fornecedorId: e.target.value });
+                    }}
+                  >
                     <option value="">Escolha…</option>
                     {ativosForn.map((f) => (
                       <option key={f.id} value={f.id}>
@@ -206,6 +325,15 @@ export function PedidoSimplesPage() {
             <>
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <CampoBusca valor={busca} aoMudar={setBusca} placeholder="Pesquisar produto ou código" className="sm:flex-1" />
+                <label className="flex h-11 items-center gap-2 text-sm font-medium text-verde">
+                  <input
+                    type="checkbox"
+                    className="size-5 accent-verde"
+                    checked={todosVisiveisMarcados}
+                    onChange={() => marcarVarios(visiveis.map((l) => l.p.id), !todosVisiveisMarcados)}
+                  />
+                  {busca ? `Selecionar os ${visiveis.length} da busca` : "Selecionar todos"}
+                </label>
                 <label className="flex h-11 items-center gap-2 text-sm font-medium text-verde">
                   <input type="checkbox" className="size-5 accent-verde" checked={soMarcados} onChange={(e) => setSoMarcados(e.target.checked)} />
                   Só os marcados ({escolhidas.length})
@@ -318,7 +446,10 @@ export function PedidoSimplesPage() {
               <strong className="text-lg tabular-nums">Total {moeda(totalGeral)}</strong>
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="contorno" size="lg" aria-expanded={verEscolhidos} onClick={() => setVerEscolhidos((v) => !v)}>
+              <Button variant="contorno" size="lg" aria-expanded={verEscolhidos} onClick={() => {
+                  if (!verEscolhidos) registrarAtividade("pedidos", "mostrou_produtos", `Abriu a lista dos produtos marcados (${escolhidas.length})`);
+                  setVerEscolhidos((v) => !v);
+                }}>
                 <List className="size-5" /> {verEscolhidos ? "Esconder produtos" : "Mostrar produtos"}
               </Button>
               <Button size="lg" onClick={revisar} disabled={envio.enviando}>
@@ -351,6 +482,10 @@ export function PedidoSimplesPage() {
                 <span className="tabular-nums">{moeda(totalGeral)}</span>
               </li>
             </ul>
+            <div className="mb-3 rounded-xl border border-linha p-3">
+              <p className="mb-2 text-sm font-semibold text-verde">Pagamento (vai para Contas a pagar)</p>
+              <EscolhaPagamentoCampos valor={pagamento} aoMudar={setPagamento} total={totalGeral} saldoCaixa={financeiro.dados?.saldo_caixa} />
+            </div>
             <p>Em seguida aparecem a lista para o WhatsApp e o PDF do pedido.</p>
           </>
         }
@@ -398,7 +533,17 @@ function Contador({ nome, valor, aoMudar }: { nome: string; valor: string; aoMud
   );
 }
 
-function PedidoRealizado({ pedido, aoVoltar }: { pedido: PedidoDetalhe; aoVoltar: () => void }) {
+function PedidoRealizado({
+  pedido,
+  conta,
+  erroConta,
+  aoVoltar,
+}: {
+  pedido: PedidoDetalhe;
+  conta: ContaPagar | null;
+  erroConta: string | null;
+  aoVoltar: () => void;
+}) {
   const [copiado, setCopiado] = useState(false);
   const [gerandoPdf, setGerandoPdf] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -410,6 +555,7 @@ function PedidoRealizado({ pedido, aoVoltar }: { pedido: PedidoDetalhe; aoVoltar
   async function copiar() {
     try {
       await navigator.clipboard.writeText(mensagem);
+      registrarAtividade("pedidos", "copiou_lista", `Copiou a lista do pedido ${pedido.numero_formatado}`, { pedido_id: pedido.id });
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
     } catch {
@@ -421,6 +567,7 @@ function PedidoRealizado({ pedido, aoVoltar }: { pedido: PedidoDetalhe; aoVoltar
     setGerandoPdf(true);
     try {
       await gerarPdfPedido(pedido);
+      registrarAtividade("pedidos", "gerou_pdf", `Gerou o PDF do pedido ${pedido.numero_formatado}`, { pedido_id: pedido.id });
     } finally {
       setGerandoPdf(false);
     }
@@ -434,6 +581,31 @@ function PedidoRealizado({ pedido, aoVoltar }: { pedido: PedidoDetalhe; aoVoltar
           <CircleCheck className="size-4 shrink-0" /> {pedido.numero_formatado} · {pedido.fornecedor_nome} · {moeda(pedido.valor_total)}
         </span>
       </Aviso>
+      {conta && (
+        <Aviso tom="info" className="mb-4">
+          {conta.forma === "a_vista" ? (
+            <>
+              Pago à vista: <strong>{moeda(conta.valor_total)}</strong> saiu do caixa
+              {conta.saldo_caixa !== undefined && conta.saldo_caixa !== null && (
+                <>
+                  {" "}
+                  (saldo <span className={conta.saldo_caixa < 0 ? "font-semibold text-perigo" : ""}>{moeda(conta.saldo_caixa)}</span>)
+                </>
+              )}
+              .
+            </>
+          ) : (
+            <>
+              Lançado em Contas a pagar: {conta.parcelas.length}× de {moeda(conta.parcelas[0]?.valor)}, a 1ª vence em {dataBR(conta.parcelas[0]?.vencimento)}.
+            </>
+          )}
+        </Aviso>
+      )}
+      {erroConta && (
+        <Aviso tom="atencao" className="mb-4">
+          O pedido foi feito, mas não entrou em Contas a pagar: {erroConta} Abra o pedido para lançar o pagamento.
+        </Aviso>
+      )}
       <Secao titulo="Lista para o WhatsApp">
         <pre className="max-h-80 overflow-auto rounded-xl bg-offwhite/60 p-3 text-sm whitespace-pre-wrap text-verde">{mensagem}</pre>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -441,7 +613,13 @@ function PedidoRealizado({ pedido, aoVoltar }: { pedido: PedidoDetalhe; aoVoltar
             href={link}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => !enviado && setPerguntar(true)}
+            onClick={() => {
+              registrarAtividade("pedidos", "abriu_whatsapp", `Abriu o WhatsApp para enviar o pedido ${pedido.numero_formatado}`, {
+                pedido_id: pedido.id,
+                whatsapp: numero ?? "escolher contato",
+              });
+              if (!enviado) setPerguntar(true);
+            }}
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-amarelo px-4 font-semibold text-verde hover:bg-ouro"
           >
             <MessageCircle className="size-4" /> Enviar pelo WhatsApp
@@ -472,6 +650,7 @@ function PedidoRealizado({ pedido, aoVoltar }: { pedido: PedidoDetalhe; aoVoltar
         aoFechar={() => setPerguntar(false)}
         aoConfirmar={async () => {
           await executar("mudar_status_pedido", { id: pedido.id, status: "enviado" });
+          registrarAtividade("pedidos", "marcou_enviado", `Confirmou que enviou o pedido ${pedido.numero_formatado} ao fornecedor`, { pedido_id: pedido.id });
           setEnviado(true);
         }}
       />
