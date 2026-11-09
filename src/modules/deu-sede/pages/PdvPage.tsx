@@ -158,7 +158,9 @@ function Vender() {
   if (!produtos) return <Carregando />;
 
   return (
-    <div className="relative z-20 grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[13rem_minmax(0,1fr)_24rem] lg:grid-rows-1">
+    // Produtos em no máximo 3 colunas; o espaço que sobra vai para o carrinho
+    // (mais largo e com letra maior, para o cliente acompanhar).
+    <div className="relative z-20 grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[12rem_minmax(0,1fr)_25rem] lg:grid-rows-1 xl:grid-cols-[12rem_minmax(0,1fr)_29rem] 2xl:grid-cols-[13rem_minmax(0,1fr)_36rem]">
       <nav className="border-b border-linha bg-superficie px-3 py-2 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-3 lg:py-5" aria-label="Categorias de produtos">
         <p className="hidden px-3 pb-3 text-xs font-bold tracking-widest text-texto-suave uppercase lg:block">Categorias</p>
         <ul className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
@@ -191,7 +193,7 @@ function Vender() {
           {filtrados.length === 0 ? (
             <Vazio icone={ScanBarcode} titulo="Nenhum produto encontrado" />
           ) : (
-            <ul className="grid content-start gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <ul className="grid content-start gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {filtrados.map((p) => {
                 const pu = precoTabela(p, "unidade");
                 const pe = p.unidades_por_embalagem > 1 ? precoTabela(p, "embalagem") : null;
@@ -229,9 +231,9 @@ function Vender() {
             {carrinho.map((i) => {
               const preco = precoItem(i);
               return (
-                <li key={i.chave} className="rounded-xl border border-linha p-2.5">
+                <li key={i.chave} className="rounded-xl border border-linha p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm leading-tight font-medium text-verde">{i.produto.nome}</span>
+                    <span className="text-base leading-tight font-semibold text-verde">{i.produto.nome}</span>
                     <button type="button" aria-label={`Tirar ${i.produto.nome}`} className="text-texto-suave hover:text-perigo" onClick={() => setCarrinho((c) => c.filter((x) => x.chave !== i.chave))}>
                       <Trash2 className="size-4" />
                     </button>
@@ -269,16 +271,16 @@ function Vender() {
                     )}
                     <button
                       type="button"
-                      className="ml-auto text-right text-sm"
+                      className="ml-auto text-right"
                       onClick={async () => (await pedirSenha("pdv_desconto")) && setEditandoPreco(i)}
                       title="Alterar o preço (pede senha)"
                     >
-                      <span className={cn("block font-semibold", preco === null ? "text-perigo" : "text-verde")}>
+                      <span className={cn("block text-lg font-bold tabular-nums", preco === null ? "text-perigo" : "text-verde")}>
                         {preco === null ? "Definir preço" : moeda(subtotalItem(i))}
                       </span>
                       {preco !== null && (
-                        <span className="block text-xs text-texto-suave">
-                          {moeda(preco)} {i.preco_manual !== null && "(manual)"}
+                        <span className="block text-sm text-texto-suave">
+                          {moeda(preco)} cada {i.preco_manual !== null && "(manual)"}
                         </span>
                       )}
                     </button>
@@ -323,11 +325,11 @@ function Vender() {
               </Campo>
             )}
             <Campo rotulo="Cliente (opcional)">{(id) => <Input id={id} value={cliente} onChange={(e) => setCliente(e.target.value)} />}</Campo>
-            <dl className="grid gap-1 rounded-xl bg-offwhite/60 p-3 text-sm">
+            <dl className="grid gap-1.5 rounded-xl bg-offwhite/60 p-4 text-base">
               <div className="flex justify-between"><dt>Subtotal</dt><dd className="tabular-nums">{moeda(t.subtotal)}</dd></div>
               {t.desconto > 0 && <div className="flex justify-between"><dt>Desconto</dt><dd className="tabular-nums">− {moeda(t.desconto)}</dd></div>}
-              <div className="flex justify-between text-lg font-bold text-verde"><dt>Total</dt><dd className="tabular-nums">{moeda(t.total)}</dd></div>
-              {t.troco !== null && <div className="flex justify-between font-semibold text-sucesso"><dt>Troco</dt><dd className="tabular-nums">{moeda(t.troco)}</dd></div>}
+              <div className="flex items-baseline justify-between text-2xl font-bold text-verde sm:text-3xl"><dt>Total</dt><dd className="tabular-nums">{moeda(t.total)}</dd></div>
+              {t.troco !== null && <div className="flex justify-between text-lg font-semibold text-sucesso"><dt>Troco</dt><dd className="tabular-nums">{moeda(t.troco)}</dd></div>}
             </dl>
             {t.semSaldo.length > 0 && (
               <Aviso tom="atencao">Estoque insuficiente: {t.semSaldo.map((s) => s.produto.nome).join(", ")}.</Aviso>

@@ -23,6 +23,12 @@ type EscopoMargem = "todos" | "categoria" | "selecionados";
 
 const semPrecoDeVenda = (p: Produto) => p.preco_venda === null && p.preco_venda_embalagem === null;
 
+/** Venda da embalagem fechada: o preço próprio dela ou unidade × quantidade. */
+function vendaEmbalagem(p: Produto): number | null {
+  if (p.preco_venda_embalagem !== null) return Number(p.preco_venda_embalagem);
+  return p.preco_venda === null ? null : arredondar(Number(p.preco_venda) * p.unidades_por_embalagem);
+}
+
 /** Margem atual sobre o custo (%), ou null sem preço de venda ou sem custo. */
 function margemAtual(p: Produto, custoUn: number | null): number | null {
   if (p.preco_venda === null || custoUn === null || custoUn <= 0) return null;
@@ -395,7 +401,8 @@ export function ProdutosPage() {
                 />
                 <span className="flex-1">Produto</span>
                 <span className="hidden w-20 text-right sm:block">Estoque</span>
-                <span className="w-24 text-right sm:w-28">Custo</span>
+                <span className="hidden w-28 text-right sm:block">Custo</span>
+                <span className="w-24 text-right sm:w-28">Venda</span>
                 <span className="w-5" />
               </div>
               <ul className="divide-y divide-linha">
@@ -430,7 +437,7 @@ export function ProdutosPage() {
                           <span className={cn("hidden w-20 shrink-0 text-right font-semibold tabular-nums sm:block", saldo < 0 ? "text-perigo" : "text-verde")}>
                             {numero(saldo)} <span className="text-xs font-normal text-texto-suave">un</span>
                           </span>
-                          <span className="w-24 shrink-0 text-right tabular-nums sm:w-28">
+                          <span className="hidden w-28 shrink-0 text-right tabular-nums sm:block">
                             <span className="block font-semibold text-verde">
                               {moedaUnitaria(l.menorCusto)}
                               {l.menorCusto !== null && <span className="text-xs font-normal text-texto-suave">/un</span>}
@@ -441,6 +448,28 @@ export function ProdutosPage() {
                               </span>
                             )}
                           </span>
+                          {(() => {
+                            const vendaEmb = vendaEmbalagem(p);
+                            return (
+                              <span className="w-24 shrink-0 text-right tabular-nums sm:w-28">
+                                {p.preco_venda !== null ? (
+                                  <span className="block font-semibold text-verde">
+                                    {moeda(p.preco_venda)}
+                                    <span className="text-xs font-normal text-texto-suave">/un</span>
+                                  </span>
+                                ) : (
+                                  <span className="block text-xs font-medium text-marrom">sem preço</span>
+                                )}
+                                {vendaEmb !== null && p.unidades_por_embalagem > 1 && (
+                                  <span className="hidden text-xs text-texto-suave sm:block">
+                                    {moeda(vendaEmb)}/{rotuloEmbalagemCurto(p.tipo_embalagem)} {p.unidades_por_embalagem}
+                                  </span>
+                                )}
+                                {/* no celular o custo fica embaixo da venda (sem coluna própria) */}
+                                <span className="block text-xs text-texto-suave sm:hidden">custo {moedaUnitaria(l.menorCusto)}</span>
+                              </span>
+                            );
+                          })()}
                           <ChevronDown className={cn("size-5 shrink-0 text-texto-suave transition-transform", aberto && "rotate-180")} />
                         </button>
                       </div>
@@ -469,14 +498,7 @@ export function ProdutosPage() {
                                     return mg === null ? "—" : `${numero(mg, 0)}%`;
                                   })(),
                                 ],
-                                [
-                                  `Venda ${descreverEmbalagem(p.tipo_embalagem, p.unidades_por_embalagem).toLowerCase()}`,
-                                  p.preco_venda_embalagem !== null
-                                    ? moeda(p.preco_venda_embalagem)
-                                    : p.preco_venda !== null
-                                      ? moeda(arredondar(Number(p.preco_venda) * p.unidades_por_embalagem))
-                                      : "—",
-                                ],
+                                [`Venda ${descreverEmbalagem(p.tipo_embalagem, p.unidades_por_embalagem).toLowerCase()}`, moeda(vendaEmbalagem(p))],
                                 ["Fornecedores", numero(l.fornecedores)],
                                 ["Situação", p.ativo ? "Ativo" : "Inativo"],
                               ] as const
