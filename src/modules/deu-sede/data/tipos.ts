@@ -35,6 +35,8 @@ export interface Produto {
   estoque_minimo: number | null;
   preco_venda: number | null;
   preco_venda_embalagem: number | null;
+  /** custo por unidade informado no cadastro (migração 0018) */
+  custo_referencia?: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -786,5 +786,20 @@ entrou && new Date(entrou.quando).getFullYear() >= 2026 ? pass("hora absurda do 
 await asSuper();
 await expectErr("registro não se altera (nem superusuário)", "update deusede.atividades set descricao = 'x'", /não podem ser alterados/);
 
+console.log("\n29) Preço de custo no cadastro do produto");
+await as(ADMIN);
+const comCusto = await rpcOk("produto novo com custo R$ 2,50/un e venda R$ 4,00", "salvar_produto", {
+  nome: "Produto Custo Teste", categoria_id: catBebida, tipo_embalagem: "fardo", unidades_por_embalagem: 6, custo_referencia: 2.5, preco_venda: 4 });
+num(comCusto?.custo_referencia) === 2.5 && num(comCusto.preco_venda) === 4 ? pass("guarda custo por unidade e preço de venda") : bad("custo novo", JSON.stringify(comCusto));
+const soNome = await rpcOk("edita só o nome (sem mandar preços)", "salvar_produto", { id: comCusto.id, nome: "Produto Custo Teste 2", categoria_id: catBebida });
+num(soNome?.custo_referencia) === 2.5 && num(soNome.preco_venda) === 4 && soNome.tipo_embalagem === "fardo"
+  ? pass("campo que não veio continua como estava (custo e venda mantidos)") : bad("editar apagou", JSON.stringify(soNome));
+const limpaVenda = await rpcOk("apaga só o preço de venda", "salvar_produto", { id: comCusto.id, nome: "Produto Custo Teste 2", categoria_id: catBebida, preco_venda: null });
+limpaVenda?.preco_venda === null && num(limpaVenda.custo_referencia) === 2.5 ? pass("campo enviado vazio é apagado") : bad("apagar venda", JSON.stringify(limpaVenda));
+await rpcErr("custo negativo", "salvar_produto", { id: comCusto.id, nome: "Produto Custo Teste 2", categoria_id: catBebida, custo_referencia: -1 }, /custo inválido/i);
+const entCusto = await rpcOk("entrada manual sem custo", "registrar_movimento_estoque", { produto_id: comCusto.id, tipo: "entrada", quantidade: 1, unidade: "embalagem" });
+num(entCusto?.ultimo_custo_unitario) === 2.5 ? pass("entrada sem custo usa o custo do cadastro (2,50/un)") : bad("custo da entrada", entCusto?.ultimo_custo_unitario);
+await asSuper();
+
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

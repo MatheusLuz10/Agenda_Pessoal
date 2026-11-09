@@ -85,7 +85,13 @@ export function ProdutosPage() {
           const precos = (vinculosPorProduto.get(p.id) ?? []).filter((v) => v.ativo && v.preco_unitario !== null);
           const e = estoquePorProduto.get(p.id);
           const melhor = precos.length ? precos.reduce((a, b) => (Number(b.preco_unitario) < Number(a.preco_unitario) ? b : a)) : null;
-          const custoUn = melhor ? Number(melhor.preco_unitario) : e?.ultimo_custo_unitario != null ? Number(e.ultimo_custo_unitario) : null;
+          const custoUn = melhor
+            ? Number(melhor.preco_unitario)
+            : e?.ultimo_custo_unitario != null
+              ? Number(e.ultimo_custo_unitario)
+              : p.custo_referencia != null
+                ? Number(p.custo_referencia)
+                : null;
           const embalagemCusto = melhor
             ? { tipo: melhor.tipo_embalagem, unidades: melhor.unidades_por_embalagem }
             : { tipo: p.tipo_embalagem, unidades: p.unidades_por_embalagem };
@@ -94,7 +100,8 @@ export function ProdutosPage() {
             categoria: categorias.get(p.categoria_id)?.nome ?? "—",
             estoque: e,
             // menor preço atual entre os fornecedores; sem fornecedor com preço,
-            // o custo da última entrada (nota colada ou recebimento)
+            // o custo da última entrada (nota colada ou recebimento); sem ela,
+            // o preço de custo do cadastro
             menorCusto: custoUn,
             custoEmbalagem: melhor?.preco_atual != null ? Number(melhor.preco_atual) : custoUn === null ? null : arredondar(custoUn * embalagemCusto.unidades),
             embalagemCusto,

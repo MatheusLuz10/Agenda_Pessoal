@@ -11,7 +11,6 @@ import { rota } from "@/modules/deu-sede/config/modules";
 import { executar } from "@/modules/deu-sede/data/cliente";
 import { useCadastros, useEnvio } from "@/modules/deu-sede/data/hooks";
 import type { Categoria, Embalagem, Fornecedor, Produto, UnidadeMedida } from "@/modules/deu-sede/data/tipos";
-import { cn } from "@/lib/utils";
 import { arredondar, descreverEmbalagem, EMBALAGENS, lerDecimal, moeda, moedaUnitaria, paraCampo, UNIDADES_MEDIDA } from "@/modules/deu-sede/domain/formatos";
 
 export function ProdutoFormPage() {
@@ -61,24 +60,45 @@ function Formulario({
   const [ativo, setAtivo] = useState(produto?.ativo ?? true);
   const [vendaUnidade, setVendaUnidade] = useState(paraCampo(produto?.preco_venda, 2));
   const [vendaEmbalagem, setVendaEmbalagem] = useState(paraCampo(produto?.preco_venda_embalagem, 2));
-  // produto novo: já liga a um fornecedor (opcional), com o preço dele
+  // produto novo: já liga a um fornecedor (opcional); o preço de custo vira o preço dele
   const [fornecedorId, setFornecedorId] = useState("");
-  const [precoFornecedor, setPrecoFornecedor] = useState("");
+  // preço de custo (por embalagem); no banco fica por unidade (custo_referencia)
+  const [custo, setCusto] = useState(() =>
+    produto?.custo_referencia != null ? paraCampo(arredondar(Number(produto.custo_referencia) * produto.unidades_por_embalagem, 2), 2) : "",
+  );
+  // custo por unidade usado na margem: o digitado; sem ele, o do fornecedor
+  const custoUnDe = (texto: string, unidadesTexto: string) => {
+    const c = lerDecimal(texto);
+    const u = Number(unidadesTexto);
+    return c !== null && !Number.isNaN(c) && c >= 0 && Number.isInteger(u) && u > 0 ? c / u : null;
+  };
+  const custoBase = custoUnDe(custo, unidades) ?? custoUnitario;
   // margem sobre o custo: digitar a margem calcula o preço e vice-versa
-  const margemDe = (venda: number | null) =>
+  const margemDe = (venda: number | null, base: number | null) =>
     // inteiro: o preço vai a centavos, então 25% pode voltar como 25,07%
-    venda === null || Number.isNaN(venda) || custoUnitario === null || custoUnitario <= 0 ? "" : paraCampo(Math.round((venda / custoUnitario - 1) * 100));
-  const [margem, setMargem] = useState(() => margemDe(produto?.preco_venda ?? null));
+    venda === null || Number.isNaN(venda) || base === null || base <= 0 ? "" : paraCampo(Math.round((venda / base - 1) * 100));
+  const [margem, setMargem] = useState(() =>
+    margemDe(
+      produto?.preco_venda ?? null,
+      produto?.custo_referencia != null ? Number(produto.custo_referencia) : custoUnitario,
+    ),
+  );
 
   function mudarMargem(texto: string) {
     setMargem(texto);
     const m = lerDecimal(texto);
-    if (m !== null && !Number.isNaN(m) && custoUnitario !== null) setVendaUnidade(paraCampo(arredondar(custoUnitario * (1 + m / 100)), 2));
+    if (m !== null && !Number.isNaN(m) && custoBase !== null) setVendaUnidade(paraCampo(arredondar(custoBase * (1 + m / 100)), 2));
   }
 
   function mudarVendaUnidade(texto: string) {
     setVendaUnidade(texto);
-    setMargem(margemDe(lerDecimal(texto)));
+    setMargem(margemDe(lerDecimal(texto), custoBase));
+  }
+
+  // mudar o custo mantém o preço de venda e recalcula a margem
+  function mudarCusto(texto: string) {
+    setCusto(texto);
+    setMargem(margemDe(lerDecimal(vendaUnidade), custoUnDe(texto, unidades) ?? custoUnitario));
   }
   const [novaCategoria, setNovaCategoria] = useState<string | null>(null);
   const { enviando, erro, setErro, enviar } = useEnvio();
@@ -96,8 +116,8 @@ function Formulario({
     const vendaEmbNum = lerDecimal(vendaEmbalagem);
     if (vendaUnNum !== null && (Number.isNaN(vendaUnNum) || vendaUnNum < 0)) return setErro("Preço de venda por unidade inválido.");
     if (vendaEmbNum !== null && (Number.isNaN(vendaEmbNum) || vendaEmbNum < 0)) return setErro("Preço de venda da embalagem inválido.");
-    const precoFornNum = lerDecimal(precoFornecedor);
-    if (fornecedorId && precoFornNum !== null && (Number.isNaN(precoFornNum) || precoFornNum < 0)) return setErro("Preço do fornecedor inválido.");
+    const custoNum = lerDecimal(custo);
+    if (custoNum !== null && (Number.isNaN(custoNum) || custoNum < 0)) return setErro("Preço de custo inválido.");
     const salvo = await enviar(async () => {
       const p = await executar<Produto>("salvar_produto", {
         id: produto?.id,
@@ -115,6 +135,7 @@ function Formulario({
         estoque_minimo: produto?.estoque_minimo ?? null,
         preco_venda: vendaUnNum === null ? null : arredondar(vendaUnNum),
         preco_venda_embalagem: vendaEmbNum === null || unidadesNum <= 1 ? null : arredondar(vendaEmbNum),
+        custo_referencia: custoNum === null ? null : arredondar(custoNum / unidadesNum, 4),
       });
       if (!produto && fornecedorId) {
         await executar("salvar_fornecedor_produto", {
@@ -122,7 +143,7 @@ function Formulario({
           produto_id: p.id,
           tipo_embalagem: tipo,
           unidades_por_embalagem: unidadesNum,
-          preco_atual: precoFornNum === null ? null : arredondar(precoFornNum),
+          preco_atual: custoNum === null ? null : arredondar(custoNum),
           ativo: true,
         });
       }
@@ -146,8 +167,15 @@ function Formulario({
   const vendaUnLida = lerDecimal(vendaUnidade);
   const vendaUnValida = vendaUnLida !== null && !Number.isNaN(vendaUnLida) && vendaUnLida > 0 ? vendaUnLida : null;
   const sugestaoEmbalagem = vendaUnValida !== null && variasUnidades ? arredondar(vendaUnValida * unidadesNum) : null;
-  const ajudaVendaUnidade =
-    custoUnitario === null ? "Preço que aparece no PDV. A margem aparece quando o produto tiver custo." : `Custo por unidade: ${moedaUnitaria(custoUnitario)}.`;
+  const rotuloEmb = descreverEmbalagem(tipo, Number.isInteger(unidadesNum) && unidadesNum > 0 ? unidadesNum : 1).toLowerCase();
+  const custoDigitadoUn = custoUnDe(custo, unidades);
+  const ajudaCusto =
+    custoDigitadoUn !== null && variasUnidades
+      ? `Por unidade: ${moedaUnitaria(custoDigitadoUn)}.`
+      : custoUnitario !== null
+        ? `Custo do fornecedor: ${moedaUnitaria(custoUnitario)} por unidade.`
+        : "Quanto você paga. Opcional.";
+  const ajudaVendaUnidade = "Preço que aparece no PDV.";
 
   const voltar = produto ? rota("produtos", produto.id) : rota("produtos");
   const categoriasVisiveis = categorias.filter((c) => c.ativo || c.id === categoriaId);
@@ -221,7 +249,7 @@ function Formulario({
             <fieldset className="flex flex-col gap-3 rounded-lg border border-linha p-3 sm:p-4">
               <legend className="px-1 text-sm font-semibold">Fornecedor (opcional)</legend>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Campo rotulo="Fornecedor" ajuda="Quem vende este produto. Dá para ligar outros depois.">
+                <Campo rotulo="Fornecedor" ajuda="Quem vende este produto. O preço de custo abaixo vira o preço dele.">
                   {(id) => (
                     <Select id={id} value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)}>
                       <option value="">Nenhum</option>
@@ -233,25 +261,20 @@ function Formulario({
                     </Select>
                   )}
                 </Campo>
-                {fornecedorId && (
-                  <Campo
-                    rotulo={`Preço do fornecedor (${descreverEmbalagem(tipo, Number.isInteger(unidadesNum) && unidadesNum > 0 ? unidadesNum : 1).toLowerCase()})`}
-                    ajuda="Opcional. Vira o preço do fornecedor no Montar pedido."
-                  >
-                    {(id) => <Input id={id} inputMode="decimal" placeholder="R$" value={precoFornecedor} onChange={(e) => setPrecoFornecedor(e.target.value)} />}
-                  </Campo>
-                )}
               </div>
             </fieldset>
           )}
           <fieldset className="flex flex-col gap-3 rounded-lg border border-linha p-3 sm:p-4">
-            <legend className="px-1 text-sm font-semibold">Preço de venda (PDV)</legend>
-            <div className={cn("grid gap-4", custoUnitario !== null ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
-              {custoUnitario !== null && (
-                <Campo rotulo="Margem sobre o custo (%)" ajuda="Calcula o preço da unidade.">
-                  {(id) => <Input id={id} inputMode="decimal" placeholder="Ex.: 30" value={margem} onChange={(e) => mudarMargem(e.target.value)} />}
-                </Campo>
-              )}
+            <legend className="px-1 text-sm font-semibold">Preço de custo e de venda</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Campo rotulo={`Preço de custo (${rotuloEmb})`} ajuda={ajudaCusto}>
+                {(id) => <Input id={id} inputMode="decimal" placeholder="R$" value={custo} onChange={(e) => mudarCusto(e.target.value)} />}
+              </Campo>
+              <Campo rotulo="Margem sobre o custo (%)" ajuda={custoBase === null ? "Informe o custo para usar a margem." : "Calcula o preço da unidade."}>
+                {(id) => (
+                  <Input id={id} inputMode="decimal" placeholder="Ex.: 30" value={margem} disabled={custoBase === null} onChange={(e) => mudarMargem(e.target.value)} />
+                )}
+              </Campo>
               <Campo rotulo="Venda por unidade" ajuda={ajudaVendaUnidade}>
                 {(id) => <Input id={id} inputMode="decimal" placeholder="Ex.: 4,50" value={vendaUnidade} onChange={(e) => mudarVendaUnidade(e.target.value)} />}
               </Campo>

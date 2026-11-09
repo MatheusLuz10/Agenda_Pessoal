@@ -106,6 +106,8 @@ export function PedidoSimplesPage() {
     const c = custoEntrada.get(p.id);
     if (c !== null && c !== undefined)
       return { tipo: p.tipo_embalagem, unidades: p.unidades_por_embalagem, preco: arredondar(Number(c) * p.unidades_por_embalagem), origem: "último custo" };
+    if (p.custo_referencia != null)
+      return { tipo: p.tipo_embalagem, unidades: p.unidades_por_embalagem, preco: arredondar(Number(p.custo_referencia) * p.unidades_por_embalagem), origem: "custo do cadastro" };
     return { tipo: p.tipo_embalagem, unidades: p.unidades_por_embalagem, preco: null, origem: "sem preço" };
   };
 
