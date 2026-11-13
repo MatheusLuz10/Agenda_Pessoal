@@ -1,23 +1,22 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ClipboardList, MessageCircle, Pencil, Phone, Plus, Power } from "lucide-react";
+import { MessageCircle, Pencil, Phone, Plus, Power } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
 import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Aviso, Carregando } from "@/modules/deu-sede/components/ui/aviso";
 import { Confirmar } from "@/modules/deu-sede/components/ui/dialogo";
 import { Dados, Secao, Tabela } from "@/modules/deu-sede/components/ui/secao";
-import { StatusCotacao, StatusPedido } from "@/modules/deu-sede/components/ui/status-badge";
+import { StatusPedido } from "@/modules/deu-sede/components/ui/status-badge";
 import { VinculoDialog } from "@/modules/deu-sede/components/VinculoDialog";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { executar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useCadastros } from "@/modules/deu-sede/data/hooks";
-import type { CotacaoResumo, FornecedorProduto, PedidoResumo } from "@/modules/deu-sede/data/tipos";
+import type { FornecedorProduto, PedidoResumo } from "@/modules/deu-sede/data/tipos";
 import { dataBR, descreverEmbalagem, formatarCnpj, formatarTelefone, moeda, moedaUnitaria } from "@/modules/deu-sede/domain/formatos";
 import { numeroWhatsapp } from "@/modules/deu-sede/domain/whatsapp";
 
 interface Resumo {
-  cotacoes: CotacaoResumo[];
   pedidos: PedidoResumo[];
   total_comprado: number;
   qtd_pedidos: number;
@@ -47,14 +46,9 @@ export function FornecedorDetalhePage() {
         title={f.nome}
         description={f.vendedor ? `Vendedor: ${f.vendedor}` : undefined}
         actions={
-          <>
-            <LinkBotao to={rota("cotacoes", "nova") + `?fornecedor=${f.id}`}>
-              <ClipboardList className="size-4" /> Nova cotação
-            </LinkBotao>
-            <LinkBotao to={rota("fornecedores", f.id, "editar")} variant="secundario">
-              <Pencil className="size-4" /> Editar
-            </LinkBotao>
-          </>
+          <LinkBotao to={rota("fornecedores", f.id, "editar")} variant="secundario">
+            <Pencil className="size-4" /> Editar
+          </LinkBotao>
         }
       />
 
@@ -109,7 +103,7 @@ export function FornecedorDetalhePage() {
 
         <Secao
           titulo="Produtos que vende"
-          descricao="Preço atual por embalagem e por unidade. Cotações recebidas atualizam esta lista."
+          descricao="Preço atual por embalagem e por unidade. Notas de entrada deste fornecedor atualizam esta lista."
           acoes={
             <Button size="sm" onClick={() => setVinculoAberto("novo")}>
               <Plus className="size-4" /> Adicionar produto
@@ -156,28 +150,9 @@ export function FornecedorDetalhePage() {
           )}
         </Secao>
 
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Secao titulo="Cotações recebidas" semPadding>
-            {resumo.erro && <Aviso tom="erro" className="mx-5 mb-4">{resumo.erro}</Aviso>}
-            {(resumo.dados?.cotacoes ?? []).length === 0 ? (
-              <p className="px-5 pb-4 text-sm text-texto-suave">Nenhuma cotação deste fornecedor.</p>
-            ) : (
-              <ul className="divide-y divide-linha">
-                {resumo.dados!.cotacoes.map((c) => (
-                  <li key={c.id}>
-                    <Link to={rota("cotacoes", c.id)} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 hover:bg-offwhite/60">
-                      <span>
-                        <span className="font-medium text-verde">{c.numero_formatado}</span>{" "}
-                        <span className="text-sm text-texto-suave">· {dataBR(c.data_cotacao)} · {moeda(c.valor_total)}</span>
-                      </span>
-                      <StatusCotacao status={c.status} vencida={c.vencida} />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Secao>
+        <div className="grid gap-5">
           <Secao titulo="Pedidos realizados" semPadding>
+            {resumo.erro && <Aviso tom="erro" className="mx-5 mb-4">{resumo.erro}</Aviso>}
             {(resumo.dados?.pedidos ?? []).length === 0 ? (
               <p className="px-5 pb-4 text-sm text-texto-suave">Nenhum pedido para este fornecedor.</p>
             ) : (
@@ -210,8 +185,8 @@ export function FornecedorDetalhePage() {
         titulo={f.ativo ? "Desativar fornecedor?" : "Reativar fornecedor?"}
         mensagem={
           f.ativo
-            ? "O fornecedor não aparece mais para novas cotações e pedidos. Todo o histórico continua guardado."
-            : "O fornecedor volta a aparecer para novas cotações e pedidos."
+            ? "O fornecedor não aparece mais para novos pedidos. Todo o histórico continua guardado."
+            : "O fornecedor volta a aparecer para novos pedidos."
         }
         textoConfirmar={f.ativo ? "Desativar" : "Reativar"}
         aoFechar={() => setConfirmarAtivo(false)}

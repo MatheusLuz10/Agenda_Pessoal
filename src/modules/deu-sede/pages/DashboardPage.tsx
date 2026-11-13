@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ChevronRight, ClipboardList, PackageCheck, Scale, ShoppingCart, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronRight, PackageCheck, PackagePlus, ShoppingCart, TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Aviso, Carregando } from "@/modules/deu-sede/components/ui/aviso";
 import { Secao, Tabela } from "@/modules/deu-sede/components/ui/secao";
@@ -22,7 +22,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Painel inicial" description="Só pedidos enviados ao fornecedor contam como compra. Orçamentos não entram nos valores." />
+      <PageHeader title="Painel inicial" description="Só pedidos enviados ao fornecedor contam como compra." />
       <div className="mb-4">
         <FiltroPeriodo valor={periodo} aoMudar={setPeriodo} />
       </div>
@@ -63,22 +63,19 @@ export function DashboardPage() {
             <Numero rotulo="Pedidos realizados" valor={String(d.pedidos_realizados)} />
             <Numero rotulo="Valor médio por pedido" valor={moeda(d.valor_medio_pedido)} />
             <Numero rotulo="Total de fretes" valor={moeda(d.total_frete)} />
-            <Numero rotulo="Orçamentos recebidos" valor={String(d.orcamentos_recebidos)} />
             <Numero rotulo="Fornecedores ativos" valor={String(d.fornecedores_ativos)} />
             <Numero rotulo="Descontos obtidos" valor={moeda(d.total_descontos)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Atalho para={rota("cotacoes", "nova")} icone={ClipboardList} texto="Nova cotação" />
-            <Atalho para={rota("comparacao")} icone={Scale} texto="Comparar preços" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Atalho para={rota("pedidos", "montar")} icone={ShoppingCart} texto="Montar pedido" />
             <Atalho para={rota("recebimentos")} icone={PackageCheck} texto="Conferir entrega" />
+            <Atalho para={rota("estoque", "entrada")} icone={PackagePlus} texto="Entrada por nota" />
           </div>
 
           <div className="grid gap-5 lg:grid-cols-2">
             <Secao titulo="Para fazer" descricao="Situação de agora (não depende do período)." semPadding>
               <ul className="divide-y divide-linha">
-                <Pendencia para={rota("cotacoes")} texto="Orçamentos aguardando análise" n={d.orcamentos_aguardando_analise} />
                 <Pendencia para={rota("pedidos")} texto="Pedidos aprovados para enviar ao fornecedor" n={d.pedidos_aprovados_nao_enviados} />
                 <Pendencia para={rota("pedidos")} texto="Pedidos aguardando confirmação do fornecedor" n={d.pedidos_aguardando_confirmacao} />
                 <Pendencia para={rota("recebimentos")} texto="Pedidos aguardando recebimento" n={d.pedidos_aguardando_recebimento} />
@@ -150,7 +147,7 @@ function Numero({ rotulo, valor, destaque, detalhe, negativo }: { rotulo: string
   );
 }
 
-function Atalho({ para, icone: Icone, texto }: { para: string; icone: typeof ClipboardList; texto: string }) {
+function Atalho({ para, icone: Icone, texto }: { para: string; icone: LucideIcon; texto: string }) {
   return (
     <Link to={para} className="flex min-h-14 items-center gap-2 rounded-xl border border-linha bg-superficie px-3 text-sm font-semibold text-verde hover:border-amarelo">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amarelo text-verde">

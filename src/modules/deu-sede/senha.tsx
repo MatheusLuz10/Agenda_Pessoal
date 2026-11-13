@@ -19,8 +19,6 @@ export type AreaSensivel =
   | "deu-sede"
   | "painel"
   | "fornecedores"
-  | "cotacoes"
-  | "comparacao"
   | "pedidos"
   | "relatorios"
   | "configuracoes"
@@ -45,8 +43,6 @@ const AREAS: { area: AreaSensivel; rotulo: string }[] = [
   { area: "estoque_ajuste", rotulo: "Saídas e ajustes de estoque" },
   { area: "recebimentos", rotulo: "Recebimentos" },
   { area: "fornecedores", rotulo: "Fornecedores" },
-  { area: "cotacoes", rotulo: "Cotações" },
-  { area: "comparacao", rotulo: "Comparação de preços" },
   { area: "pedidos", rotulo: "Pedidos de compra" },
   { area: "relatorios", rotulo: "Relatórios" },
   { area: "configuracoes", rotulo: "Configurações (sempre protegida)" },

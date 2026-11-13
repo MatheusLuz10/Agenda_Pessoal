@@ -252,7 +252,6 @@ export function PedidoDetalhePage() {
             <Dados
               itens={[
                 ["Fornecedor", <Link key="f" to={rota("fornecedores", p.fornecedor_id)} className="text-marrom underline">{p.fornecedor_nome}</Link>],
-                ["Cotação de origem", p.cotacao_id ? <Link key="c" to={rota("cotacoes", p.cotacao_id)} className="text-marrom underline">{p.cotacao_numero}</Link> : null],
                 ["Pagamento", p.condicao_pagamento],
                 ["Previsão de entrega", p.previsao_entrega ? dataBR(p.previsao_entrega) : null],
                 ["Enviado em", p.enviado_em ? dataHoraBR(p.enviado_em) : null],
@@ -352,7 +351,7 @@ function EditarEntrega({ pedido, aoFechar }: { pedido: PedidoDetalhe; aoFechar: 
 }
 
 // O pedido em Contas a pagar: situação do pagamento ou botão para lançar
-// (pedidos montados pela comparação de preços, ou se o lançamento falhou).
+// (pedido de antes do Contas a pagar, ou se o lançamento falhou).
 function ContaDoPedido({ pedido }: { pedido: PedidoDetalhe }) {
   const { dados: conta, erro } = useConsulta<ContaPagar | null>("obter_conta_pagar", { pedido_id: pedido.id });
   const fin = useConsulta<PainelFinanceiro>("painel_financeiro", {});

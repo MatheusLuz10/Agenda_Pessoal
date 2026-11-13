@@ -6,11 +6,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 
 const dir = new URL("./", import.meta.url);
-const migration = readdirSync(dir)
-  .filter((f) => f.endsWith(".sql"))
-  .sort()
-  .map((f) => readFileSync(new URL(f, dir), "utf8"))
-  .join("\n");
+const arquivos = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+const ler = (lista) => lista.map((f) => readFileSync(new URL(f, dir), "utf8")).join("\n");
+// As seções 1–30 rodam ANTES da 0020 (que tira as cotações), com cotações de
+// verdade no banco, como estava a nuvem; a 0020 em diante entra na seção 31.
+const SEM_COTACOES = "0020";
+const migration = ler(arquivos.filter((f) => f < SEM_COTACOES));
+const migracaoSemCotacoes = ler(arquivos.filter((f) => f >= SEM_COTACOES));
+const todasAsMigracoes = ler(arquivos);
 const db = new PGlite();
 
 let ok = 0;
@@ -51,7 +54,7 @@ const LEITOR = "00000000-0000-0000-0000-0000000000bb";
 const SEM_PERFIL = "00000000-0000-0000-0000-0000000000cc";
 
 // --- Simula o Supabase com a Agenda Pessoal já instalada
-await db.exec(`
+const SUPABASE_SIMULADO = `
   create role anon nologin; create role authenticated nologin; create role service_role nologin;
   create schema auth;
   create table auth.users (
@@ -79,7 +82,8 @@ await db.exec(`
   grant select, insert, update, delete on public.calendars to authenticated;
   grant usage on all sequences in schema public to authenticated;
   insert into public.calendars (nome) values ('Aniversário');
-`);
+`;
+await db.exec(SUPABASE_SIMULADO);
 
 console.log("\n1) Migração");
 try { await db.exec(migration); pass("roda do zero"); }
@@ -800,6 +804,137 @@ await rpcErr("custo negativo", "salvar_produto", { id: comCusto.id, nome: "Produ
 const entCusto = await rpcOk("entrada manual sem custo", "registrar_movimento_estoque", { produto_id: comCusto.id, tipo: "entrada", quantidade: 1, unidade: "embalagem" });
 num(entCusto?.ultimo_custo_unitario) === 2.5 ? pass("entrada sem custo usa o custo do cadastro (2,50/un)") : bad("custo da entrada", entCusto?.ultimo_custo_unitario);
 await asSuper();
+
+console.log("\n30) Entrada por nota guardada (rascunho na nuvem e lista colada)");
+await as(ADMIN);
+(await rpc("obter_rascunho", { chave: "entrada_nota" })) === null ? pass("sem rascunho: devolve vazio") : bad("rascunho inicial");
+await rpcOk("guarda o rascunho da nota (item ainda sem quantidade)", "salvar_rascunho", {
+  chave: "entrada_nota", dados: { numero_nota: "123", linhas: [{ produto_id: brahma.id, quantidade: "" }] } });
+const rascN = await rpc("obter_rascunho", { chave: "entrada_nota" });
+rascN?.dados?.numero_nota === "123" && rascN.dados.linhas.length === 1 && rascN.atualizado_em
+  ? pass("lê o rascunho de volta, com a hora em que foi salvo") : bad("ler rascunho", JSON.stringify(rascN));
+await rpc("salvar_rascunho", { chave: "entrada_nota", dados: { numero_nota: "456" } });
+(await rpc("obter_rascunho", { chave: "entrada_nota" }))?.dados?.numero_nota === "456" ? pass("salvar de novo substitui") : bad("substituir rascunho");
+await rpcErr("chave inválida", "salvar_rascunho", { chave: "X Y", dados: {} }, /Rascunho inválido/);
+await rpcErr("dados que não são objeto", "salvar_rascunho", { chave: "entrada_nota", dados: [1] }, /Rascunho inválido/);
+await as(LEITOR);
+(await rpc("obter_rascunho", { chave: "entrada_nota" })) === null ? pass("outro login não vê o rascunho") : bad("rascunho vazou");
+(await one("select count(*)::int n from deusede.rascunhos")).n === 0 ? pass("outro login não lê a tabela de rascunhos (RLS)") : bad("RLS rascunhos");
+await expectErr("app não grava direto na tabela de rascunhos", `insert into deusede.rascunhos (usuario_id, chave, dados) values ('${LEITOR}', 'x', '{}')`, /permission denied|row-level security/);
+await as("00000000-0000-0000-0000-0000000000ee");
+await rpcErr("login sem perfil não guarda rascunho", "salvar_rascunho", { chave: "entrada_nota", dados: {} }, /não tem acesso/);
+await as(ADMIN);
+const chaveG = crypto.randomUUID();
+const itensG = [{ produto_id: brahma.id, quantidade_embalagens: 2, preco_embalagem: 39.9 }];
+const notaG = await rpcOk("dá entrada com a lista colada", "registrar_entrada_nota", {
+  chave_idempotencia: chaveG, rascunho: "entrada_nota", lista_colada: "2 cx Cerveja Teste 39,90", itens: itensG });
+notaG?.lista_colada === "2 cx Cerveja Teste 39,90" ? pass("a nota gravada guarda a lista colada") : bad("lista colada", JSON.stringify(notaG));
+notaG && "criado_por_nome" in notaG && notaG.itens?.length === 1 ? pass("a nota devolve os itens e quem registrou") : bad("detalhe da nota");
+(await rpc("obter_rascunho", { chave: "entrada_nota" })) === null ? pass("ao dar entrada, o rascunho é apagado") : bad("rascunho ficou");
+await rpc("salvar_rascunho", { chave: "entrada_nota", dados: { chave_idempotencia: chaveG } });
+const repetida = await rpc("registrar_entrada_nota", { chave_idempotencia: chaveG, rascunho: "entrada_nota", itens: itensG });
+repetida?.id === notaG?.id ? pass("rascunho antigo confirmado de novo não duplica a nota") : bad("nota duplicada");
+(await rpc("obter_rascunho", { chave: "entrada_nota" })) === null ? pass("e o rascunho que sobrou é apagado") : bad("rascunho repetido ficou");
+await rpc("salvar_rascunho", { chave: "entrada_nota", dados: { x: 1 } });
+await rpcErr("item sem quantidade: a nota é recusada", "registrar_entrada_nota", {
+  chave_idempotencia: crypto.randomUUID(), rascunho: "entrada_nota", itens: [{ produto_id: brahma.id }] }, /Informe a quantidade/);
+(await rpc("obter_rascunho", { chave: "entrada_nota" }))?.dados?.x === 1 ? pass("com erro, o rascunho continua guardado") : bad("rascunho perdido no erro");
+(await rpc("apagar_rascunho", { chave: "entrada_nota" }))?.apagado === true ? pass("descarta o rascunho") : bad("apagar rascunho");
+await asSuper();
+
+console.log("\n31) Sem cotações e sem comparação de preços (0020)");
+await asSuper();
+await db.exec("update deusede.seguranca set areas = array['relatorios', 'cotacoes', 'comparacao', 'configuracoes']");
+const contar31 = () => one(`select (select count(*) from deusede.historico_precos)::int hist,
+  (select count(*) from deusede.historico_precos where origem = 'cotacao')::int hist_cot,
+  (select count(*) from deusede.historico_precos where cotacao_item_id is not null)::int hist_ligado,
+  (select count(*) from deusede.pedidos)::int ped, (select count(*) from deusede.pedidos where cotacao_id is not null)::int ped_cot,
+  (select count(*) from deusede.pedido_itens where cotacao_item_id is not null)::int itens_cot,
+  (select count(*) from deusede.eventos)::int ev, (select count(*) from deusede.eventos where entidade = 'cotacao')::int ev_cot,
+  (select count(*) from deusede.fornecedor_produtos)::int fp, (select count(*) from deusede.estoque_movimentos)::int mov`);
+const antes31 = await contar31();
+const cotAntes = await one("select count(*)::int n from deusede.cotacoes");
+cotAntes.n > 0 && antes31.ped_cot > 0 && antes31.itens_cot > 0 && antes31.hist_cot > 0 && antes31.ev_cot > 0
+  ? pass(`antes: ${cotAntes.n} cotações, pedido ligado a cotação, ${antes31.hist_cot} preços vindos de cotação, histórico de cotação`)
+  : bad("dados antes da 0020", JSON.stringify({ cot: cotAntes.n, ...antes31 }));
+try { await db.exec(migracaoSemCotacoes); pass("a 0020 roda sobre um banco com cotações"); }
+catch (e) { bad("aplicar 0020", `-> ${e.message} | ${e.where ?? ""}`); }
+await db.exec("set search_path = deusede, public");
+const regs = await one("select to_regclass('deusede.cotacoes') c, to_regclass('deusede.cotacao_itens') ci, to_regclass('deusede.vw_cotacoes') v, to_regclass('deusede.cotacoes_numero_seq') s");
+!regs.c && !regs.ci && !regs.v && !regs.s ? pass("tabelas, view e numeração de cotação apagadas") : bad("sobrou cotação", JSON.stringify(regs));
+const fnsCot = await one(`select count(*)::int n, string_agg(proname, ', ') nomes from pg_proc
+  where pronamespace = 'deusede'::regnamespace and (proname ~* 'cotac|ofertas' or prosrc ~* 'deusede\\.cotac|ofertas_comparacao|formatar_numero\\(''COT''')`);
+fnsCot.n === 0 ? pass("nenhuma função de cotação/comparação sobrou") : bad("funções com cotação", fnsCot.nomes);
+const depois31 = await contar31();
+depois31.hist === antes31.hist && depois31.hist_cot === antes31.hist_cot && depois31.hist_ligado === 0
+  ? pass("histórico de preços mantido (os que vieram de cotação também), sem ligação com cotação") : bad("histórico", JSON.stringify(depois31));
+depois31.ped === antes31.ped && depois31.ped_cot === 0 && depois31.itens_cot === 0
+  ? pass("pedidos mantidos, sem ligação com cotação") : bad("pedidos", JSON.stringify(depois31));
+depois31.ev === antes31.ev - antes31.ev_cot && depois31.ev_cot === 0 ? pass("só o histórico (eventos) das cotações saiu") : bad("eventos", JSON.stringify(depois31));
+depois31.fp === antes31.fp && depois31.mov === antes31.mov ? pass("preços dos fornecedores e estoque intactos") : bad("cadastros", JSON.stringify(depois31));
+const areas31 = (await one("select areas from deusede.seguranca")).areas;
+!areas31.includes("cotacoes") && !areas31.includes("comparacao") && areas31.includes("relatorios")
+  ? pass("senha: áreas de cotação/comparação saem, as outras ficam") : bad("áreas", JSON.stringify(areas31));
+await expectErr("evento de cotação não é mais aceito", "insert into deusede.eventos (entidade, entidade_id, acao) values ('cotacao', gen_random_uuid(), 'criada')", /check constraint/);
+
+await as(ADMIN);
+await rpcErr("tela de cotações não existe mais", "listar_cotacoes", {}, /does not exist/);
+await rpcErr("comparação de preços não existe mais", "ofertas_comparacao", {}, /does not exist/);
+const lote31 = await rpcOk("gera pedido sem cotação (item com cotação antiga é ignorado)", "gerar_pedidos", {
+  lote_id: crypto.randomUUID(),
+  itens: [{ fornecedor_id: fa.id, produto_id: brahma.id, cotacao_item_id: crypto.randomUUID(), quantidade_embalagens: 3, preco_embalagem: 40 }] });
+const ped31 = lote31?.pedidos?.[0];
+ped31 && num(ped31.valor_total) === 120 && !("cotacao_id" in (await rpc("obter_pedido", { id: ped31.id })))
+  ? pass("pedido de 3 × 40,00 = 120,00; detalhe sem cotação") : bad("pedido sem cotação", JSON.stringify(ped31));
+const obtC = await rpcOk("abre pedido que tinha cotação de origem", "obter_pedido", { id: pedC.id });
+obtC && !("cotacao_numero" in obtC) && obtC.itens.length > 0 ? pass("pedido antigo abre normal, sem cotação") : bad("pedido antigo", JSON.stringify(Object.keys(obtC ?? {})));
+const pain31 = await rpcOk("painel sem cotação", "painel", {});
+pain31 && !("orcamentos_recebidos" in pain31) && "total_comprado" in pain31 ? pass("painel sem 'orçamentos'") : bad("painel", JSON.stringify(Object.keys(pain31 ?? {})));
+const av31 = await rpcOk("avisos sem cotação", "avisos", {});
+av31 && !("cotacoes" in av31) && "pedidos" in av31 ? pass("avisos (bolinha) sem cotações") : bad("avisos", JSON.stringify(av31));
+const hist31 = await rpcOk("histórico de preços do produto", "historico_produto", { produto_id: brahma.id });
+hist31?.some((h) => h.origem === "cotacao") && hist31.every((h) => !("cotacao_item_id" in h) && !("cotacao_id" in h))
+  ? pass("histórico do produto mostra os preços que vieram de cotação, sem link") : bad("histórico produto", JSON.stringify(hist31?.[0]));
+const mov31 = await rpcOk("movimentos do produto", "movimentos_produto", { id: brahma.id });
+mov31 && !("cotacoes" in mov31) && mov31.pedidos.length > 0 ? pass("movimentos do produto: só pedidos") : bad("movimentos", JSON.stringify(Object.keys(mov31 ?? {})));
+const res31 = await rpcOk("resumo do fornecedor", "resumo_fornecedor", { id: fc.id });
+res31 && !("cotacoes" in res31) && res31.pedidos.length > 0 ? pass("resumo do fornecedor sem cotações") : bad("resumo fornecedor", JSON.stringify(Object.keys(res31 ?? {})));
+const rel31 = await rpcOk("relatório de fornecedores", "relatorio_fornecedores", {});
+rel31?.length > 0 && rel31.every((x) => !("cotacoes_recebidas" in x)) ? pass("relatório de fornecedores sem coluna de cotações") : bad("relatório", JSON.stringify(rel31?.[0]));
+await rpcOk("registros (logs) abrem sem cotação", "listar_atividades", {});
+const seg31 = await rpcOk("senha: salvar áreas", "salvar_seguranca", { pin_atual: "2468", areas: ["cotacoes", "comparacao", "relatorios"] });
+seg31 && !seg31.areas.includes("cotacoes") && seg31.areas.includes("relatorios") ? pass("áreas de cotação não são mais aceitas") : bad("salvar áreas", JSON.stringify(seg31?.areas));
+await asSuper();
+
+// Modo de teste local: o banco do navegador estava na 0019, com cotação
+// gravada; quando chega migração nova, ele reaplica TODAS (0001…) de novo.
+const bancoLocal = new PGlite();
+try {
+  await bancoLocal.exec(SUPABASE_SIMULADO);
+  await bancoLocal.exec(migration);
+  await bancoLocal.exec(`
+    insert into deusede.fornecedores (nome) values ('Fornecedor local');
+    insert into deusede.produtos (nome, categoria_id) select 'Produto local', id from deusede.categorias order by nome limit 1;
+    insert into deusede.cotacoes (fornecedor_id) select id from deusede.fornecedores where nome = 'Fornecedor local';
+    insert into deusede.cotacao_itens (cotacao_id, produto_id, produto_nome, tipo_embalagem, unidades_por_embalagem, quantidade_embalagens, preco_embalagem)
+      select c.id, p.id, p.nome, 'caixa', 12, 1, 10 from deusede.cotacoes c cross join deusede.produtos p where p.nome = 'Produto local';`);
+  await bancoLocal.exec(todasAsMigracoes);
+  await bancoLocal.exec(todasAsMigracoes);
+  pass("modo local: banco na 0019 com cotação recebe todas as migrações de novo (2x)");
+} catch (e) { bad("modo local", `-> ${e.message} | ${e.where ?? ""}`); }
+const local31 = (await bancoLocal.query(`select to_regclass('deusede.cotacoes') c,
+  (select count(*)::int from deusede.produtos where nome = 'Produto local') p`)).rows[0];
+!local31.c && local31.p === 1 ? pass("modo local: cotações fora, produtos no lugar") : bad("modo local depois", JSON.stringify(local31));
+await bancoLocal.close();
+const bancoNovo = new PGlite();
+try {
+  await bancoNovo.exec(SUPABASE_SIMULADO);
+  await bancoNovo.exec(todasAsMigracoes);
+  await bancoNovo.exec(todasAsMigracoes);
+  pass("banco novo: todas as migrações rodam do zero (2x)");
+} catch (e) { bad("banco novo", `-> ${e.message} | ${e.where ?? ""}`); }
+!(await bancoNovo.query("select to_regclass('deusede.cotacoes') c")).rows[0].c ? pass("banco novo não tem cotações") : bad("banco novo com cotações");
+await bancoNovo.close();
 
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

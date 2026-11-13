@@ -1,4 +1,4 @@
-import type { CotacaoStatus, PedidoStatus } from "@/modules/deu-sede/domain/status";
+import type { PedidoStatus } from "@/modules/deu-sede/domain/status";
 
 // Formato dos dados devolvidos pelas funções do esquema "deusede"
 // (mesmos nomes das colunas do banco).
@@ -67,6 +67,7 @@ export interface FornecedorProduto {
   preco_atual: number | null;
   preco_unitario: number | null;
   preco_atualizado_em: string | null;
+  /** "cotacao": preço que veio de uma cotação (as cotações saíram do app; o preço fica) */
   preco_origem: "manual" | "cotacao" | "nota";
   ativo: boolean;
 }
@@ -89,8 +90,6 @@ export interface HistoricoPreco {
   unidades_por_embalagem: number;
   preco_embalagem: number;
   preco_unitario: number;
-  cotacao_id: string | null;
-  cotacao_numero: string | null;
   created_at: string;
 }
 
@@ -103,76 +102,6 @@ export interface Evento {
   created_at: string;
 }
 
-export interface CotacaoItem {
-  id: string;
-  produto_id: string;
-  produto_nome: string;
-  tipo_embalagem: Embalagem;
-  unidades_por_embalagem: number;
-  quantidade_embalagens: number;
-  preco_embalagem: number;
-  desconto_valor: number;
-  subtotal: number;
-  preco_unitario: number;
-  observacoes: string | null;
-}
-
-export interface CotacaoResumo {
-  id: string;
-  numero: number;
-  numero_formatado: string;
-  fornecedor_id: string;
-  fornecedor_nome: string;
-  data_cotacao: string;
-  validade: string | null;
-  status: CotacaoStatus;
-  frete: number;
-  desconto_geral: number;
-  condicao_pagamento: string | null;
-  prazo_entrega: string | null;
-  observacoes: string | null;
-  motivo_status: string | null;
-  qtd_itens: number;
-  valor_bruto: number;
-  total_descontos: number;
-  valor_total: number;
-  vencida: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CotacaoDetalhe extends CotacaoResumo {
-  itens: CotacaoItem[];
-  eventos: Evento[];
-  pedidos: { id: string; numero_formatado: string; status: PedidoStatus }[];
-  fornecedor: Fornecedor | null;
-}
-
-export interface Oferta {
-  cotacao_item_id: string;
-  produto_id: string;
-  produto_nome: string;
-  cotacao_id: string;
-  cotacao_numero: string;
-  fornecedor_id: string;
-  fornecedor_nome: string;
-  fornecedor_ativo: boolean;
-  cotacao_status: CotacaoStatus;
-  data_cotacao: string;
-  validade: string | null;
-  vencida: boolean;
-  tipo_embalagem: Embalagem;
-  unidades_por_embalagem: number;
-  quantidade_embalagens: number;
-  preco_embalagem: number;
-  desconto_valor: number;
-  preco_unitario: number;
-  frete: number;
-  desconto_geral: number;
-  condicao_pagamento: string | null;
-  prazo_entrega: string | null;
-}
-
 export interface PedidoResumo {
   id: string;
   numero: number;
@@ -181,7 +110,6 @@ export interface PedidoResumo {
   fornecedor_id: string;
   fornecedor_nome: string;
   fornecedor_whatsapp: string | null;
-  cotacao_id: string | null;
   status: PedidoStatus;
   data_pedido: string;
   previsao_entrega: string | null;
@@ -206,7 +134,6 @@ export interface PedidoResumo {
 export interface PedidoItem {
   id: string;
   produto_id: string;
-  cotacao_item_id: string | null;
   produto_nome: string;
   tipo_embalagem: Embalagem;
   unidades_por_embalagem: number;
@@ -257,7 +184,6 @@ export interface PedidoDetalhe extends PedidoResumo {
   itens: PedidoItem[];
   recebimentos: Recebimento[];
   eventos: Evento[];
-  cotacao_numero: string | null;
   fornecedor: Fornecedor | null;
   empresa: Empresa | null;
 }
@@ -284,8 +210,6 @@ export interface Painel {
   valor_medio_pedido: number;
   total_frete: number;
   total_descontos: number;
-  orcamentos_recebidos: number;
-  orcamentos_aguardando_analise: number;
   pedidos_aguardando_aprovacao: number;
   pedidos_aprovados_nao_enviados: number;
   pedidos_aguardando_confirmacao: number;
@@ -388,6 +312,32 @@ export interface EntradaNotaResumo {
   fornecedor_id: string | null;
   fornecedor_nome: string | null;
   qtd_itens: number;
+  total: number;
+}
+
+export interface ItemEntradaNota {
+  id: string;
+  produto_id: string;
+  produto_nome: string;
+  tipo_embalagem: Embalagem;
+  unidades_por_embalagem: number;
+  quantidade_embalagens: number;
+  preco_embalagem: number | null;
+  subtotal: number;
+}
+
+export interface EntradaNota {
+  id: string;
+  numero_formatado: string;
+  data_entrada: string;
+  numero_nota: string | null;
+  fornecedor_nome: string | null;
+  observacoes: string | null;
+  /** texto da lista colada, como veio (notas registradas a partir da 0019) */
+  lista_colada: string | null;
+  created_at: string;
+  criado_por_nome: string | null;
+  itens: ItemEntradaNota[];
   total: number;
 }
 
@@ -553,7 +503,7 @@ export interface PainelFinanceiro {
 // ------------------------------------------------------------ Registros (0017)
 
 export interface Registro {
-  /** "app" = ação anotada pelo app; "historico" = histórico de pedido/cotação/recebimento */
+  /** "app" = ação anotada pelo app; "historico" = histórico de pedido/recebimento */
   origem: "app" | "historico";
   ordem: number;
   quando: string;

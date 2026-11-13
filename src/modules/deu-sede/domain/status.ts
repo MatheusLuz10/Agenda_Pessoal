@@ -1,54 +1,7 @@
-// Regras de status de cotações e pedidos. Este arquivo espelha as
+// Regras de status dos pedidos. Este arquivo espelha as
 // restrições do banco (supabase/migrations/0001_estrutura_inicial.sql):
 // o banco é quem garante a regra; aqui ela serve para a tela mostrar só
 // as ações permitidas e dar mensagens claras antes de chamar o banco.
-
-// ---------------------------------------------------------------- Cotações
-
-export const COTACAO_STATUS = [
-  "em_elaboracao",
-  "aguardando_fornecedor",
-  "recebida",
-  "em_analise",
-  "aprovada",
-  "rejeitada",
-  "expirada",
-] as const;
-export type CotacaoStatus = (typeof COTACAO_STATUS)[number];
-
-export const COTACAO_STATUS_LABEL: Record<CotacaoStatus, string> = {
-  em_elaboracao: "Em elaboração",
-  aguardando_fornecedor: "Aguardando fornecedor",
-  recebida: "Recebida",
-  em_analise: "Em análise",
-  aprovada: "Aprovada",
-  rejeitada: "Rejeitada",
-  expirada: "Expirada",
-};
-
-/** Itens e valores só podem ser editados enquanto a cotação ainda não chegou. */
-export function cotacaoPermiteEditarItens(status: CotacaoStatus): boolean {
-  return status === "em_elaboracao" || status === "aguardando_fornecedor";
-}
-
-const COTACAO_TRANSICOES: Record<CotacaoStatus, readonly CotacaoStatus[]> = {
-  em_elaboracao: ["aguardando_fornecedor", "recebida"],
-  aguardando_fornecedor: ["em_elaboracao", "recebida", "expirada"],
-  recebida: ["em_analise", "aprovada", "rejeitada", "expirada"],
-  em_analise: ["aprovada", "rejeitada", "expirada"],
-  aprovada: ["expirada"],
-  rejeitada: [],
-  expirada: [],
-};
-
-export function proximosStatusCotacao(status: CotacaoStatus): readonly CotacaoStatus[] {
-  return COTACAO_TRANSICOES[status];
-}
-
-/** Cotação vencida = validade informada já passou. Não depende do status. */
-export function cotacaoVencida(validade: string | null, hoje: string): boolean {
-  return validade !== null && validade < hoje;
-}
 
 // ----------------------------------------------------------------- Pedidos
 
@@ -119,7 +72,7 @@ export function pedidoAceitaRecebimento(status: PedidoStatus): boolean {
 
 /**
  * "Compra realizada" para painel e relatórios: o pedido já foi enviado ao
- * fornecedor e não foi cancelado. Cotações NUNCA entram nesta conta, nem
+ * fornecedor e não foi cancelado. Não entram nesta conta
  * pedidos ainda em elaboração/aprovação.
  */
 export function contaComoCompraRealizada(status: PedidoStatus): boolean {

@@ -1,9 +1,9 @@
 import type { FuncaoRPC } from "@/modules/deu-sede/data/cliente";
 import { CATALOGO } from "@/modules/deu-sede/data/catalogo";
-import type { Cadastros, CotacaoDetalhe, Fornecedor, PedidoDetalhe, PedidoResumo, Produto } from "@/modules/deu-sede/data/tipos";
+import type { Cadastros, Fornecedor, PedidoDetalhe, PedidoResumo, Produto } from "@/modules/deu-sede/data/tipos";
 import { hojeISO, somarDias } from "@/modules/deu-sede/domain/formatos";
 
-// DADOS DE EXEMPLO do modo de teste local. Fornecedores, cotações, preços,
+// DADOS DE EXEMPLO do modo de teste local. Fornecedores, preços,
 // pedidos e vendas são FICTÍCIOS e marcados como "EXEMPLO"; os nomes dos
 // produtos vêm do catálogo de referência. Tudo é gravado pelas mesmas
 // funções que o app usa, então passa pelas mesmas regras.
@@ -67,59 +67,39 @@ export async function carregarDadosExemplo(rpc: Rpc) {
 
   const item = (p: Produto, quantidade: number, preco: number) => ({ produto_id: p.id, quantidade_embalagens: quantidade, preco_embalagem: preco });
 
-  // Cotações recebidas (preços de EXEMPLO por embalagem)
-  const cotA = await rpc<CotacaoDetalhe>("salvar_cotacao", {
-    fornecedor_id: fA.id,
-    data_cotacao: somarDias(hoje, -3),
-    validade: somarDias(hoje, 7),
-    condicao_pagamento: "Boleto 21 dias (exemplo)",
-    prazo_entrega: "2 dias úteis",
-    observacoes: "Cotação de EXEMPLO",
-    status: "recebida",
-    itens: [
-      item(BRAHMA, 30, 38.9),
-      item(SKOL, 30, 37.5),
-      item(ANTARCTICA, 20, 37.9),
-      item(BRAHMA600, 10, 129.9),
-      item(BUD_LN, 5, 119.9),
-      item(SPATEN, 10, 45.9),
-      item(AMA, 10, 15.9),
-    ],
-  });
-  const cotB = await rpc<CotacaoDetalhe>("salvar_cotacao", {
-    fornecedor_id: fB.id,
-    data_cotacao: somarDias(hoje, -2),
-    validade: somarDias(hoje, 5),
-    frete: 25,
-    condicao_pagamento: "PIX à vista (exemplo)",
-    observacoes: "Cotação de EXEMPLO",
-    status: "recebida",
-    itens: [item(BRAHMA, 30, 39.5), item(SKOL, 30, 36.9), item(ANTARCTICA, 20, 38.5), item(AMA, 10, 14.9), item(REDBULL, 24, 6.9), item(MONSTER, 12, 8.5)],
-  });
-  await rpc("salvar_cotacao", {
-    fornecedor_id: fC.id,
-    data_cotacao: somarDias(hoje, -12),
-    validade: somarDias(hoje, -2),
-    frete: 40,
-    observacoes: "Cotação de EXEMPLO (já vencida)",
-    status: "recebida",
-    itens: [item(BRAHMA269, 20, 33.9), item(SKOL269, 20, 33.5), item(BUD350, 10, 42.9), item(C51, 12, 13.9), item(SMIRNOFF, 6, 32.9), item(REDLABEL, 3, 89.9)],
-  });
+  // Preço atual de cada fornecedor (preços de EXEMPLO por embalagem)
+  const precos = async (f: Fornecedor, lista: [Produto, number][]) => {
+    for (const [p, preco] of lista)
+      await rpc("salvar_fornecedor_produto", {
+        fornecedor_id: f.id,
+        produto_id: p.id,
+        tipo_embalagem: p.tipo_embalagem,
+        unidades_por_embalagem: p.unidades_por_embalagem,
+        preco_atual: preco,
+      });
+  };
+  await precos(fA, [[BRAHMA, 38.9], [SKOL, 37.5], [ANTARCTICA, 37.9], [BRAHMA600, 129.9], [BUD_LN, 119.9], [SPATEN, 45.9], [AMA, 15.9]]);
+  await precos(fB, [[BRAHMA, 39.5], [SKOL, 36.9], [ANTARCTICA, 38.5], [AMA, 14.9], [REDBULL, 6.9], [MONSTER, 8.5]]);
+  await precos(fC, [[BRAHMA269, 33.9], [SKOL269, 33.5], [BUD350, 42.9], [C51, 13.9], [SMIRNOFF, 32.9], [REDLABEL, 89.9]]);
 
   // Montar pedido: itens dos dois fornecedores -> 2 pedidos
-  const deA = (p: Produto) => cotA.itens.find((i) => i.produto_id === p.id)!.id;
-  const deB = (p: Produto) => cotB.itens.find((i) => i.produto_id === p.id)!.id;
+  const pedir = (f: Fornecedor, p: Produto, quantidade: number, preco: number) => ({
+    fornecedor_id: f.id,
+    produto_id: p.id,
+    quantidade_embalagens: quantidade,
+    preco_embalagem: preco,
+  });
   const lote = await rpc<{ pedidos: PedidoResumo[] }>("gerar_pedidos", {
     lote_id: crypto.randomUUID(),
     itens: [
-      { fornecedor_id: fA.id, produto_id: BRAHMA.id, cotacao_item_id: deA(BRAHMA), quantidade_embalagens: 30 },
-      { fornecedor_id: fA.id, produto_id: ANTARCTICA.id, cotacao_item_id: deA(ANTARCTICA), quantidade_embalagens: 10 },
-      { fornecedor_id: fA.id, produto_id: BUD_LN.id, cotacao_item_id: deA(BUD_LN), quantidade_embalagens: 2 },
-      { fornecedor_id: fA.id, produto_id: SPATEN.id, cotacao_item_id: deA(SPATEN), quantidade_embalagens: 5 },
-      { fornecedor_id: fB.id, produto_id: SKOL.id, cotacao_item_id: deB(SKOL), quantidade_embalagens: 20 },
-      { fornecedor_id: fB.id, produto_id: AMA.id, cotacao_item_id: deB(AMA), quantidade_embalagens: 10 },
-      { fornecedor_id: fB.id, produto_id: REDBULL.id, cotacao_item_id: deB(REDBULL), quantidade_embalagens: 24 },
-      { fornecedor_id: fB.id, produto_id: MONSTER.id, cotacao_item_id: deB(MONSTER), quantidade_embalagens: 12 },
+      pedir(fA, BRAHMA, 30, 38.9),
+      pedir(fA, ANTARCTICA, 10, 37.9),
+      pedir(fA, BUD_LN, 2, 119.9),
+      pedir(fA, SPATEN, 5, 45.9),
+      pedir(fB, SKOL, 20, 36.9),
+      pedir(fB, AMA, 10, 14.9),
+      pedir(fB, REDBULL, 24, 6.9),
+      pedir(fB, MONSTER, 12, 8.5),
     ],
     fornecedores: [
       { fornecedor_id: fA.id, condicao_pagamento: "Boleto 21 dias (exemplo)", previsao_entrega: somarDias(hoje, 2) },

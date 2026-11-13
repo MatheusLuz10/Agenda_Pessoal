@@ -9,6 +9,7 @@ import { Select } from "@/modules/deu-sede/components/ui/input";
 import { Planilha } from "@/modules/deu-sede/components/ui/planilha";
 import { Tabela } from "@/modules/deu-sede/components/ui/secao";
 import { MovimentoEstoqueDialog } from "@/modules/deu-sede/components/MovimentoEstoqueDialog";
+import { NotaEntradaDialogo } from "@/modules/deu-sede/components/NotaEntradaDialogo";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useCadastros } from "@/modules/deu-sede/data/hooks";
@@ -346,6 +347,7 @@ function Movimentos() {
 
 function Entradas() {
   const { dados, erro } = useConsulta<EntradaNotaResumo[]>("listar_entradas_nota");
+  const [aberta, setAberta] = useState<string | null>(null);
   if (erro) return <Aviso tom="erro">{erro}</Aviso>;
   if (!dados) return <Carregando />;
   if (dados.length === 0)
@@ -355,10 +357,13 @@ function Entradas() {
       </Vazio>
     );
   return (
+    <>
+    <p className="mb-2 text-sm text-texto-suave">Toque numa nota para ver os produtos, as quantidades e a lista colada.</p>
     <Planilha<EntradaNotaResumo>
       rotulo="Entradas por nota (sem pedido)"
       linhas={dados}
       chave={(n) => n.id}
+      aoAbrir={(n) => setAberta(n.id)}
       ordemInicial={{ chave: "data", sentido: -1 }}
       colunas={[
         { chave: "numero", rotulo: "Nº", fixa: true, ordenar: (n) => n.numero_formatado, celula: (n) => <span className="font-semibold text-verde">{n.numero_formatado}</span> },
@@ -380,6 +385,8 @@ function Entradas() {
         total: moeda(dados.reduce((s, n) => s + Number(n.total), 0)),
       }}
     />
+    <NotaEntradaDialogo id={aberta} aoFechar={() => setAberta(null)} />
+    </>
   );
 }
 

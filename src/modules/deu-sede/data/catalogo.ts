@@ -5,7 +5,7 @@ import type { Embalagem, UnidadeMedida } from "@/modules/deu-sede/data/tipos";
 // (destilados das marcas mais vendidas). Pode haver item que saiu de
 // linha ou faltar algum regional: confira e desative o que não vende.
 // Embalagens padrão são as mais usadas na compra por distribuidoras —
-// cada fornecedor pode ter outra (a cotação registra a embalagem real).
+// cada fornecedor pode ter outra (o vínculo e a nota registram a embalagem real).
 
 export interface ItemCatalogo {
   nome: string;

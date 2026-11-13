@@ -12,8 +12,8 @@ import { EMBALAGENS, lerDecimal, moedaUnitaria, paraCampo } from "@/modules/deu-
 // Produto que um fornecedor vende + preço atual. Abre a partir do
 // produto (escolhe o fornecedor) ou do fornecedor (escolhe o produto ou
 // cadastra um produto novo na hora).
-// Mudar o preço atual cria uma linha nova no histórico; cotações e
-// pedidos antigos não mudam.
+// Mudar o preço atual cria uma linha nova no histórico; pedidos e
+// notas antigas não mudam.
 export function VinculoDialog({
   aberto,
   aoFechar,
@@ -223,7 +223,7 @@ function Formulario({
         </div>
         <Campo
           rotulo={novoProduto ? "Preço de custo da embalagem (R$)" : "Preço atual da embalagem (R$)"}
-          ajuda={unitario ? `Por unidade: ${moedaUnitaria(unitario)}` : "Opcional. Cotações recebidas também atualizam este preço."}
+          ajuda={unitario ? `Por unidade: ${moedaUnitaria(unitario)}` : "Opcional. Notas de entrada também atualizam este preço."}
         >
           {(id) => <Input id={id} inputMode="decimal" placeholder="0,00" value={preco} onChange={(e) => setPreco(e.target.value)} />}
         </Campo>
@@ -232,7 +232,7 @@ function Formulario({
         </Campo>
         {editando && <Interruptor ligado={ativo} aoMudar={setAtivo} rotulo="Fornecedor ainda vende este produto" />}
         {editando && (
-          <p className="text-xs text-texto-suave">Mudar o preço cria uma linha nova no histórico. Cotações e pedidos já feitos não mudam.</p>
+          <p className="text-xs text-texto-suave">Mudar o preço cria uma linha nova no histórico. Pedidos já feitos não mudam.</p>
         )}
         {erro && <Aviso tom="erro">{erro}</Aviso>}
       </div>

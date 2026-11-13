@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Oferta, PedidoDetalhe } from "@/modules/deu-sede/data/tipos";
+import type { PedidoDetalhe } from "@/modules/deu-sede/data/tipos";
 import {
   cnpjValido,
   contemBusca,
@@ -13,36 +13,7 @@ import {
   normalizarWhatsapp,
   somarDias,
 } from "./formatos";
-import { custoOferta, melhorCombinacao, ofertasValidas, tudoDeUmFornecedor } from "./comparacao";
 import { linkWhatsapp, mensagemPedido, numeroWhatsapp } from "./whatsapp";
-
-function oferta(o: Partial<Oferta>): Oferta {
-  return {
-    cotacao_item_id: crypto.randomUUID(),
-    produto_id: "brahma",
-    produto_nome: "Brahma 269",
-    cotacao_id: "c",
-    cotacao_numero: "COT-00001",
-    fornecedor_id: "A",
-    fornecedor_nome: "A",
-    fornecedor_ativo: true,
-    cotacao_status: "recebida",
-    data_cotacao: "2026-11-07",
-    validade: null,
-    vencida: false,
-    tipo_embalagem: "caixa",
-    unidades_por_embalagem: 12,
-    quantidade_embalagens: 10,
-    preco_embalagem: 39.9,
-    desconto_valor: 0,
-    preco_unitario: 3.325,
-    frete: 0,
-    desconto_geral: 0,
-    condicao_pagamento: null,
-    prazo_entrega: null,
-    ...o,
-  };
-}
 
 describe("formatos", () => {
   it("lê números digitados em pt-BR", () => {
@@ -82,62 +53,6 @@ describe("formatos", () => {
   it("descrição de embalagem e busca sem acento", () => {
     expect(descreverEmbalagem("fardo", 15)).toBe("Fardo c/ 15");
     expect(contemBusca("agua", "Água Mineral")).toBe(true);
-  });
-});
-
-describe("comparação de preços", () => {
-  it("normaliza embalagens diferentes pela quantidade em unidades", () => {
-    // 240 latas: caixa c/ 12 -> 20 caixas; fardo c/ 15 -> 16 fardos; fardo c/ 18 -> 14 (252 latas)
-    expect(custoOferta(oferta({}), 240).embalagens).toBe(20);
-    expect(custoOferta(oferta({ unidades_por_embalagem: 15, preco_embalagem: 48 }), 240)).toMatchObject({ embalagens: 16, subtotal: 768 });
-    expect(custoOferta(oferta({ unidades_por_embalagem: 18 }), 240)).toMatchObject({ embalagens: 14, unidades: 252 });
-  });
-
-  it("aplica o desconto do item proporcionalmente", () => {
-    // cotou 10 cx com R$ 10 de desconto -> R$ 1 por caixa
-    expect(custoOferta(oferta({ desconto_valor: 10 }), 60)).toMatchObject({ embalagens: 5, descontoItem: 5, subtotal: 194.5 });
-  });
-
-  it("melhor combinação considera o frete", () => {
-    const desejos = [{ produto_id: "brahma", unidades: 24 }];
-    // A: 2 cx × 39,90 = 79,80 + frete 50 = 129,80 | B: 2 cx × 41,50 = 83,00 sem frete
-    const alt = melhorCombinacao(desejos, [
-      oferta({ fornecedor_id: "A", fornecedor_nome: "A", frete: 50 }),
-      oferta({ fornecedor_id: "B", fornecedor_nome: "B", preco_embalagem: 41.5 }),
-    ]);
-    expect(alt.porFornecedor.map((g) => g.fornecedor_id)).toEqual(["B"]);
-    expect(alt.total).toBe(83);
-  });
-
-  it("junta itens no mesmo fornecedor quando o frete compensa", () => {
-    const desejos = [
-      { produto_id: "p1", unidades: 12 },
-      { produto_id: "p2", unidades: 12 },
-    ];
-    const ofertas = [
-      oferta({ produto_id: "p1", fornecedor_id: "A", preco_embalagem: 10, frete: 20 }),
-      oferta({ produto_id: "p2", fornecedor_id: "A", preco_embalagem: 12, frete: 20 }),
-      oferta({ produto_id: "p2", fornecedor_id: "B", preco_embalagem: 11, frete: 20 }),
-    ];
-    // só A: 10 + 12 + 20 = 42 | A + B: 10 + 11 + 40 = 61
-    const alt = melhorCombinacao(desejos, ofertas);
-    expect(alt.total).toBe(42);
-    expect(alt.porFornecedor).toHaveLength(1);
-  });
-
-  it("tudo de um fornecedor aponta o que ele não cotou", () => {
-    const desejos = [
-      { produto_id: "p1", unidades: 12 },
-      { produto_id: "p2", unidades: 12 },
-    ];
-    const alt = tudoDeUmFornecedor("A", desejos, [oferta({ produto_id: "p1", fornecedor_id: "A" })]);
-    expect(alt.semPreco).toEqual(["p2"]);
-  });
-
-  it("cotações vencidas ficam de fora, a menos que o usuário peça", () => {
-    const lista = [oferta({ vencida: true }), oferta({ fornecedor_id: "B" })];
-    expect(ofertasValidas(lista, false)).toHaveLength(1);
-    expect(ofertasValidas(lista, true)).toHaveLength(2);
   });
 });
 

@@ -1,20 +1,20 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Pencil, Plus, Power, Scale } from "lucide-react";
+import { Pencil, Plus, Power } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
 import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Aviso, Carregando } from "@/modules/deu-sede/components/ui/aviso";
 import { Confirmar } from "@/modules/deu-sede/components/ui/dialogo";
 import { Dados, Secao, Tabela } from "@/modules/deu-sede/components/ui/secao";
-import { StatusCotacao, StatusPedido } from "@/modules/deu-sede/components/ui/status-badge";
+import { StatusPedido } from "@/modules/deu-sede/components/ui/status-badge";
 import { VinculoDialog } from "@/modules/deu-sede/components/VinculoDialog";
 import { GraficoPrecos } from "@/modules/deu-sede/components/GraficoPrecos";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { executar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useCadastros } from "@/modules/deu-sede/data/hooks";
 import type { FornecedorProduto, HistoricoPreco } from "@/modules/deu-sede/data/tipos";
-import type { CotacaoStatus, PedidoStatus } from "@/modules/deu-sede/domain/status";
+import type { PedidoStatus } from "@/modules/deu-sede/domain/status";
 import {
   dataBR,
   dataHoraBR,
@@ -26,20 +26,15 @@ import {
 } from "@/modules/deu-sede/domain/formatos";
 
 const ORIGEM: Record<FornecedorProduto["preco_origem"], string> = { manual: "manual", cotacao: "cotação", nota: "nota fiscal" };
+// de onde veio cada preço do histórico ("cotação": das cotações, que saíram do app)
+const ORIGEM_HISTORICO: Record<HistoricoPreco["origem"], string> = {
+  manual: "Atualização manual",
+  nota: "Nota fiscal (recebimento)",
+  pedido: "Pedido",
+  cotacao: "Cotação",
+};
 
 interface Movimentos {
-  cotacoes: {
-    cotacao_id: string;
-    numero_formatado: string;
-    data_cotacao: string;
-    status: CotacaoStatus;
-    vencida: boolean;
-    fornecedor_nome: string;
-    tipo_embalagem: FornecedorProduto["tipo_embalagem"];
-    unidades_por_embalagem: number;
-    preco_embalagem: number;
-    preco_unitario: number;
-  }[];
   pedidos: {
     pedido_id: string;
     numero_formatado: string;
@@ -80,9 +75,6 @@ export function ProdutoDetalhePage() {
         description={[produto.marca, descreverVolume(produto.volume_por_unidade, produto.unidade_medida)].filter(Boolean).join(" · ")}
         actions={
           <>
-            <LinkBotao to={rota("comparacao") + `?produto=${produto.id}`} variant="contorno">
-              <Scale className="size-4" /> Comparar preços
-            </LinkBotao>
             <LinkBotao to={rota("produtos", produto.id, "editar")} variant="secundario">
               <Pencil className="size-4" /> Editar
             </LinkBotao>
@@ -125,7 +117,7 @@ export function ProdutoDetalhePage() {
         >
           {vinculos.length === 0 ? (
             <p className="px-5 pb-4 text-sm text-texto-suave">
-              Nenhum fornecedor ligado a este produto ainda. Ao receber uma cotação, o fornecedor aparece aqui automaticamente.
+              Nenhum fornecedor ligado a este produto ainda. Use “Adicionar fornecedor” ou dê entrada de uma nota com fornecedor.
             </p>
           ) : (
             <Tabela>
@@ -172,7 +164,7 @@ export function ProdutoDetalhePage() {
           )}
         </Secao>
 
-        <Secao titulo="Histórico de preços" descricao="Cada cotação recebida e cada mudança de preço atual ficam registradas para sempre.">
+        <Secao titulo="Histórico de preços" descricao="Cada mudança de preço atual (manual ou por nota) fica registrada para sempre.">
           {historico.erro && <Aviso tom="erro">{historico.erro}</Aviso>}
           {!historico.dados && !historico.erro && <Carregando />}
           {historico.dados && historico.dados.length === 0 && <p className="text-sm text-texto-suave">Nenhum preço registrado ainda.</p>}
@@ -195,15 +187,7 @@ export function ProdutoDetalhePage() {
                     <tr key={h.id}>
                       <td>{dataBR(h.data_referencia)}</td>
                       <td>{h.fornecedor_nome}</td>
-                      <td>
-                        {h.cotacao_id ? (
-                          <Link to={rota("cotacoes", h.cotacao_id)} className="text-marrom underline">
-                            {h.cotacao_numero}
-                          </Link>
-                        ) : (
-                          h.origem === "nota" ? "Nota fiscal (recebimento)" : "Atualização manual"
-                        )}
-                      </td>
+                      <td>{ORIGEM_HISTORICO[h.origem] ?? h.origem}</td>
                       <td>{descreverEmbalagem(h.tipo_embalagem, h.unidades_por_embalagem)}</td>
                       <td className="num">{moeda(h.preco_embalagem)}</td>
                       <td className="num">{moedaUnitaria(h.preco_unitario)}</td>
@@ -215,31 +199,7 @@ export function ProdutoDetalhePage() {
           )}
         </Secao>
 
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Secao titulo="Cotações com este produto" semPadding>
-            {(movimentos.dados?.cotacoes ?? []).length === 0 ? (
-              <p className="px-5 pb-4 text-sm text-texto-suave">Nenhuma cotação ainda.</p>
-            ) : (
-              <ul className="divide-y divide-linha">
-                {movimentos.dados!.cotacoes.map((c) => (
-                  <li key={c.cotacao_id + c.tipo_embalagem + c.unidades_por_embalagem}>
-                    <Link to={rota("cotacoes", c.cotacao_id)} className="flex flex-col gap-1 px-5 py-3 hover:bg-offwhite/60">
-                      <span className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium text-verde">
-                          {c.numero_formatado} · {c.fornecedor_nome}
-                        </span>
-                        <StatusCotacao status={c.status} vencida={c.vencida} />
-                      </span>
-                      <span className="text-sm text-texto-suave">
-                        {dataBR(c.data_cotacao)} · {descreverEmbalagem(c.tipo_embalagem, c.unidades_por_embalagem)} a {moeda(c.preco_embalagem)} ·{" "}
-                        {moedaUnitaria(c.preco_unitario)}/un
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Secao>
+        <div className="grid gap-5">
           <Secao titulo="Pedidos com este produto" semPadding>
             {(movimentos.dados?.pedidos ?? []).length === 0 ? (
               <p className="px-5 pb-4 text-sm text-texto-suave">Nenhum pedido ainda.</p>
@@ -278,8 +238,8 @@ export function ProdutoDetalhePage() {
         titulo={produto.ativo ? "Desativar produto?" : "Reativar produto?"}
         mensagem={
           produto.ativo
-            ? "O produto deixa de aparecer nas novas cotações e pedidos. O histórico continua guardado e você pode reativar quando quiser."
-            : "O produto volta a aparecer nas novas cotações e pedidos."
+            ? "O produto deixa de aparecer nos novos pedidos. O histórico continua guardado e você pode reativar quando quiser."
+            : "O produto volta a aparecer nos novos pedidos."
         }
         textoConfirmar={produto.ativo ? "Desativar" : "Reativar"}
         aoFechar={() => setConfirmarAtivo(false)}

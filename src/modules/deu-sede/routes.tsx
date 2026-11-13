@@ -1,6 +1,6 @@
 import { Navigate, Route } from "react-router-dom";
 import { DeuSedeLayout } from "@/modules/deu-sede/components/DeuSedeLayout";
-import { DEU_SEDE_BASE } from "@/modules/deu-sede/config/modules";
+import { DEU_SEDE_BASE, rota } from "@/modules/deu-sede/config/modules";
 import { DashboardPage } from "@/modules/deu-sede/pages/DashboardPage";
 import { NotFoundPage } from "@/modules/deu-sede/pages/NotFoundPage";
 import { SettingsPage } from "@/modules/deu-sede/pages/SettingsPage";
@@ -10,12 +10,7 @@ import { ProdutoDetalhePage } from "@/modules/deu-sede/pages/produtos/ProdutoDet
 import { FornecedoresPage } from "@/modules/deu-sede/pages/fornecedores/FornecedoresPage";
 import { FornecedorFormPage } from "@/modules/deu-sede/pages/fornecedores/FornecedorFormPage";
 import { FornecedorDetalhePage } from "@/modules/deu-sede/pages/fornecedores/FornecedorDetalhePage";
-import { CotacoesPage } from "@/modules/deu-sede/pages/cotacoes/CotacoesPage";
-import { CotacaoFormPage } from "@/modules/deu-sede/pages/cotacoes/CotacaoFormPage";
-import { CotacaoDetalhePage } from "@/modules/deu-sede/pages/cotacoes/CotacaoDetalhePage";
-import { ComparacaoPage } from "@/modules/deu-sede/pages/ComparacaoPage";
 import { PedidosPage } from "@/modules/deu-sede/pages/pedidos/PedidosPage";
-import { MontarPedidoPage } from "@/modules/deu-sede/pages/pedidos/MontarPedidoPage";
 import { PedidoSimplesPage } from "@/modules/deu-sede/pages/pedidos/PedidoSimplesPage";
 import { PedidoDetalhePage } from "@/modules/deu-sede/pages/pedidos/PedidoDetalhePage";
 import { RecebimentosPage } from "@/modules/deu-sede/pages/recebimentos/RecebimentosPage";
@@ -40,15 +35,12 @@ export const deuSedeRoutes = (
     <Route path="fornecedores/novo" element={<FornecedorFormPage />} />
     <Route path="fornecedores/:id" element={<FornecedorDetalhePage />} />
     <Route path="fornecedores/:id/editar" element={<FornecedorFormPage />} />
-    <Route path="cotacoes" element={<CotacoesPage />} />
-    <Route path="cotacoes/nova" element={<CotacaoFormPage />} />
-    <Route path="cotacoes/:id" element={<CotacaoDetalhePage />} />
-    <Route path="cotacoes/:id/editar" element={<CotacaoFormPage />} />
-    <Route path="comparacao" element={<ComparacaoPage />} />
+    {/* Cotações e Comparação de preços saíram do app (migração 0020): links antigos vão para o Montar pedido */}
+    <Route path="cotacoes/*" element={<Navigate to={rota("pedidos", "montar")} replace />} />
+    <Route path="comparacao" element={<Navigate to={rota("pedidos", "montar")} replace />} />
     <Route path="pedidos" element={<PedidosPage />} />
     <Route path="pedidos/montar" element={<PedidoSimplesPage />} />
-    {/* vários fornecedores de uma vez, vindo da Comparação de preços ou de uma cotação */}
-    <Route path="pedidos/montar-comparacao" element={<MontarPedidoPage />} />
+    <Route path="pedidos/montar-comparacao" element={<Navigate to={rota("pedidos", "montar")} replace />} />
     <Route path="pedidos/:id" element={<PedidoDetalhePage />} />
     <Route path="recebimentos" element={<RecebimentosPage />} />
     <Route path="recebimentos/novo/:pedidoId" element={<RegistrarRecebimentoPage />} />

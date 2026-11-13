@@ -42,7 +42,7 @@ export function FornecedoresPage() {
       {!dados && !erro && <Carregando />}
       {dados && dados.fornecedores.length === 0 && (
         <Vazio icone={Store} titulo="Nenhum fornecedor cadastrado">
-          Cadastre os fornecedores para registrar cotações e enviar pedidos pelo WhatsApp.
+          Cadastre os fornecedores para montar e enviar pedidos pelo WhatsApp.
         </Vazio>
       )}
       {dados && dados.fornecedores.length > 0 && (

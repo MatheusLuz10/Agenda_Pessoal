@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  COTACAO_STATUS,
   PEDIDO_STATUS,
   contaComoCompraRealizada,
-  cotacaoPermiteEditarItens,
-  cotacaoVencida,
   pedidoAceitaRecebimento,
   pedidoEncerrado,
   podeMudarStatusPedido,
-  proximosStatusCotacao,
   proximosStatusPedido,
 } from "./status";
 
@@ -46,26 +42,5 @@ describe("status de pedidos", () => {
     for (const s of PEDIDO_STATUS) {
       for (const p of proximosStatusPedido(s)) expect(PEDIDO_STATUS).toContain(p);
     }
-  });
-});
-
-describe("status de cotações", () => {
-  it("itens editáveis só antes de a cotação ser recebida", () => {
-    expect(cotacaoPermiteEditarItens("em_elaboracao")).toBe(true);
-    expect(cotacaoPermiteEditarItens("aguardando_fornecedor")).toBe(true);
-    expect(cotacaoPermiteEditarItens("recebida")).toBe(false);
-    expect(cotacaoPermiteEditarItens("aprovada")).toBe(false);
-  });
-
-  it("toda transição aponta para um status existente", () => {
-    for (const s of COTACAO_STATUS) {
-      for (const p of proximosStatusCotacao(s)) expect(COTACAO_STATUS).toContain(p);
-    }
-  });
-
-  it("vencimento compara pela data de validade", () => {
-    expect(cotacaoVencida("2026-11-06", "2026-11-07")).toBe(true);
-    expect(cotacaoVencida("2026-11-07", "2026-11-07")).toBe(false);
-    expect(cotacaoVencida(null, "2026-11-07")).toBe(false);
   });
 });

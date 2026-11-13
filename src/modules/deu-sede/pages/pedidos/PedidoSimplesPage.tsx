@@ -11,7 +11,7 @@ import { Secao } from "@/modules/deu-sede/components/ui/secao";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { chamar, executar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useCadastros, useEnvio } from "@/modules/deu-sede/data/hooks";
-import type { ContaPagar, Embalagem, ItemEstoque, Oferta, PainelFinanceiro, PedidoDetalhe, PedidoResumo, Produto } from "@/modules/deu-sede/data/tipos";
+import type { ContaPagar, Embalagem, ItemEstoque, PainelFinanceiro, PedidoDetalhe, PedidoResumo, Produto } from "@/modules/deu-sede/data/tipos";
 import { arredondar, contemBusca, dataBR, descreverEmbalagem, lerDecimal, moeda, paraCampo } from "@/modules/deu-sede/domain/formatos";
 import { erroEscolha, escolhaInicial, payloadEscolha } from "@/modules/deu-sede/domain/financeiro";
 import { EscolhaPagamentoCampos } from "@/modules/deu-sede/components/EscolhaPagamento";
@@ -22,13 +22,12 @@ import { gerarPdfPedido } from "@/modules/deu-sede/pedidoPdf";
 import { cn } from "@/lib/utils";
 
 // Valor de partida de cada produto para o fornecedor escolhido: preço atual
-// do fornecedor > cotação válida dele > custo da última entrada (nota).
+// do fornecedor > custo da última entrada (nota) > custo do cadastro.
 interface Base {
   tipo: Embalagem;
   unidades: number;
   preco: number | null;
   origem: string;
-  cotacao_item_id?: string;
 }
 
 interface Marcado {
@@ -60,7 +59,6 @@ function lerRascunho(): Rascunho {
 // WhatsApp e o PDF.
 export function PedidoSimplesPage() {
   const { dados: cad, fornecedores, vinculosPorFornecedor, erro } = useCadastros();
-  const ofertas = useConsulta<Oferta[]>("ofertas_comparacao");
   const estoque = useConsulta<ItemEstoque[]>("estoque");
   const [rascunho, setRascunho] = useState<Rascunho>(lerRascunho);
   const [busca, setBusca] = useState("");
@@ -92,17 +90,6 @@ export function PedidoSimplesPage() {
   const base = (p: Produto): Base => {
     const v = (vinculosPorFornecedor.get(fornecedorId) ?? []).find((x) => x.produto_id === p.id && x.ativo && x.preco_atual !== null);
     if (v) return { tipo: v.tipo_embalagem, unidades: v.unidades_por_embalagem, preco: Number(v.preco_atual), origem: "preço do fornecedor" };
-    const o = (ofertas.dados ?? [])
-      .filter((x) => x.fornecedor_id === fornecedorId && x.produto_id === p.id && !x.vencida)
-      .sort((a, b) => Number(a.preco_unitario) - Number(b.preco_unitario))[0];
-    if (o)
-      return {
-        tipo: o.tipo_embalagem,
-        unidades: o.unidades_por_embalagem,
-        preco: Number(o.preco_embalagem),
-        origem: `cotação ${o.cotacao_numero}`,
-        cotacao_item_id: o.cotacao_item_id,
-      };
     const c = custoEntrada.get(p.id);
     if (c !== null && c !== undefined)
       return { tipo: p.tipo_embalagem, unidades: p.unidades_por_embalagem, preco: arredondar(Number(c) * p.unidades_por_embalagem), origem: "último custo" };
@@ -184,8 +171,8 @@ export function PedidoSimplesPage() {
     registrarAtividade("pedidos", "abriu_montar_pedido", "Abriu o Montar pedido");
   }, []);
 
-  if (erro || ofertas.erro || estoque.erro) return <Aviso tom="erro">{erro ?? ofertas.erro ?? estoque.erro}</Aviso>;
-  if (!cad || !ofertas.dados || !estoque.dados) return <Carregando />;
+  if (erro || estoque.erro) return <Aviso tom="erro">{erro ?? estoque.erro}</Aviso>;
+  if (!cad || !estoque.dados) return <Carregando />;
 
   if (feito) return <PedidoRealizado pedido={feito.pedido} conta={feito.conta} erroConta={feito.erroConta} aoVoltar={() => setFeito(null)} />;
 
@@ -227,8 +214,6 @@ export function PedidoSimplesPage() {
         itens: escolhidas.map((l) => ({
           fornecedor_id: fornecedorId,
           produto_id: l.p.id,
-          // a cotação só vale se o valor não foi trocado (com ela o banco usa o preço da cotação)
-          cotacao_item_id: l.b.cotacao_item_id && l.preco === l.b.preco ? l.b.cotacao_item_id : undefined,
           tipo_embalagem: l.b.tipo,
           unidades_por_embalagem: l.b.unidades,
           quantidade_embalagens: l.qtd,
@@ -318,7 +303,7 @@ export function PedidoSimplesPage() {
           )}
         </Secao>
 
-        <Secao titulo="Produtos" descricao="Valor por embalagem: preço do fornecedor, cotação ou o último custo. Pode trocar o valor na linha.">
+        <Secao titulo="Produtos" descricao="Valor por embalagem: preço do fornecedor ou o último custo. Pode trocar o valor na linha.">
           {ativos.length === 0 ? (
             <Vazio icone={ShoppingCart} titulo="Nenhum produto cadastrado">
               Cadastre produtos ou cole a lista de uma nota em Estoque → Entrada por nota.

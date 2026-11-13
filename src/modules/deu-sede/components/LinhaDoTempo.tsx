@@ -1,8 +1,8 @@
 import type { Evento } from "@/modules/deu-sede/data/tipos";
-import { COTACAO_STATUS_LABEL, PEDIDO_STATUS_LABEL } from "@/modules/deu-sede/domain/status";
+import { PEDIDO_STATUS_LABEL } from "@/modules/deu-sede/domain/status";
 import { dataHoraBR } from "@/modules/deu-sede/domain/formatos";
 
-const ROTULOS = { ...COTACAO_STATUS_LABEL, ...PEDIDO_STATUS_LABEL } as Record<string, string>;
+const ROTULOS = PEDIDO_STATUS_LABEL as Record<string, string>;
 
 function descrever(e: Evento): string {
   switch (e.acao) {
@@ -21,7 +21,7 @@ function descrever(e: Evento): string {
   }
 }
 
-/** Histórico de alterações (auditoria) de uma cotação ou pedido. */
+/** Histórico de alterações (auditoria) de um pedido. */
 export function LinhaDoTempo({ eventos }: { eventos: Evento[] }) {
   if (eventos.length === 0) return <p className="text-sm text-texto-suave">Nenhuma alteração registrada.</p>;
   return (

@@ -42,7 +42,6 @@ interface LinhaFornecedor {
   total_comprado: number;
   qtd_pedidos: number;
   ultima_compra: string | null;
-  cotacoes_recebidas: number;
   produtos_mais_comprados: string;
   produtos_com_melhor_preco: number;
   variacao_media_pct: number | null;
@@ -166,13 +165,12 @@ export function RelatoriosPage() {
               { titulo: "Total comprado", formato: "moeda" },
               { titulo: "Pedidos", formato: "numero" },
               { titulo: "Última compra", formato: "data" },
-              { titulo: "Cotações", formato: "numero" },
               { titulo: "Mais comprados" },
               { titulo: "Melhor preço em", formato: "numero" },
               { titulo: "Variação de preço", formato: "percentual" },
             ],
-            linhas: l.map((x) => [x.fornecedor_nome, x.total_comprado, x.qtd_pedidos, x.ultima_compra, x.cotacoes_recebidas, x.produtos_mais_comprados || null, x.produtos_com_melhor_preco, x.variacao_media_pct]),
-            totais: ["Total", l.reduce((s, x) => s + Number(x.total_comprado), 0), l.reduce((s, x) => s + Number(x.qtd_pedidos), 0), null, null, null, null, null],
+            linhas: l.map((x) => [x.fornecedor_nome, x.total_comprado, x.qtd_pedidos, x.ultima_compra, x.produtos_mais_comprados || null, x.produtos_com_melhor_preco, x.variacao_media_pct]),
+            totais: ["Total", l.reduce((s, x) => s + Number(x.total_comprado), 0), l.reduce((s, x) => s + Number(x.qtd_pedidos), 0), null, null, null, null],
           },
         ],
       };
@@ -238,7 +236,7 @@ export function RelatoriosPage() {
     <>
       <PageHeader
         title="Relatórios"
-        description="Compras realizadas (pedidos enviados ao fornecedor). Cotações não entram nos valores."
+        description="Compras realizadas (pedidos enviados ao fornecedor)."
         actions={
           <>
             <Button variant="contorno" onClick={() => exportar("pdf")} disabled={!dados || exportando !== null}>
@@ -406,7 +404,6 @@ function VerFornecedores({ linhas }: { linhas: LinhaFornecedor[] }) {
             <th className="num">Total comprado</th>
             <th className="num">Pedidos</th>
             <th>Última compra</th>
-            <th className="num">Cotações</th>
             <th>Mais comprados</th>
             <th className="num">Melhor preço em</th>
             <th className="num">Variação</th>
@@ -415,7 +412,7 @@ function VerFornecedores({ linhas }: { linhas: LinhaFornecedor[] }) {
         <tbody>
           {linhas.length === 0 && (
             <tr>
-              <td colSpan={8} className="text-texto-suave">Sem movimento no período.</td>
+              <td colSpan={7} className="text-texto-suave">Sem movimento no período.</td>
             </tr>
           )}
           {linhas.map((x) => (
@@ -428,7 +425,6 @@ function VerFornecedores({ linhas }: { linhas: LinhaFornecedor[] }) {
               <td className="num font-semibold">{moeda(x.total_comprado)}</td>
               <td className="num">{x.qtd_pedidos}</td>
               <td>{dataBR(x.ultima_compra)}</td>
-              <td className="num">{x.cotacoes_recebidas}</td>
               <td className="max-w-64 truncate" title={x.produtos_mais_comprados}>{x.produtos_mais_comprados || "—"}</td>
               <td className="num">
                 {x.produtos_com_melhor_preco} {x.produtos_com_melhor_preco === 1 ? "produto" : "produtos"}

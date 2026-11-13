@@ -70,7 +70,7 @@ export function SettingsPage() {
 
         <Secao titulo="Usuários e níveis de acesso">
           <div className="flex flex-col gap-2 text-sm text-texto">
-            <p>Níveis: Administrador (tudo), Comprador (cadastros, cotações, pedidos e recebimentos), Conferente (consulta e recebimentos) e Consulta (só leitura).</p>
+            <p>Níveis: Administrador (tudo), Comprador (cadastros, pedidos e recebimentos), Conferente (consulta e recebimentos) e Consulta (só leitura).</p>
             <p className="text-texto-suave">
               Ter login na Agenda não dá acesso ao DEU SEDE!. Para liberar alguém, o administrador cria o perfil no Supabase (SQL Editor):
             </p>
@@ -84,7 +84,7 @@ export function SettingsPage() {
       <Confirmar
         aberto={apagar}
         titulo="Apagar os dados de teste?"
-        mensagem="Todos os produtos, fornecedores, cotações, pedidos e recebimentos cadastrados NESTE navegador serão apagados. Não afeta o banco do Supabase."
+        mensagem="Todos os produtos, fornecedores, pedidos e recebimentos cadastrados NESTE navegador serão apagados. Não afeta o banco do Supabase."
         perigo
         textoConfirmar="Apagar tudo"
         aoFechar={() => setApagar(false)}

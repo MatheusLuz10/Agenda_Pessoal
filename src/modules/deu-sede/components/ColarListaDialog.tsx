@@ -95,7 +95,8 @@ export function ColarListaDialog({
   /** com as categorias, permite cadastrar produto novo a partir da linha */
   categoriasNovos?: Categoria[];
   aoFechar: () => void;
-  aoAplicar: (linhas: LinhaAplicada[]) => void | Promise<void>;
+  /** recebe também o texto colado, como veio (a entrada por nota guarda) */
+  aoAplicar: (linhas: LinhaAplicada[], texto: string) => void | Promise<void>;
 }) {
   const [aplicando, setAplicando] = useState(false);
   const [texto, setTexto] = useState("");
@@ -300,6 +301,7 @@ export function ColarListaDialog({
           valorUnitario: lerDecimal(l.valor),
           precoAlterado: comPrecoNovo.some((x) => x.linha === l.linha),
         })),
+        texto,
       );
       fechar();
     } catch (e) {

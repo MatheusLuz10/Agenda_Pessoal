@@ -25,7 +25,6 @@ const AREAS: { valor: string; rotulo: string }[] = [
   { valor: "", rotulo: "Tudo" },
   { valor: "pedidos", rotulo: "Pedidos de compra" },
   { valor: "acesso", rotulo: "Entradas no sistema" },
-  { valor: "cotacoes", rotulo: "Cotações" },
   { valor: "recebimentos", rotulo: "Recebimentos" },
 ];
 
