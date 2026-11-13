@@ -936,5 +936,24 @@ try {
 !(await bancoNovo.query("select to_regclass('deusede.cotacoes') c")).rows[0].c ? pass("banco novo não tem cotações") : bad("banco novo com cotações");
 await bancoNovo.close();
 
+console.log("\n32) Preço de compra da nota vira o preço de custo do produto (0021)");
+await as(ADMIN);
+const custoDe = async (id) => num((await one("select custo_referencia c from deusede.produtos where id = $1", [id]))?.c);
+const semCusto = await rpcOk("produto sem preço de custo", "salvar_produto", {
+  nome: "Produto Nota Custo", categoria_id: catBebida, tipo_embalagem: "fardo", unidades_por_embalagem: 6 });
+await rpcOk("nota sem fornecedor: fardo de 6 a R$ 48,00", "registrar_entrada_nota", {
+  data_entrada: "2026-03-10", itens: [{ produto_id: semCusto.id, quantidade_embalagens: 2, unidades_por_embalagem: 6, preco_embalagem: 48 }] });
+(await custoDe(semCusto.id)) === 8 ? pass("preço de custo do cadastro = R$ 8,00/un") : bad("custo pela nota", await custoDe(semCusto.id));
+await rpcOk("nota nova com preço maior (R$ 54,00)", "registrar_entrada_nota", {
+  data_entrada: "2026-03-20", itens: [{ produto_id: semCusto.id, quantidade_embalagens: 1, unidades_por_embalagem: 6, preco_embalagem: 54 }] });
+(await custoDe(semCusto.id)) === 9 ? pass("custo atualizado para R$ 9,00/un") : bad("custo atualizado", await custoDe(semCusto.id));
+await rpcOk("nota com data antiga (R$ 30,00)", "registrar_entrada_nota", {
+  data_entrada: "2026-01-05", itens: [{ produto_id: semCusto.id, quantidade_embalagens: 1, unidades_por_embalagem: 6, preco_embalagem: 30 }] });
+(await custoDe(semCusto.id)) === 9 ? pass("nota antiga não sobrescreve o custo mais recente") : bad("nota antiga", await custoDe(semCusto.id));
+await rpcOk("nota sem preço", "registrar_entrada_nota", {
+  data_entrada: "2026-03-25", itens: [{ produto_id: semCusto.id, quantidade_embalagens: 1, unidades_por_embalagem: 6 }] });
+(await custoDe(semCusto.id)) === 9 ? pass("nota sem preço não apaga o custo") : bad("nota sem preço", await custoDe(semCusto.id));
+await asSuper();
+
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);

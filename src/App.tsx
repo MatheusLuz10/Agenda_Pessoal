@@ -3,16 +3,19 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { RequireAuth } from "@/components/layout/RequireAuth";
 import { AgendaProvider } from "@/contexts/AgendaContext";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { CalendarViewPage } from "@/pages/CalendarViewPage";
-import { CalendarsPage } from "@/pages/CalendarsPage";
-import { DocumentosPage } from "@/pages/DocumentosPage";
 import { LoginPage } from "@/pages/LoginPage";
-import { SettingsPage } from "@/pages/SettingsPage";
 import { deuSedeRoutes } from "@/modules/deu-sede/routes";
-import { PdvPage } from "@/modules/deu-sede/pages/PdvPage";
 import { SenhaProvider } from "@/modules/deu-sede/senha";
 import { TravaSoPedidos } from "@/modules/deu-sede/acessoPedidos";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
+import { telaSobDemanda } from "@/lib/telaSobDemanda";
+
+// Telas baixadas só quando são abertas (ver src/lib/telaSobDemanda.tsx).
+const CalendarsPage = telaSobDemanda(() => import("@/pages/CalendarsPage"), "CalendarsPage");
+const CalendarViewPage = telaSobDemanda(() => import("@/pages/CalendarViewPage"), "CalendarViewPage");
+const DocumentosPage = telaSobDemanda(() => import("@/pages/DocumentosPage"), "DocumentosPage");
+const SettingsPage = telaSobDemanda(() => import("@/pages/SettingsPage"), "SettingsPage");
+const PdvPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/PdvPage"), "PdvPage");
 
 // Abas do app: Agenda (calendário independente), Documentos (área em
 // branco, a ser refeita), DEU SEDE! (compras) e Configurações.

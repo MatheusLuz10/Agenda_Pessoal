@@ -1,25 +1,28 @@
 import { Navigate, Route } from "react-router-dom";
 import { DeuSedeLayout } from "@/modules/deu-sede/components/DeuSedeLayout";
 import { DEU_SEDE_BASE, rota } from "@/modules/deu-sede/config/modules";
-import { DashboardPage } from "@/modules/deu-sede/pages/DashboardPage";
-import { NotFoundPage } from "@/modules/deu-sede/pages/NotFoundPage";
-import { SettingsPage } from "@/modules/deu-sede/pages/SettingsPage";
-import { ProdutosPage } from "@/modules/deu-sede/pages/produtos/ProdutosPage";
-import { ProdutoFormPage } from "@/modules/deu-sede/pages/produtos/ProdutoFormPage";
-import { ProdutoDetalhePage } from "@/modules/deu-sede/pages/produtos/ProdutoDetalhePage";
-import { FornecedoresPage } from "@/modules/deu-sede/pages/fornecedores/FornecedoresPage";
-import { FornecedorFormPage } from "@/modules/deu-sede/pages/fornecedores/FornecedorFormPage";
-import { FornecedorDetalhePage } from "@/modules/deu-sede/pages/fornecedores/FornecedorDetalhePage";
-import { PedidosPage } from "@/modules/deu-sede/pages/pedidos/PedidosPage";
-import { PedidoSimplesPage } from "@/modules/deu-sede/pages/pedidos/PedidoSimplesPage";
-import { PedidoDetalhePage } from "@/modules/deu-sede/pages/pedidos/PedidoDetalhePage";
-import { RecebimentosPage } from "@/modules/deu-sede/pages/recebimentos/RecebimentosPage";
-import { RegistrarRecebimentoPage } from "@/modules/deu-sede/pages/recebimentos/RegistrarRecebimentoPage";
-import { EstoquePage } from "@/modules/deu-sede/pages/estoque/EstoquePage";
-import { EntradaNotaPage } from "@/modules/deu-sede/pages/estoque/EntradaNotaPage";
-import { RelatoriosPage } from "@/modules/deu-sede/pages/RelatoriosPage";
-import { ContasPagarPage } from "@/modules/deu-sede/pages/financeiro/ContasPagarPage";
-import { RegistrosPage } from "@/modules/deu-sede/pages/RegistrosPage";
+import { telaSobDemanda } from "@/lib/telaSobDemanda";
+
+// Cada tela é baixada só quando é aberta (ver src/lib/telaSobDemanda.tsx).
+const DashboardPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/DashboardPage"), "DashboardPage");
+const NotFoundPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/NotFoundPage"), "NotFoundPage");
+const SettingsPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/SettingsPage"), "SettingsPage");
+const ProdutosPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/produtos/ProdutosPage"), "ProdutosPage");
+const ProdutoFormPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/produtos/ProdutoFormPage"), "ProdutoFormPage");
+const ProdutoDetalhePage = telaSobDemanda(() => import("@/modules/deu-sede/pages/produtos/ProdutoDetalhePage"), "ProdutoDetalhePage");
+const FornecedoresPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/fornecedores/FornecedoresPage"), "FornecedoresPage");
+const FornecedorFormPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/fornecedores/FornecedorFormPage"), "FornecedorFormPage");
+const FornecedorDetalhePage = telaSobDemanda(() => import("@/modules/deu-sede/pages/fornecedores/FornecedorDetalhePage"), "FornecedorDetalhePage");
+const PedidosPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/pedidos/PedidosPage"), "PedidosPage");
+const PedidoSimplesPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/pedidos/PedidoSimplesPage"), "PedidoSimplesPage");
+const PedidoDetalhePage = telaSobDemanda(() => import("@/modules/deu-sede/pages/pedidos/PedidoDetalhePage"), "PedidoDetalhePage");
+const RecebimentosPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/recebimentos/RecebimentosPage"), "RecebimentosPage");
+const RegistrarRecebimentoPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/recebimentos/RegistrarRecebimentoPage"), "RegistrarRecebimentoPage");
+const EstoquePage = telaSobDemanda(() => import("@/modules/deu-sede/pages/estoque/EstoquePage"), "EstoquePage");
+const EntradaNotaPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/estoque/EntradaNotaPage"), "EntradaNotaPage");
+const RelatoriosPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/RelatoriosPage"), "RelatoriosPage");
+const ContasPagarPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/financeiro/ContasPagarPage"), "ContasPagarPage");
+const RegistrosPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/RegistrosPage"), "RegistrosPage");
 
 // Rotas da seção DEU SEDE!. Entram no App.tsx dentro do
 // <RequireAuth />, então valem as mesmas regras de login do app
