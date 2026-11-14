@@ -14,7 +14,6 @@ import type { FormaPagamento, ProdutoPdv, ResumoVendas, Venda, VendaResumo } fro
 import { FORMAS_PAGAMENTO, precoBaseItem, precoItem, precoTabela, subtotalItem, totaisCarrinho, unidadesDoItem, type ItemCarrinho } from "@/modules/deu-sede/domain/pdv";
 import { periodoDoAtalho, type Periodo } from "@/modules/deu-sede/domain/periodo";
 import { contemBusca, dataHoraBR, descreverEmbalagem, descreverQuantidade, lerDecimal, moeda, numero, paraCampo } from "@/modules/deu-sede/domain/formatos";
-import { DEU_SEDE_BASE } from "@/modules/deu-sede/config/modules";
 import { useSenha } from "@/modules/deu-sede/senha";
 import { cn } from "@/lib/utils";
 import { MarcaDagua } from "@/components/layout/MarcaDagua";
@@ -28,10 +27,12 @@ export function PdvPage() {
       <MarcaDagua />
       <header className="relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-linha bg-superficie px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
+          {/* Voltar leva à página inicial do app (Calendário) */}
           <Link
-            to={DEU_SEDE_BASE}
+            to="/calendarios"
             className="flex size-10 shrink-0 items-center justify-center rounded-xl text-verde hover:bg-offwhite"
-            aria-label="Voltar ao DEU SEDE"
+            aria-label="Voltar"
+            title="Voltar para a página inicial"
           >
             <ArrowLeft className="size-5" />
           </Link>
