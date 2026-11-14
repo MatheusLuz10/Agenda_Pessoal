@@ -107,7 +107,7 @@ export interface PedidoResumo {
   numero: number;
   numero_formatado: string;
   lote_id: string;
-  fornecedor_id: string;
+  fornecedor_id: string | null;
   fornecedor_nome: string;
   fornecedor_whatsapp: string | null;
   status: PedidoStatus;
@@ -129,6 +129,7 @@ export interface PedidoResumo {
   valor_recebido_itens: number;
   quantidade_pendente: number;
   created_at: string;
+  nota_entrada_id?: string | null;
 }
 
 export interface PedidoItem {

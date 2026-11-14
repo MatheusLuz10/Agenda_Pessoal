@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { LinkBotao } from "@/modules/deu-sede/components/ui/button";
+import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
 import { CampoBusca } from "@/modules/deu-sede/components/ui/filtros";
 import { Select } from "@/modules/deu-sede/components/ui/input";
@@ -75,7 +76,7 @@ export function PedidosPage() {
               >
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="font-semibold text-verde">
-                    {p.numero_formatado} · {p.fornecedor_nome}
+                    {p.numero_formatado} · {p.fornecedor_nome} {p.nota_entrada_id && <Badge tone="amarelo">Pedido avulso</Badge>}
                   </span>
                   <span className="text-sm text-texto-suave">
                     {dataBR(p.data_pedido)} · {p.qtd_itens} {p.qtd_itens === 1 ? "produto" : "produtos"}

@@ -40,6 +40,7 @@ interface RascunhoNota {
 }
 
 const RASCUNHO = "entrada_nota";
+type ResultadoEntrada = { id: string; numero_formatado: string; total: number; pedido_avulso?: { id: string; numero_formatado: string } | null };
 const nova = (): Linha => ({ chave: crypto.randomUUID(), produto_id: "", tipo_embalagem: "caixa", unidades: "1", quantidade: "", preco: "" });
 const faltaQuantidade = (l: Linha) => {
   const q = lerDecimal(l.quantidade);
@@ -80,7 +81,7 @@ export function EntradaNotaPage() {
   const [atualizarPrecos, setAtualizarPrecos] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recuperado, setRecuperado] = useState<string | null>(null);
-  const [feita, setFeita] = useState<{ id: string; numero_formatado: string; total: number } | null>(null);
+  const [feita, setFeita] = useState<ResultadoEntrada | null>(null);
   const [verNota, setVerNota] = useState<string | null>(null);
   const fornecedoresAtivos = (dados?.fornecedores ?? []).filter((f) => f.ativo);
   const fornecedorId = fornecedorEscolhido ?? (fornecedoresAtivos.length === 1 ? fornecedoresAtivos[0].id : "");
@@ -195,9 +196,9 @@ export function EntradaNotaPage() {
 
   async function registrar() {
     await rascunho.pausar();
-    let r: { id: string; numero_formatado: string; total: number };
+    let r: ResultadoEntrada;
     try {
-      r = await executar<{ id: string; numero_formatado: string; total: number }>("registrar_entrada_nota", {
+      r = await executar<ResultadoEntrada>("registrar_entrada_nota", {
         chave_idempotencia: chave,
         fornecedor_id: fornecedorId || null,
         numero_nota: numeroNota,
@@ -228,11 +229,13 @@ export function EntradaNotaPage() {
       <>
         <PageHeader title="Entrada registrada" />
         <Aviso tom="sucesso" className="mb-4">
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             <CircleCheck className="size-4" /> {feita.numero_formatado} registrada ({moeda(feita.total)}). As quantidades já estão no estoque.
+            {feita.pedido_avulso && <>Pedido avulso {feita.pedido_avulso.numero_formatado} criado em Pedidos realizados.</>}
           </span>
         </Aviso>
         <div className="flex flex-wrap gap-2">
+          {feita.pedido_avulso && <LinkBotao to={rota("pedidos", feita.pedido_avulso.id)}>Ver pedido avulso</LinkBotao>}
           <Button variant="contorno" onClick={() => setVerNota(feita.id)}>
             <FileText className="size-4" /> Ver a nota
           </Button>

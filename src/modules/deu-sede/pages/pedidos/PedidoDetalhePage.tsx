@@ -101,10 +101,14 @@ export function PedidoDetalhePage() {
       {(podeEnviar || reenviar) && !numeroWa && (
         <Aviso tom="atencao" className="mb-4">
           O fornecedor não tem WhatsApp cadastrado.{" "}
-          <Link to={rota("fornecedores", p.fornecedor_id, "editar")} className="font-semibold underline">
-            Cadastrar o WhatsApp
-          </Link>{" "}
-          ou copie a mensagem abaixo e envie por outro meio.
+          {p.fornecedor_id ? (
+            <>
+              <Link to={rota("fornecedores", p.fornecedor_id, "editar")} className="font-semibold underline">Cadastrar o WhatsApp</Link>{" "}
+              ou copie a mensagem abaixo e envie por outro meio.
+            </>
+          ) : (
+            "Copie a mensagem abaixo e envie por outro meio."
+          )}
         </Aviso>
       )}
       {divergencias.length > 0 && (
@@ -251,7 +255,7 @@ export function PedidoDetalhePage() {
           <Secao titulo="Dados do pedido">
             <Dados
               itens={[
-                ["Fornecedor", <Link key="f" to={rota("fornecedores", p.fornecedor_id)} className="text-marrom underline">{p.fornecedor_nome}</Link>],
+                ["Fornecedor", p.fornecedor_id ? <Link key="f" to={rota("fornecedores", p.fornecedor_id)} className="text-marrom underline">{p.fornecedor_nome}</Link> : p.fornecedor_nome],
                 ["Pagamento", p.condicao_pagamento],
                 ["Previsão de entrega", p.previsao_entrega ? dataBR(p.previsao_entrega) : null],
                 ["Enviado em", p.enviado_em ? dataHoraBR(p.enviado_em) : null],

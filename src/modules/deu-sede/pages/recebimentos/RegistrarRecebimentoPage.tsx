@@ -115,7 +115,7 @@ function Formulario({ pedido }: { pedido: PedidoDetalhe }) {
 
   const candidatos: CandidatoLista[] = pedido.itens.map((i) => {
     const produto = produtos.get(i.produto_id);
-    const vinculo = (vinculosPorFornecedor.get(pedido.fornecedor_id) ?? []).find((v) => v.produto_id === i.produto_id);
+    const vinculo = pedido.fornecedor_id ? (vinculosPorFornecedor.get(pedido.fornecedor_id) ?? []).find((v) => v.produto_id === i.produto_id) : undefined;
     return {
       id: i.id,
       nome: i.produto_nome,
