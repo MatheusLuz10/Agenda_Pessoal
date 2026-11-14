@@ -19,13 +19,21 @@ export function Dialogo({
   rodape?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // aoFechar costuma ser uma função nova a cada desenho da tela (a cada tecla
+  // digitada): guardada aqui, não reabre o efeito abaixo
+  const aoFecharRef = useRef(aoFechar);
+  useEffect(() => {
+    aoFecharRef.current = aoFechar;
+  });
+  // Só quando a janela ABRE: Esc fecha e o foco vai para o primeiro campo.
+  // (Antes, cada tecla digitada mandava o foco de volta para o primeiro campo.)
   useEffect(() => {
     if (!aberto) return;
-    const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && aoFechar();
+    const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && aoFecharRef.current();
     document.addEventListener("keydown", aoTeclar);
     ref.current?.querySelector<HTMLElement>("textarea, input, select, button[data-principal]")?.focus();
     return () => document.removeEventListener("keydown", aoTeclar);
-  }, [aberto, aoFechar]);
+  }, [aberto]);
 
   if (!aberto) return null;
   return (
