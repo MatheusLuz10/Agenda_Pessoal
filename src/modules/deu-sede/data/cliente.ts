@@ -63,7 +63,8 @@ export type FuncaoRPC =
   | "listar_atividades"
   | "obter_rascunho"
   | "salvar_rascunho"
-  | "apagar_rascunho";
+  | "apagar_rascunho"
+  | "definir_compra_avulsa";
 
 // Funções que vieram em migrações recentes: o erro diz qual arquivo falta rodar.
 const MIGRACAO_DA_FUNCAO: Partial<Record<FuncaoRPC, string>> = {
@@ -86,6 +87,7 @@ const MIGRACAO_DA_FUNCAO: Partial<Record<FuncaoRPC, string>> = {
   obter_rascunho: "0019_nota_guardada.sql",
   salvar_rascunho: "0019_nota_guardada.sql",
   apagar_rascunho: "0019_nota_guardada.sql",
+  definir_compra_avulsa: "0025_compra_avulsa_opcional.sql",
 };
 
 function mensagemDeErro(e: unknown, fn?: FuncaoRPC): string {

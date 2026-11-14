@@ -40,7 +40,7 @@ interface RascunhoNota {
 }
 
 const RASCUNHO = "entrada_nota";
-type ResultadoEntrada = { id: string; numero_formatado: string; total: number; pedido_avulso?: { id: string; numero_formatado: string } | null };
+type ResultadoEntrada = { id: string; numero_formatado: string; total: number };
 const nova = (): Linha => ({ chave: crypto.randomUUID(), produto_id: "", tipo_embalagem: "caixa", unidades: "1", quantidade: "", preco: "" });
 const faltaQuantidade = (l: Linha) => {
   const q = lerDecimal(l.quantidade);
@@ -231,11 +231,12 @@ export function EntradaNotaPage() {
         <Aviso tom="sucesso" className="mb-4">
           <span className="flex flex-wrap items-center gap-2">
             <CircleCheck className="size-4" /> {feita.numero_formatado} registrada ({moeda(feita.total)}). As quantidades já estão no estoque.
-            {feita.pedido_avulso && <>Pedido avulso {feita.pedido_avulso.numero_formatado} criado em Pedidos realizados.</>}
           </span>
         </Aviso>
+        <p className="mb-4 text-sm text-texto-suave">
+          A nota não entra sozinha no Total comprado. Para contar como compra, toque em “Ver a nota” e ligue <strong>Compra avulsa</strong>.
+        </p>
         <div className="flex flex-wrap gap-2">
-          {feita.pedido_avulso && <LinkBotao to={rota("pedidos", feita.pedido_avulso.id)}>Ver pedido avulso</LinkBotao>}
           <Button variant="contorno" onClick={() => setVerNota(feita.id)}>
             <FileText className="size-4" /> Ver a nota
           </Button>

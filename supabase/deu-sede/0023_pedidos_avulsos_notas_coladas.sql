@@ -261,11 +261,7 @@ exception when others then
   raise exception '%', deusede.traduzir_erro(sqlstate, sqlerrm, v_restricao);
 end $$;
 
--- Notas coladas já existentes também entram no histórico uma única vez.
-do $$
-declare n record;
-begin
-  for n in select id from deusede.notas_entrada where nullif(btrim(lista_colada), '') is not null loop
-    perform deusede.criar_pedido_avulso_nota(n.id);
-  end loop;
-end $$;
+-- (A carga que criava aqui um pedido avulso para cada nota colada já
+-- registrada saiu: desde a 0025 a nota só entra no Total comprado quando
+-- alguém marca "Compra avulsa" nela. Sem a carga, rodar as migrações de
+-- novo, como faz o modo de teste local, não recria pedidos desmarcados.)

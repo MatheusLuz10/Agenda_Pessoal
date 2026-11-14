@@ -314,6 +314,8 @@ export interface EntradaNotaResumo {
   fornecedor_nome: string | null;
   qtd_itens: number;
   total: number;
+  /** marcada como "Compra avulsa": conta no Total comprado (0025) */
+  compra_avulsa?: boolean;
 }
 
 export interface ItemEntradaNota {
@@ -340,6 +342,8 @@ export interface EntradaNota {
   criado_por_nome: string | null;
   itens: ItemEntradaNota[];
   total: number;
+  /** "Compra avulsa" ligada: o pedido avulso que leva a nota ao Total comprado (0025) */
+  compra_avulsa?: { pedido_id: string; numero_formatado: string; valor_total: number } | null;
 }
 
 // ----------------------------------------------------------------- PDV

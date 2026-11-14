@@ -4,6 +4,7 @@ import { ChevronDown, PackagePlus, Warehouse } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
+import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { CampoBusca, Segmentado } from "@/modules/deu-sede/components/ui/filtros";
 import { Select } from "@/modules/deu-sede/components/ui/input";
 import { Planilha } from "@/modules/deu-sede/components/ui/planilha";
@@ -408,7 +409,9 @@ function Entradas() {
     );
   return (
     <>
-    <p className="mb-2 text-sm text-texto-suave">Toque numa nota para ver os produtos, as quantidades e a lista colada.</p>
+    <p className="mb-2 text-sm text-texto-suave">
+      Toque numa nota para ver os produtos, as quantidades e a lista colada, e para ligar <strong>Compra avulsa</strong> (a nota passa a contar no Total comprado).
+    </p>
     <Planilha<EntradaNotaResumo>
       rotulo="Entradas por nota (sem pedido)"
       linhas={dados}
@@ -429,6 +432,12 @@ function Entradas() {
         { chave: "nf", rotulo: "NF", ordenar: (n) => n.numero_nota, celula: (n) => n.numero_nota || <span className="text-texto-suave">—</span> },
         { chave: "itens", rotulo: "Produtos", num: true, ordenar: (n) => n.qtd_itens, celula: (n) => numero(n.qtd_itens) },
         { chave: "total", rotulo: "Total", num: true, ordenar: (n) => Number(n.total), celula: (n) => moeda(n.total) },
+        {
+          chave: "avulsa",
+          rotulo: "Compra avulsa",
+          ordenar: (n) => (n.compra_avulsa ? 1 : 0),
+          celula: (n) => (n.compra_avulsa ? <Badge tone="verde">Sim</Badge> : <span className="text-texto-suave">—</span>),
+        },
       ]}
       totais={{
         numero: `${dados.length} ${dados.length === 1 ? "nota" : "notas"}`,

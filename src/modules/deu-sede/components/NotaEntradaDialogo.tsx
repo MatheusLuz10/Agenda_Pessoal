@@ -1,9 +1,60 @@
+import { useState } from "react";
 import { Dialogo } from "@/modules/deu-sede/components/ui/dialogo";
 import { Aviso, Carregando } from "@/modules/deu-sede/components/ui/aviso";
 import { Button } from "@/modules/deu-sede/components/ui/button";
-import { useConsulta } from "@/modules/deu-sede/data/cliente";
-import type { EntradaNota } from "@/modules/deu-sede/data/tipos";
+import { Interruptor } from "@/modules/deu-sede/components/ui/input";
+import { executar, useConsulta } from "@/modules/deu-sede/data/cliente";
+import type { Acesso, EntradaNota } from "@/modules/deu-sede/data/tipos";
 import { dataBR, dataHoraBR, descreverEmbalagem, moeda, numero } from "@/modules/deu-sede/domain/formatos";
+import { cn } from "@/lib/utils";
+
+// "Compra avulsa": a nota só conta no Total comprado (painel, relatórios e
+// fornecedor) quando alguém liga esta opção. Ligar cria um pedido avulso
+// recebido com os itens e preços da nota; desligar tira esse pedido. O
+// estoque não muda (a nota já deu a entrada). Só admin e comprador mudam.
+function CompraAvulsa({ nota }: { nota: EntradaNota }) {
+  const { dados: acesso } = useConsulta<Acesso | null>("meu_acesso");
+  const podeMudar = acesso?.papel === "admin" || acesso?.papel === "comprador";
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const compra = nota.compra_avulsa ?? null;
+
+  async function mudar(avulsa: boolean) {
+    if (enviando) return;
+    setEnviando(true);
+    setErro(null);
+    try {
+      await executar("definir_compra_avulsa", { id: nota.id, avulsa });
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <section aria-label="Compra avulsa" className={cn("flex flex-col gap-1 rounded-xl border p-3", compra ? "border-verde/40 bg-verde/5" : "border-linha")}>
+      {podeMudar ? (
+        <Interruptor ligado={!!compra} aoMudar={mudar} rotulo={enviando ? "Compra avulsa (salvando…)" : "Compra avulsa"} />
+      ) : (
+        <p className="text-sm font-medium text-verde">Compra avulsa: {compra ? "sim" : "não"}</p>
+      )}
+      <p className="text-sm text-texto-suave">
+        {compra ? (
+          <>
+            Conta no <strong className="text-verde">Total comprado</strong> como {compra.numero_formatado} ({moeda(compra.valor_total)}).
+            {podeMudar && " Desligue para tirar."}
+          </>
+        ) : (
+          <>
+            Não conta no Total comprado.{podeMudar && ` Ligue para somar o valor desta nota (${moeda(nota.total)}).`} O estoque não muda.
+          </>
+        )}
+      </p>
+      {erro && <Aviso tom="erro">{erro}</Aviso>}
+    </section>
+  );
+}
 
 // Uma entrada por nota já gravada: o que entrou de cada produto, os preços
 // e a lista colada como veio (para conferir com a nota em papel).
@@ -73,6 +124,8 @@ export function NotaEntradaDialogo({ id, aoFechar }: { id: string | null; aoFech
             </ul>
             <p className="mt-2 text-right font-semibold text-verde">Total {moeda(nota.total)}</p>
           </section>
+
+          <CompraAvulsa nota={nota} />
 
           {nota.observacoes && (
             <p className="text-sm text-texto-suave">

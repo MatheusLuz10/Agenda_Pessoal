@@ -882,12 +882,11 @@ try {
   pass("as migrações depois da 0020 rodam (e de novo) sobre este banco");
 } catch (e) { bad("migrações depois da 0020", `-> ${e.message} | ${e.where ?? ""}`); }
 await db.exec("set search_path = deusede, public");
-// 0023: cada nota com lista colada vira um pedido avulso recebido, uma vez só
-const av23 = await one(`select (select count(*) from deusede.notas_entrada where nullif(btrim(lista_colada), '') is not null)::int notas,
-  (select count(*) from deusede.pedidos where nota_entrada_id is not null and status = 'recebido')::int pedidos,
+// 0023 + 0025: nota (colada ou não) não vira compra avulsa sozinha
+const av23 = await one(`select (select count(*) from deusede.pedidos where nota_entrada_id is not null)::int pedidos,
   (select count(*) from deusede.estoque_movimentos)::int mov`);
-av23.pedidos === av23.notas && av23.mov === depois31.mov
-  ? pass(`0023: ${av23.pedidos} pedido(s) avulso(s) das notas coladas, sem mexer no estoque`) : bad("pedidos avulsos (0023)", JSON.stringify(av23));
+av23.pedidos === 0 && av23.mov === depois31.mov
+  ? pass("notas não viram compra avulsa (Total comprado) sozinhas") : bad("pedidos avulsos automáticos", JSON.stringify(av23));
 const areas31 = (await one("select areas from deusede.seguranca")).areas;
 !areas31.includes("cotacoes") && !areas31.includes("comparacao") && areas31.includes("relatorios")
   ? pass("senha: áreas de cotação/comparação saem, as outras ficam") : bad("áreas", JSON.stringify(areas31));
@@ -969,6 +968,75 @@ await rpcOk("nota com data antiga (R$ 30,00)", "registrar_entrada_nota", {
 await rpcOk("nota sem preço", "registrar_entrada_nota", {
   data_entrada: "2026-03-25", itens: [{ produto_id: semCusto.id, quantidade_embalagens: 1, unidades_por_embalagem: 6 }] });
 (await custoDe(semCusto.id)) === 9 ? pass("nota sem preço não apaga o custo") : bad("nota sem preço", await custoDe(semCusto.id));
+await asSuper();
+
+console.log("\n33) Compra avulsa: opção de cada nota lançada (0025)");
+await as(ADMIN);
+const prodAv = await rpcOk("produto para a compra avulsa", "salvar_produto", {
+  nome: "Produto Compra Avulsa", categoria_id: catBebida, tipo_embalagem: "caixa", unidades_por_embalagem: 12 });
+const PERIODO_AV = { de: "2026-04-01", ate: "2026-04-30" };
+const totalComprado = async () => num((await one("select coalesce(sum(valor_total), 0) t from deusede.pedidos_comprados($1::jsonb)", [JSON.stringify(PERIODO_AV)])).t);
+const avulsosDa = async (id) => num((await one("select count(*) n from deusede.pedidos where nota_entrada_id = $1", [id])).n);
+const movAntes = num((await one("select count(*) n from deusede.estoque_movimentos")).n);
+const total0 = await totalComprado();
+const notaAv = await rpcOk("registra nota colada (2 cx a R$ 60,00)", "registrar_entrada_nota", {
+  data_entrada: "2026-04-10", lista_colada: "2 cx Produto Compra Avulsa R$ 60,00",
+  itens: [{ produto_id: prodAv.id, quantidade_embalagens: 2, unidades_por_embalagem: 12, preco_embalagem: 60 }] });
+notaAv?.compra_avulsa === null && (await avulsosDa(notaAv.id)) === 0 && (await totalComprado()) === total0
+  ? pass("nota registrada NÃO entra sozinha no Total comprado") : bad("nota entrou sozinha", JSON.stringify(notaAv?.compra_avulsa));
+const movDepoisNota = num((await one("select count(*) n from deusede.estoque_movimentos")).n);
+movDepoisNota === movAntes + 1 ? pass("a nota deu entrada no estoque") : bad("estoque da nota", movDepoisNota - movAntes);
+
+await as(LEITOR);
+await rpcErr("perfil consulta não marca compra avulsa", "definir_compra_avulsa", { id: notaAv.id, avulsa: true }, /administrador ou comprador/);
+await as(ADMIN);
+
+const marcada = await rpcOk("marca Compra avulsa", "definir_compra_avulsa", { id: notaAv.id, avulsa: true });
+num(marcada?.compra_avulsa?.valor_total) === 120 && /^PED-/.test(marcada?.compra_avulsa?.numero_formatado ?? "")
+  ? pass(`compra avulsa ${marcada.compra_avulsa.numero_formatado} com o valor da nota (R$ 120,00)`) : bad("compra avulsa marcada", JSON.stringify(marcada?.compra_avulsa));
+(await totalComprado()) === total0 + 120 ? pass("Total comprado do período sobe R$ 120,00") : bad("total comprado", await totalComprado());
+num((await one("select count(*) n from deusede.estoque_movimentos")).n) === movDepoisNota
+  ? pass("marcar não mexe no estoque") : bad("estoque mudou ao marcar");
+const ped33 = await one("select status from deusede.pedidos where nota_entrada_id = $1", [notaAv.id]);
+ped33?.status === "recebido" ? pass("pedido avulso fica como recebido") : bad("status do pedido avulso", ped33?.status);
+const marcada2 = await rpcOk("marcar de novo", "definir_compra_avulsa", { id: notaAv.id, avulsa: true });
+(await avulsosDa(notaAv.id)) === 1 && marcada2?.compra_avulsa?.pedido_id === marcada.compra_avulsa.pedido_id
+  ? pass("marcar de novo não duplica") : bad("compra avulsa duplicada", await avulsosDa(notaAv.id));
+const lista33 = (await rpc("listar_entradas_nota")).find((n) => n.id === notaAv.id);
+lista33?.compra_avulsa === true ? pass("a lista de notas mostra a compra avulsa") : bad("lista sem compra avulsa", JSON.stringify(lista33));
+
+// pelo app o RLS já não deixa apagar pedido; como superusuário, a trava é que segura
+await asSuper();
+await expectErr("trava: pedido comum continua sem poder ser excluído",
+  "delete from deusede.pedidos where id = (select id from deusede.pedidos where nota_entrada_id is null limit 1)", /não podem ser excluídos/);
+await expectErr("trava: pedido avulso também não se exclui direto (só pela opção)",
+  `delete from deusede.pedidos where nota_entrada_id = '${notaAv.id}'`, /não podem ser excluídos/);
+await expectErr("trava: item do pedido avulso não se apaga direto",
+  `delete from deusede.pedido_itens where pedido_id = (select id from deusede.pedidos where nota_entrada_id = '${notaAv.id}')`, /não podem mais ser alterados/);
+await as(ADMIN);
+
+const desmarcada = await rpcOk("desmarca Compra avulsa", "definir_compra_avulsa", { id: notaAv.id, avulsa: false });
+desmarcada?.compra_avulsa === null && (await avulsosDa(notaAv.id)) === 0
+  ? pass("o pedido avulso sai") : bad("pedido avulso ficou", JSON.stringify(desmarcada?.compra_avulsa));
+(await totalComprado()) === total0 ? pass("Total comprado volta ao que era") : bad("total depois de desmarcar", await totalComprado());
+num((await one("select count(*) n from deusede.estoque_movimentos")).n) === movDepoisNota
+  ? pass("desmarcar não mexe no estoque (a nota continua)") : bad("estoque mudou ao desmarcar");
+(await one("select count(*)::int n from deusede.notas_entrada_itens where nota_id = $1", [notaAv.id])).n === 1
+  ? pass("a nota e os itens dela continuam") : bad("nota perdeu itens");
+(await one("select count(*)::int n from deusede.eventos where acao = 'compra_avulsa_removida' and entidade_id = $1", [marcada.compra_avulsa.pedido_id])).n === 1
+  ? pass("fica o registro de que a compra avulsa foi desmarcada") : bad("sem evento de desmarcar");
+await rpcOk("desmarcar o que já está desmarcado não dá erro", "definir_compra_avulsa", { id: notaAv.id, avulsa: false });
+
+// nota digitada (sem lista colada) também pode ser compra avulsa
+const notaDig = await rpcOk("nota digitada, sem lista colada", "registrar_entrada_nota", {
+  data_entrada: "2026-04-12", itens: [{ produto_id: prodAv.id, quantidade_embalagens: 1, unidades_por_embalagem: 12, preco_embalagem: 55 }] });
+const marcDig = await rpcOk("marca a nota digitada", "definir_compra_avulsa", { id: notaDig.id, avulsa: true });
+num(marcDig?.compra_avulsa?.valor_total) === 55 ? pass("nota digitada vira compra avulsa de R$ 55,00") : bad("nota digitada", JSON.stringify(marcDig?.compra_avulsa));
+
+// com conta a pagar lançada, a compra avulsa não sai
+await rpcOk("lança conta a pagar da compra avulsa", "lancar_conta_pagar", { pedido_id: marcDig.compra_avulsa.pedido_id, forma: "a_vista", primeiro_vencimento: "2026-04-20" });
+await rpcErr("com conta a pagar, não desmarca", "definir_compra_avulsa", { id: notaDig.id, avulsa: false }, /conta a pagar/);
+(await avulsosDa(notaDig.id)) === 1 ? pass("a compra avulsa com conta continua") : bad("compra com conta saiu");
 await asSuper();
 
 console.log(`\nResultado: ${ok} ok, ${fail} falha(s)`);
