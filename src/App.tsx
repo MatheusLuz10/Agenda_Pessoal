@@ -13,16 +13,14 @@ import { telaSobDemanda } from "@/lib/telaSobDemanda";
 // Telas baixadas só quando são abertas (ver src/lib/telaSobDemanda.tsx).
 const CalendarsPage = telaSobDemanda(() => import("@/pages/CalendarsPage"), "CalendarsPage");
 const CalendarViewPage = telaSobDemanda(() => import("@/pages/CalendarViewPage"), "CalendarViewPage");
-const DocumentosPage = telaSobDemanda(() => import("@/pages/DocumentosPage"), "DocumentosPage");
-const SettingsPage = telaSobDemanda(() => import("@/pages/SettingsPage"), "SettingsPage");
 const PdvPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/PdvPage"), "PdvPage");
 
-// Abas do app: Agenda (calendário independente), Documentos (área em
-// branco, a ser refeita), DEU SEDE! (compras) e Configurações.
+// Abas do app: ADM - DEU SEDE! (compras, estoque, financeiro...), PDV e
+// Calendário.
 //
 // "Meu trabalho" (com TTK e relatórios), "Conecta Rede" (com a página
-// pública /solicitar-servico), "Gestão de tempo" e "Finanças" saíram do
-// app. Os arquivos continuam em src/pages e src/contexts, sem uso — para
+// pública /solicitar-servico), "Gestão de tempo", "Finanças", "Documentos"
+// e as Configurações da Agenda saíram do app. Os arquivos continuam em src/pages e src/contexts, sem uso — para
 // voltar com alguma, basta recolocar a rota e o provider aqui.
 function App() {
   return (
@@ -49,7 +47,6 @@ function App() {
               <Route index element={<Navigate to="/calendarios" replace />} />
               <Route path="/calendarios" element={<CalendarsPage />} />
               <Route path="/calendarios/:calendarId" element={<CalendarViewPage />} />
-              <Route path="/documentos" element={<DocumentosPage />} />
               <Route
                 path="/pdv"
                 element={
@@ -58,7 +55,6 @@ function App() {
                   </SenhaProvider>
                 }
               />
-              <Route path="/configuracoes" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/calendarios" replace />} />
             </Route>
             </Route>

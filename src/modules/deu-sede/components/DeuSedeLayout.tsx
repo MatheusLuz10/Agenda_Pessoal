@@ -1,5 +1,5 @@
 import { Link, Outlet } from "react-router-dom";
-import { CalendarDays, FlaskConical, LogOut, Phone } from "lucide-react";
+import { FlaskConical, LogOut, Phone, ScanBarcode } from "lucide-react";
 import { Shell } from "@/components/layout/Shell";
 import { TELEFONE_CONTATO, TELEFONE_LINK } from "@/config/contato";
 import { DEU_SEDE_BASE, MODULES } from "@/modules/deu-sede/config/modules";
@@ -13,8 +13,8 @@ import { Aviso, Carregando } from "@/modules/deu-sede/components/ui/aviso";
 
 // Seção de compras dentro do app: mesmo esqueleto visual da área principal
 // (components/layout/Shell), com o menu de compras e o atalho de volta
-// para o Calendário.
-const AGENDA_HOME = "/calendarios";
+// para o PDV.
+const PDV = "/pdv";
 
 function AvisoModoLocal() {
   const { mode } = useSessaoDeuSede();
@@ -52,7 +52,7 @@ function ConteudoProtegido() {
 export function DeuSedeLayout() {
   const { mode, signOut } = useSessaoDeuSede();
   useRecarregarAoVoltar();
-  // login "só pedidos de compra": menu só com Pedidos, sem volta para o Calendário
+  // login "só pedidos de compra": menu só com Pedidos, sem volta para o PDV
   const soPedidos = useSoPedidos() === true;
   const avisos = useAvisos();
   const itens = (soPedidos ? MODULES.filter((m) => m.key === "pedidos") : MODULES).map((m) => ({
@@ -84,19 +84,19 @@ export function DeuSedeLayout() {
             </button>
           ) : (
           <Link
-            to={AGENDA_HOME}
+            to={PDV}
             className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-creme/90 hover:bg-verde-600"
           >
-            {/* ícone de calendário: a seta fica só no "Voltar" da esquerda */}
-            <CalendarDays className="size-4" /> Calendário
+            {/* ícone do PDV: a seta fica só no "Voltar" da esquerda */}
+            <ScanBarcode className="size-4" /> PDV
           </Link>
           )
         }
         rodape={
           <>
             {!soPedidos && (
-              <Link to={AGENDA_HOME} className="flex h-10 items-center gap-2 font-medium text-creme/85 hover:text-creme">
-                <CalendarDays className="size-4" /> Voltar para o Calendário
+              <Link to={PDV} className="flex h-10 items-center gap-2 font-medium text-creme/85 hover:text-creme">
+                <ScanBarcode className="size-4" /> Voltar para o PDV
               </Link>
             )}
             <a href={TELEFONE_LINK} className="flex h-10 items-center gap-2 text-creme/85 hover:text-creme">
@@ -109,10 +109,10 @@ export function DeuSedeLayout() {
           soPedidos ? undefined : (
           <>
             <Link
-              to={AGENDA_HOME}
+              to={PDV}
               className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-verde text-sm font-semibold text-creme"
             >
-              <CalendarDays className="size-4" /> Voltar ao Calendário
+              <ScanBarcode className="size-4" /> Voltar para o PDV
             </Link>
             {mode === "supabase" && (
               <button

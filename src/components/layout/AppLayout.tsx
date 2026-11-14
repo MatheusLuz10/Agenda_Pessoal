@@ -13,7 +13,7 @@ import { totalAvisos, useAvisos } from "@/modules/deu-sede/data/avisos";
 export function AppLayout() {
   const { pathname } = useLocation();
   const { signOut } = useAuth();
-  // bolinha vermelha em "DEU SEDE! Compras" quando alguma aba de lá tem aviso
+  // bolinha vermelha em "ADM - DEU SEDE!" quando alguma aba de lá tem aviso
   const avisosDeuSede = totalAvisos(useAvisos());
   const itens = NAV_ITEMS.map((i) => (i.key === "deu-sede" ? { ...i, alerta: avisosDeuSede } : i));
 

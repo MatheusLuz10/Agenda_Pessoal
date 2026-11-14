@@ -182,8 +182,8 @@ function Vender() {
     // Categorias à esquerda, carrinho no meio (grande, para o cliente
     // acompanhar) e a lista simples de produtos à direita. No celular a ordem
     // é categorias, produtos e carrinho (com atalho fixo embaixo).
-    <div className="relative z-20 grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[11rem_minmax(0,1fr)_22rem] lg:grid-rows-1 xl:grid-cols-[12rem_minmax(0,1fr)_26rem] 2xl:grid-cols-[13rem_minmax(0,1fr)_30rem]">
-      <nav className="border-b border-linha bg-superficie px-3 py-2 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-3 lg:py-5" aria-label="Categorias de produtos">
+    <div className="relative z-20 grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[11rem_minmax(0,1fr)_22rem] lg:grid-rows-1 xl:grid-cols-[12rem_minmax(0,1fr)_26rem] 2xl:grid-cols-[13rem_minmax(0,1fr)_30rem]">
+      <nav className="min-w-0 border-b border-linha bg-superficie px-3 py-2 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-3 lg:py-5" aria-label="Categorias de produtos">
         <p className="hidden px-3 pb-3 text-xs font-bold tracking-widest text-texto-suave uppercase lg:block">Categorias</p>
         <ul className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
           {[["", "Todas"], ...categorias].map(([id, nome]) => (
@@ -204,7 +204,7 @@ function Vender() {
         </ul>
       </nav>
 
-      <div className="grid min-h-0 overflow-y-auto lg:contents">
+      <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] overflow-y-auto lg:contents">
         {/* ---------- Produtos: lista simples, à direita ---------- */}
         <section
           aria-label="Produtos"
