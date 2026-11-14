@@ -125,3 +125,30 @@ describe("reconhecer pelo nome sem trocar de produto", () => {
     expect(achado("STELLA ARTOIS PURE GOLD LT 269ML")).toBeNull();
   });
 });
+
+describe("nome parecido com palavras a mais na nota (outro sabor ou versão?)", () => {
+  const cands = comoCandidatos([
+    "Cerveja Skol Lata 269ml",
+    "Refrigerante Coca-Cola Lata 220ml",
+    "Energético Red Bull 250ml",
+    "Água Crystal 500ml",
+    "Cerveja Heineken",
+    "CERVEJA AMSTEL LT 269ML",
+  ]);
+  const de = (descricao: string) =>
+    associar({ linha: 1, texto: "", codigo: null, descricao, quantidade: 1, unidade: null, valorUnitario: 1, valorTotal: null }, cands);
+
+  it("marca como dúvida em vez de ligar direto ao parecido", () => {
+    expect(de("Skol Beats Senses 269ml")).toEqual({ candidatoId: "Cerveja Skol Lata 269ml", confianca: "nome", duvida: true });
+    expect(de("Coca-Cola Café 220ml")).toMatchObject({ candidatoId: "Refrigerante Coca-Cola Lata 220ml", duvida: true });
+    expect(de("Red Bull Tropical 250ml")).toMatchObject({ candidatoId: "Energético Red Bull 250ml", duvida: true });
+    expect(de("Agua Crystal com gas 500ml")).toMatchObject({ candidatoId: "Água Crystal 500ml", duvida: true });
+    expect(de("Heineken Barril 5L")).toMatchObject({ candidatoId: "Cerveja Heineken", duvida: true });
+  });
+
+  it("mesmo nome (só tipo, embalagem ou volume escritos diferente) continua reconhecido direto", () => {
+    expect(de("CERVEJA AMSTEL LT 269ML")).toEqual({ candidatoId: "CERVEJA AMSTEL LT 269ML", confianca: "nome" });
+    expect(de("CERV SKOL LT 269ML")).toEqual({ candidatoId: "Cerveja Skol Lata 269ml", confianca: "nome" });
+    expect(de("REFR COCA COLA LT 220ML")).toEqual({ candidatoId: "Refrigerante Coca-Cola Lata 220ml", confianca: "nome" });
+  });
+});

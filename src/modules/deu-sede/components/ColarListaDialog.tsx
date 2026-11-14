@@ -65,6 +65,11 @@ interface LinhaEditavel {
   novoCategoria: string;
   novoEmbalagem: Embalagem;
   novoUnidades: string;
+  /**
+   * Produto do cadastro parecido com esta linha (a nota tem palavras a mais).
+   * A linha vem como produto novo e "Usar este" troca para o parecido.
+   */
+  sugestao: { id: string; quantidade: string; valor: string; convertido: boolean; embalagemLista: LinhaEditavel["embalagemLista"] } | null;
 }
 
 const NOVO = "__novo__";
@@ -160,10 +165,29 @@ export function ColarListaDialog({
     const categoriaPadrao = ativas.find((c) => c.nome === "Outros")?.id ?? ativas[0]?.id ?? "";
     const analisadas: LinhaEditavel[] = r.linhas.map((l) => {
         const a = associar(l, candidatos);
-        const c = a.candidatoId ? porId.get(a.candidatoId) : undefined;
+        // Nome parecido, mas a nota tem palavras a mais (outro sabor ou
+        // versão?): onde dá para cadastrar, vem como produto NOVO, com o
+        // parecido como sugestão. Antes, "Skol Beats" entrava como "Skol" e
+        // o produto novo nunca era cadastrado.
+        const emDuvida = !!(a.duvida && categoriasNovos && a.candidatoId);
+        const c = a.candidatoId && !emDuvida ? porId.get(a.candidatoId) : undefined;
         const conv = converterParaEmbalagem(l, c?.unidadesPorEmbalagem ?? 1);
         const embalagem = embalagemDaUnidade(l.unidade);
         const unidadesNovo = embalagem.tipo === "unidade" ? 1 : (l.unidadesPorEmbalagem ?? embalagem.unidades);
+        const embalagemDaLista = (convertido: boolean) =>
+          !convertido && unidadesNovo && (l.unidade || l.unidadesPorEmbalagem) ? { tipo: embalagem.tipo, unidades: unidadesNovo } : null;
+        let sugestao: LinhaEditavel["sugestao"] = null;
+        if (emDuvida && a.candidatoId) {
+          const parecido = porId.get(a.candidatoId);
+          const convParecido = converterParaEmbalagem(l, parecido?.unidadesPorEmbalagem ?? 1);
+          sugestao = {
+            id: a.candidatoId,
+            quantidade: paraCampo(convParecido.quantidade),
+            valor: paraCampo(convParecido.valorUnitario, 2),
+            convertido: convParecido.convertido,
+            embalagemLista: embalagemDaLista(convParecido.convertido),
+          };
+        }
         return {
           linha: l.linha,
           texto: l.texto,
@@ -171,16 +195,16 @@ export function ColarListaDialog({
           // Onde dá para cadastrar (entrada por nota), o que não existe já
           // vem marcado como produto novo: com o banco vazio, toda a nota é
           // "não reconhecida" e escolher linha a linha travava a entrada.
-          candidatoId: a.candidatoId ?? (categoriasNovos ? NOVO : ""),
-          confianca: a.confianca,
+          candidatoId: emDuvida ? NOVO : (a.candidatoId ?? (categoriasNovos ? NOVO : "")),
+          confianca: emDuvida ? "nenhuma" : a.confianca,
+          sugestao,
           quantidade: paraCampo(conv.quantidade),
           valor: paraCampo(conv.valorUnitario, 2),
           convertido: conv.convertido,
           // "CX 12" na lista: a nota manda na embalagem desta entrada (o
           // padrão do produto pode ser outro). Linha em UN já convertida
           // para a embalagem do produto fica com a do produto.
-          embalagemLista:
-            !conv.convertido && unidadesNovo && (l.unidade || l.unidadesPorEmbalagem) ? { tipo: embalagem.tipo, unidades: unidadesNovo } : null,
+          embalagemLista: embalagemDaLista(conv.convertido),
           // só código de barras vai para o cadastro: código interno do
           // fornecedor ("924") pode ser outro produto em outro fornecedor
           codigo: ehCodigoDeBarras(l.codigo) ? l.codigo : null,
@@ -502,6 +526,31 @@ export function ColarListaDialog({
                         </>
                       )}
                     </p>
+                  )}
+                  {l.candidatoId === NOVO && l.sugestao && porId.get(l.sugestao.id) && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amarelo/50 bg-amarelo/10 px-2.5 py-2 text-sm text-marrom">
+                      <span className="min-w-0 flex-1">
+                        Parecido com <strong>{porId.get(l.sugestao.id)?.rotulo}</strong>. É o mesmo produto?
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="contorno"
+                        onClick={() => {
+                          const sg = l.sugestao!;
+                          mudar(i, {
+                            candidatoId: sg.id,
+                            confianca: "nome",
+                            quantidade: sg.quantidade,
+                            valor: sg.valor,
+                            convertido: sg.convertido,
+                            embalagemLista: sg.embalagemLista,
+                            sugestao: null,
+                          });
+                        }}
+                      >
+                        Sim, usar este
+                      </Button>
+                    </div>
                   )}
                   {aberta && (
                     <div className="mt-2">

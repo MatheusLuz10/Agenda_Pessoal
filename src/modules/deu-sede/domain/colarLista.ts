@@ -337,6 +337,13 @@ export function semelhanca(a: string, b: string): number {
 export interface Associacao {
   candidatoId: string | null;
   confianca: "codigo" | "nome" | "nenhuma";
+  /**
+   * Reconhecido pelo nome, mas a linha da nota tem palavras que o produto
+   * do cadastro não tem (Skol Beats x Skol, Coca-Cola Café x Coca-Cola,
+   * Água com gás x Água). Pode ser outro sabor ou versão: quem pode
+   * cadastrar decide se é o mesmo produto ou um produto novo.
+   */
+  duvida?: boolean;
 }
 
 // Palavras que não identificam o produto: tipo de bebida, embalagem e
@@ -408,23 +415,29 @@ function identidade(texto: string): string[] {
  * ultra, pure gold…) ou quando cada um tem uma marca que o outro não tem.
  */
 export function notaAssociacao(descricao: string, nome: string): number {
+  return compararNomes(descricao, nome).nota;
+}
+
+/** Nota da associação e as palavras que só a linha da nota tem. */
+function compararNomes(descricao: string, nome: string): { nota: number; sobraNaNota: string[] } {
+  const zero = { nota: 0, sobraNaNota: [] };
   const va = volumes(descricao);
   const vb = volumes(nome);
-  if (va.size && vb.size && ![...va].some((v) => vb.has(v))) return 0;
+  if (va.size && vb.size && ![...va].some((v) => vb.has(v))) return zero;
   const a = identidade(descricao);
   const b = identidade(nome);
-  if (!a.length || !b.length) return 0;
+  if (!a.length || !b.length) return zero;
   const variante = (t: string) => VARIANTES.some((v) => parecida(t, v));
   const falta = (de: string[], em: string[]) => de.some((t) => variante(t) && !em.some((u) => parecida(t, u)));
-  if (falta(a, b) || falta(b, a)) return 0;
+  if (falta(a, b) || falta(b, a)) return zero;
   // Palavra própria dos DOIS lados = marcas diferentes (Guaraná Antarctica x
   // Guaraná Paraense). Só um lado com palavra a mais ("Skol" x "Skol
   // Pilsen") ainda pode ser o mesmo produto.
   const soA = a.filter((t) => !b.some((u) => parecida(t, u)));
   const soB = b.filter((t) => !a.some((u) => parecida(t, u)));
-  if (soA.length && soB.length) return 0;
+  if (soA.length && soB.length) return zero;
   const comuns = a.length - soA.length;
-  return (2 * comuns) / (a.length + b.length);
+  return { nota: (2 * comuns) / (a.length + b.length), sobraNaNota: soA };
 }
 
 export function associar(linha: LinhaColada, candidatos: Candidato[]): Associacao {
@@ -433,12 +446,15 @@ export function associar(linha: LinhaColada, candidatos: Candidato[]): Associaca
     const porCodigo = candidatos.find((c) => c.codigos.some((x) => x && x.trim().toLowerCase() === codigo));
     if (porCodigo) return { candidatoId: porCodigo.id, confianca: "codigo" };
   }
-  let melhor: { id: string; nota: number } | null = null;
+  let melhor: { id: string; nota: number; sobraNaNota: string[] } | null = null;
   for (const c of candidatos) {
-    const nota = notaAssociacao(linha.descricao, c.nome);
-    if (!melhor || nota > melhor.nota) melhor = { id: c.id, nota };
+    const r = compararNomes(linha.descricao, c.nome);
+    if (!melhor || r.nota > melhor.nota) melhor = { id: c.id, ...r };
   }
-  return melhor && melhor.nota >= 0.5 ? { candidatoId: melhor.id, confianca: "nome" } : { candidatoId: null, confianca: "nenhuma" };
+  if (!melhor || melhor.nota < 0.5) return { candidatoId: null, confianca: "nenhuma" };
+  return melhor.sobraNaNota.length
+    ? { candidatoId: melhor.id, confianca: "nome", duvida: true }
+    : { candidatoId: melhor.id, confianca: "nome" };
 }
 
 /**
