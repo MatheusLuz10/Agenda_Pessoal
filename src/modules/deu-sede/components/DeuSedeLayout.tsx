@@ -1,5 +1,5 @@
 import { Link, Outlet } from "react-router-dom";
-import { ArrowLeft, CalendarDays, FlaskConical, LogOut, Phone } from "lucide-react";
+import { CalendarDays, FlaskConical, LogOut, Phone } from "lucide-react";
 import { Shell } from "@/components/layout/Shell";
 import { TELEFONE_CONTATO, TELEFONE_LINK } from "@/config/contato";
 import { DEU_SEDE_BASE, MODULES } from "@/modules/deu-sede/config/modules";
@@ -87,7 +87,8 @@ export function DeuSedeLayout() {
             to={AGENDA_HOME}
             className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-creme/90 hover:bg-verde-600"
           >
-            <ArrowLeft className="size-4" /> Calendário
+            {/* ícone de calendário: a seta fica só no "Voltar" da esquerda */}
+            <CalendarDays className="size-4" /> Calendário
           </Link>
           )
         }

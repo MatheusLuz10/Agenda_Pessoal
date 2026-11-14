@@ -8,17 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { totalAvisos, useAvisos } from "@/modules/deu-sede/data/avisos";
 
-// Destino do botão "Voltar" (celular) derivado do próprio caminho, sem
-// depender do histórico do navegador: quem entra direto numa rota
-// aninhada (ex: "/calendarios/abc123", link compartilhado) sobe um nível.
-function destinoVoltar(pathname: string): string | null {
-  if (NAV_ITEMS.some((item) => item.to === pathname)) return null;
-  const partes = pathname.split("/").filter(Boolean);
-  if (partes.length <= 1) return "/calendarios";
-  return `/${partes.slice(0, -1).join("/")}`;
-}
-
-// Esqueleto principal da Distribuidora DEU SEDE! (Shell).
+// Esqueleto principal da Distribuidora DEU SEDE! (Shell). O botão "Voltar"
+// de todas as telas fica no Shell.
 export function AppLayout() {
   const { pathname } = useLocation();
   const { signOut } = useAuth();
@@ -32,7 +23,6 @@ export function AppLayout() {
       itens={itens}
       rotuloMenu="Menu principal"
       telaCheia={pathname === "/pdv"}
-      voltarPara={destinoVoltar(pathname)}
       acaoCabecalho={
         isSupabaseConfigured ? (
           <button

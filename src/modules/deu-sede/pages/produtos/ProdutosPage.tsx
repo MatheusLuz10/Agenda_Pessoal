@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { ChevronDown, EyeOff, Eye, Package, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { Button, LinkBotao } from "@/modules/deu-sede/components/ui/button";
@@ -7,12 +6,11 @@ import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso
 import { CampoBusca } from "@/modules/deu-sede/components/ui/filtros";
 import { Campo, Input, Interruptor, Select } from "@/modules/deu-sede/components/ui/input";
 import { Confirmar } from "@/modules/deu-sede/components/ui/dialogo";
-import { BotaoColarLista, ColarListaDialog, type CandidatoLista, type LinhaAplicada } from "@/modules/deu-sede/components/ColarListaDialog";
+import { PrecoVendaDialogo } from "@/modules/deu-sede/components/PrecoVendaDialogo";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { chamar, executar, invalidar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useCadastros } from "@/modules/deu-sede/data/hooks";
-import { cadastrarProdutosNovos } from "@/modules/deu-sede/data/produtosNovos";
-import type { Cadastros, Embalagem, ItemEstoque, Produto } from "@/modules/deu-sede/data/tipos";
+import type { Embalagem, ItemEstoque, Produto } from "@/modules/deu-sede/data/tipos";
 import { arredondar, contemBusca, descreverEmbalagem, descreverVolume, lerDecimal, moeda, moedaUnitaria, numero } from "@/modules/deu-sede/domain/formatos";
 import { cn } from "@/lib/utils";
 
@@ -54,10 +52,11 @@ function rotuloEmbalagemCurto(tipo: Embalagem): string {
 
 // Produtos em lista enxuta (nome, código, estoque e custo), sem rolagem
 // lateral: tocar no produto abre o resto das informações e as ações.
-// Caixas de marcar para desativar/excluir vários de uma vez. "Colar lista"
-// cadastra produtos e guarda o preço do fornecedor (sem mexer no estoque).
+// Caixas de marcar para desativar/excluir vários de uma vez. "sem preço"
+// abre o preço de venda ali mesmo. (O "Colar lista" fica só na entrada de
+// estoque: Entrada por nota e Conferir entrega.)
 export function ProdutosPage() {
-  const { dados, erro, categorias, fornecedores, vinculosPorProduto } = useCadastros();
+  const { dados, erro, categorias, vinculosPorProduto } = useCadastros();
   const estoque = useConsulta<ItemEstoque[]>("estoque");
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -68,8 +67,8 @@ export function ProdutosPage() {
   const [excluindo, setExcluindo] = useState<string[] | null>(null);
   const [resultado, setResultado] = useState<{ tom: "sucesso" | "atencao"; texto: string } | null>(null);
   const [erroAcao, setErroAcao] = useState<string | null>(null);
-  const [colar, setColar] = useState(false);
-  const [fornecedorEscolhido, setFornecedorLista] = useState("");
+  // produto do "sem preço" tocado: abre o preço de venda rápido
+  const [precoDe, setPrecoDe] = useState<LinhaProduto | null>(null);
   const [precificando, setPrecificando] = useState(false);
   const [margem, setMargem] = useState("30");
   const [escopoMargem, setEscopoMargem] = useState<EscopoMargem>("todos");
@@ -133,10 +132,6 @@ export function ProdutosPage() {
   const marcados = todas.filter(({ p }) => selecionados.has(p.id));
   const algumAtivo = marcados.some(({ p }) => p.ativo);
   const todosMarcados = lista.length > 0 && lista.every(({ p }) => selecionados.has(p.id));
-
-  // Fornecedor da lista colada: com um só fornecedor ativo, já vem escolhido.
-  const fornecedoresAtivos = (dados?.fornecedores ?? []).filter((f) => f.ativo);
-  const fornecedorLista = fornecedorEscolhido || (fornecedoresAtivos.length === 1 ? fornecedoresAtivos[0].id : "");
 
   function limparFiltros() {
     setBusca("");
@@ -234,71 +229,13 @@ export function ProdutosPage() {
     setPrecificando(false);
   }
 
-  // Lista de preços colada: cadastra o que não existe e guarda o preço de
-  // cada linha como preço atual do fornecedor (o Montar pedido usa esse
-  // preço). Não mexe no estoque.
-  async function aplicarLista(itens: LinhaAplicada[]) {
-    if (!fornecedorLista) throw new Error("Escolha o fornecedor da lista.");
-    const embalagens = itens.map((it) =>
-      it.embalagem ?? (it.novo ? { tipo: it.novo.tipo_embalagem as Embalagem, unidades: it.novo.unidades_por_embalagem } : null),
-    );
-    const novos = itens.filter((it) => it.novo).length;
-    const prontos = await cadastrarProdutosNovos(itens);
-    const cad = await chamar<Cadastros>("cadastros");
-    let precos = 0;
-    try {
-      for (let i = 0; i < prontos.length; i++) {
-        const it = prontos[i];
-        const prod = cad.produtos.find((x) => x.id === it.candidatoId);
-        if (!prod || it.valorUnitario === null) continue;
-        const emb = embalagens[i] ?? { tipo: prod.tipo_embalagem, unidades: prod.unidades_por_embalagem };
-        const v = cad.fornecedor_produtos.find(
-          (x) => x.fornecedor_id === fornecedorLista && x.produto_id === prod.id && x.tipo_embalagem === emb.tipo && x.unidades_por_embalagem === emb.unidades,
-        );
-        await chamar("salvar_fornecedor_produto", {
-          id: v?.id,
-          fornecedor_id: fornecedorLista,
-          produto_id: prod.id,
-          codigo_no_fornecedor: v?.codigo_no_fornecedor ?? null,
-          tipo_embalagem: emb.tipo,
-          unidades_por_embalagem: emb.unidades,
-          preco_atual: it.valorUnitario,
-          ativo: true,
-        });
-        precos++;
-      }
-    } finally {
-      invalidar();
-    }
-    const nomeForn = fornecedores.get(fornecedorLista)?.nome ?? "fornecedor";
-    setResultado({
-      tom: "sucesso",
-      texto: `${novos} ${novos === 1 ? "produto novo cadastrado" : "produtos novos cadastrados"} e ${precos} ${precos === 1 ? "preço guardado" : "preços guardados"} para ${nomeForn}.`,
-    });
-  }
-
-  const candidatos: CandidatoLista[] = (dados?.produtos ?? [])
-    .filter((p) => p.ativo)
-    .map((p) => {
-      const v = (vinculosPorProduto.get(p.id) ?? []).find((x) => x.fornecedor_id === fornecedorLista && x.ativo);
-      return {
-        id: p.id,
-        nome: p.nome,
-        rotulo: p.nome,
-        codigos: [p.codigo, v?.codigo_no_fornecedor],
-        unidadesPorEmbalagem: v?.unidades_por_embalagem ?? p.unidades_por_embalagem,
-        precoReferencia: v?.preco_atual ?? null,
-      };
-    });
-
   return (
     <>
       <PageHeader
         title="Produtos"
-        description="Toque no produto para ver tudo. Cole a lista de preços do fornecedor para cadastrar de uma vez."
+        description="Toque no produto para ver tudo. Em “sem preço”, toque para definir o preço de venda."
         actions={
           <>
-            <BotaoColarLista aoClicar={() => setColar(true)} />
             {!!dados?.produtos.length && (
               <Button variant="contorno" onClick={() => abrirMargem(selecionados.size ? "selecionados" : categoria ? "categoria" : "todos")}>
                 <Tag className="size-4" /> Margem de venda
@@ -317,7 +254,7 @@ export function ProdutosPage() {
 
       {dados && dados.produtos.length === 0 && (
         <Vazio icone={Package} titulo="Nenhum produto cadastrado">
-          Toque em “Colar lista” para cadastrar os produtos com os preços do fornecedor, ou em “Novo produto”.
+          Toque em “Novo produto”, ou dê entrada de uma nota em Estoque → Entrada por nota: os produtos que não existirem são cadastrados na hora.
         </Vazio>
       )}
 
@@ -419,21 +356,25 @@ export function ProdutosPage() {
                   const saldo = Number(l.estoque?.saldo_unidades ?? 0);
                   return (
                     <li key={p.id} className={cn(selecionados.has(p.id) && "bg-offwhite")}>
-                      <div className="flex items-center gap-3 px-3 py-2.5">
-                        <input
-                          type="checkbox"
-                          className="size-5 shrink-0 accent-verde"
-                          aria-label={`Selecionar ${p.nome}`}
-                          checked={selecionados.has(p.id)}
-                          onChange={() => setSelecionados((s) => alternar(s, p.id))}
-                        />
+                      {/* A linha toda abre as informações (botão por baixo do
+                          conteúdo); a caixa de marcar e o "sem preço" ficam por
+                          cima e respondem ao toque deles. */}
+                      <div className="relative flex items-center gap-3 px-3 py-2.5">
                         <button
                           type="button"
                           aria-expanded={aberto}
                           aria-label={`${p.nome}: ${aberto ? "esconder" : "ver"} informações`}
                           onClick={() => setAbertos((s) => alternar(s, p.id))}
-                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                        >
+                          className="absolute inset-0 w-full"
+                        />
+                        <input
+                          type="checkbox"
+                          className="relative size-5 shrink-0 accent-verde"
+                          aria-label={`Selecionar ${p.nome}`}
+                          checked={selecionados.has(p.id)}
+                          onChange={() => setSelecionados((s) => alternar(s, p.id))}
+                        />
+                        <span className="pointer-events-none flex min-w-0 flex-1 items-center gap-3 text-left">
                           <span className="min-w-0 flex-1">
                             <span className={cn("block font-semibold break-words", p.ativo ? "text-verde" : "text-texto-suave")}>{p.nome}</span>
                             <span className="block text-xs text-texto-suave">
@@ -465,7 +406,15 @@ export function ProdutosPage() {
                                     <span className="text-xs font-normal text-texto-suave">/un</span>
                                   </span>
                                 ) : (
-                                  <span className="block text-xs font-medium text-marrom">sem preço</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPrecoDe(l)}
+                                    aria-label={`Definir o preço de venda de ${p.nome}`}
+                                    title="Definir o preço de venda"
+                                    className="pointer-events-auto relative inline-flex h-8 items-center gap-1 rounded-lg border border-amarelo bg-amarelo/15 px-2 text-xs font-semibold text-marrom hover:bg-amarelo/30"
+                                  >
+                                    <Pencil className="size-3.5 shrink-0" /> sem preço
+                                  </button>
                                 )}
                                 {vendaEmb !== null && p.unidades_por_embalagem > 1 && (
                                   <span className="hidden text-xs text-texto-suave sm:block">
@@ -478,7 +427,7 @@ export function ProdutosPage() {
                             );
                           })()}
                           <ChevronDown className={cn("size-5 shrink-0 text-texto-suave transition-transform", aberto && "rotate-180")} />
-                        </button>
+                        </span>
                       </div>
                       {aberto && (
                         <div className="border-t border-linha/60 bg-fundo px-3 py-3 sm:pl-11">
@@ -546,38 +495,11 @@ export function ProdutosPage() {
         </div>
       )}
 
-      <ColarListaDialog
-        aberto={colar}
-        titulo="Colar lista de preços"
-        explicacao="Cole a lista do fornecedor (por exemplo, gerada por IA a partir da foto). Os produtos que não existirem são cadastrados e o preço de cada linha fica guardado como preço do fornecedor. O estoque não muda."
-        topo={
-          fornecedoresAtivos.length === 0 ? (
-            <Aviso tom="atencao">
-              Para guardar os preços, cadastre antes o fornecedor.{" "}
-              <Link to={rota("fornecedores", "novo")} className="font-semibold underline">
-                Cadastrar fornecedor
-              </Link>
-            </Aviso>
-          ) : (
-            <Campo rotulo="Fornecedor da lista" obrigatorio>
-              {(id) => (
-                <Select id={id} value={fornecedorLista} onChange={(e) => setFornecedorLista(e.target.value)}>
-                  <option value="">Escolha…</option>
-                  {fornecedoresAtivos.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.nome}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Campo>
-          )
-        }
-        candidatos={candidatos}
-        categoriasNovos={dados?.categorias}
-        rotuloReferencia="Preço atual"
-        aoFechar={() => setColar(false)}
-        aoAplicar={aplicarLista}
+      <PrecoVendaDialogo
+        produto={precoDe?.p ?? null}
+        custoUnitario={precoDe?.menorCusto ?? null}
+        aoFechar={() => setPrecoDe(null)}
+        aoSalvar={(p) => setResultado({ tom: "sucesso", texto: `Preço de venda de ${p.nome}: ${moeda(p.preco_venda)} por unidade.` })}
       />
       <Confirmar
         aberto={precificando}
@@ -634,7 +556,7 @@ export function ProdutosPage() {
             )}
             {alvoSemCusto.length > 0 && (
               <p className="text-sm text-marrom">
-                {alvoSemCusto.length} sem custo {alvoSemCusto.length === 1 ? "fica" : "ficam"} de fora (cole a lista de preços do fornecedor antes).
+                {alvoSemCusto.length} sem custo {alvoSemCusto.length === 1 ? "fica" : "ficam"} de fora (dê entrada da nota ou informe o preço de custo no produto antes).
               </p>
             )}
           </div>

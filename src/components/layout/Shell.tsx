@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Menu, X, type LucideIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,26 @@ interface Marca {
   to: string;
 }
 
+/** Posição na história do navegador dentro do app (o React Router guarda). */
+function posicaoNaHistoria(): number {
+  const estado = window.history.state as { idx?: unknown } | null;
+  return typeof estado?.idx === "number" ? estado.idx : 0;
+}
+
+/**
+ * Para onde o "Voltar" leva quando não há página anterior no app (a tela
+ * foi aberta direto, por link ou favorito): para a aba da tela; já na aba,
+ * para o início. No início, não há para onde voltar.
+ */
+function destinoAcima(pathname: string, itens: ItemMenu[], inicio: string): string | null {
+  const caminho = pathname.replace(/\/+$/, "") || "/";
+  if (caminho === inicio) return null;
+  const aba = itens
+    .filter((i) => caminho === i.to || caminho.startsWith(`${i.to}/`))
+    .sort((a, b) => b.to.length - a.to.length)[0];
+  return aba && aba.to !== caminho ? aba.to : inicio;
+}
+
 // Logo recortada do banner da distribuidora (fundo transparente):
 //   empilhada  -> menu lateral do computador;
 //   horizontal -> cabeçalho do celular (canecas ao lado do nome).
@@ -77,7 +97,6 @@ export function Shell({
   rotuloMenu,
   rodape,
   acaoCabecalho,
-  voltarPara,
   extrasMenuMais,
   aviso,
   telaCheia = false,
@@ -90,8 +109,6 @@ export function Shell({
   rodape?: ReactNode;
   /** canto direito do cabeçalho (celular) */
   acaoCabecalho?: ReactNode;
-  /** destino do botão voltar do cabeçalho (celular), quando houver */
-  voltarPara?: string | null;
   /** itens extras no fim do menu "Mais" (celular) */
   extrasMenuMais?: ReactNode;
   /** faixa de aviso logo abaixo do cabeçalho */
@@ -101,6 +118,15 @@ export function Shell({
   children: ReactNode;
 }) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  // "Voltar" em todas as telas: volta para a página anterior do app; sem
+  // página anterior (abriu direto), sobe para a aba ou para o início.
+  const acima = destinoAcima(pathname, itens, marca.to);
+  const podeVoltar = posicaoNaHistoria() > 0 || acima !== null;
+  const voltar = () => {
+    if (posicaoNaHistoria() > 0) navigate(-1);
+    else if (acima) navigate(acima);
+  };
   // Guarda em qual tela o menu "Mais" foi aberto: ao trocar de tela
   // (inclusive pelo botão voltar) ele fecha sozinho.
   const [maisAbertoEm, setMaisAbertoEm] = useState<string | null>(null);
@@ -150,14 +176,16 @@ export function Shell({
       {/* ---------- Celular: cabeçalho ---------- */}
       {!telaCheia && <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 bg-verde px-4 lg:hidden">
         <div className="flex min-w-0 items-center gap-1">
-          {voltarPara && (
-            <Link
-              to={voltarPara}
+          {podeVoltar && (
+            <button
+              type="button"
+              onClick={voltar}
               className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-xl text-creme hover:bg-verde-600"
               aria-label="Voltar"
+              title="Voltar"
             >
               <ArrowLeft className="size-5" />
-            </Link>
+            </button>
           )}
           <LogoMarca marca={marca} horizontal />
         </div>
@@ -167,9 +195,21 @@ export function Shell({
         </div>
       </header>}
 
-      {/* Computador: tema claro/escuro, só o ícone, no canto superior direito */}
+      {/* Computador: "Voltar" à esquerda e tema claro/escuro (só o ícone) à
+          direita, alinhados com o conteúdo */}
       {!telaCheia && (
-        <div className="hidden justify-end px-8 pt-3 lg:flex">
+        <div className="mx-auto hidden w-full max-w-6xl items-center justify-between gap-3 px-8 pt-3 lg:flex">
+          {podeVoltar ? (
+            <button
+              type="button"
+              onClick={voltar}
+              className="-ml-3 flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-verde hover:bg-offwhite"
+            >
+              <ArrowLeft className="size-4" /> Voltar
+            </button>
+          ) : (
+            <span />
+          )}
           <ThemeToggle variante="pagina" />
         </div>
       )}
