@@ -19,6 +19,8 @@ export interface ItemCarrinho {
   quantidade: number;
   /** preço digitado no caixa (null = preço cadastrado) */
   preco_manual: number | null;
+  desconto?: number;
+  desconto_tipo?: "valor" | "porcentagem";
 }
 
 /** Preço de tabela do item (unidade ou embalagem fechada). */
@@ -31,6 +33,14 @@ export function precoTabela(p: ProdutoPdv, unidade: "unidade" | "embalagem"): nu
 }
 
 export function precoItem(i: ItemCarrinho): number | null {
+  const base = i.preco_manual ?? precoTabela(i.produto, i.unidade_venda);
+  if (base === null) return null;
+  const valorDesconto = i.desconto ?? 0;
+  const desconto = i.desconto_tipo === "porcentagem" ? base * Math.min(valorDesconto, 100) / 100 : valorDesconto;
+  return arredondar(Math.max(0, base - Math.min(base, desconto)));
+}
+
+export function precoBaseItem(i: ItemCarrinho): number | null {
   return i.preco_manual ?? precoTabela(i.produto, i.unidade_venda);
 }
 

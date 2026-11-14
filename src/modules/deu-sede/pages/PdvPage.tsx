@@ -11,7 +11,7 @@ import { Secao } from "@/modules/deu-sede/components/ui/secao";
 import { FiltroPeriodo } from "@/modules/deu-sede/components/FiltroPeriodo";
 import { chamar, executar, useConsulta } from "@/modules/deu-sede/data/cliente";
 import type { FormaPagamento, ProdutoPdv, ResumoVendas, Venda, VendaResumo } from "@/modules/deu-sede/data/tipos";
-import { FORMAS_PAGAMENTO, precoItem, precoTabela, subtotalItem, totaisCarrinho, unidadesDoItem, type ItemCarrinho } from "@/modules/deu-sede/domain/pdv";
+import { FORMAS_PAGAMENTO, precoBaseItem, precoItem, precoTabela, subtotalItem, totaisCarrinho, unidadesDoItem, type ItemCarrinho } from "@/modules/deu-sede/domain/pdv";
 import { periodoDoAtalho, type Periodo } from "@/modules/deu-sede/domain/periodo";
 import { contemBusca, dataHoraBR, descreverEmbalagem, descreverQuantidade, lerDecimal, moeda, numero, paraCampo } from "@/modules/deu-sede/domain/formatos";
 import { DEU_SEDE_BASE } from "@/modules/deu-sede/config/modules";
@@ -73,6 +73,7 @@ function Vender() {
   const [categoria, setCategoria] = useState("");
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [desconto, setDesconto] = useState("");
+  const [descontoTipo, setDescontoTipo] = useState<"valor" | "porcentagem">("valor");
   const [descontoLiberado, setDescontoLiberado] = useState(false);
   const [forma, setForma] = useState<FormaPagamento>("dinheiro");
   const [recebido, setRecebido] = useState("");
@@ -82,6 +83,7 @@ function Vender() {
   const [erro, setErro] = useState<string | null>(null);
   const [comprovante, setComprovante] = useState<Venda | null>(null);
   const [editandoPreco, setEditandoPreco] = useState<ItemCarrinho | null>(null);
+  const [editandoDesconto, setEditandoDesconto] = useState<ItemCarrinho | null>(null);
   const [pixGrande, setPixGrande] = useState(false);
   const carrinhoRef = useRef<HTMLDivElement>(null);
 
@@ -99,14 +101,15 @@ function Vender() {
     [produtos, busca, categoria],
   );
   const filtrados = encontrados.slice(0, 100);
-  const t = totaisCarrinho(carrinho, lerDecimal(desconto) ?? 0, forma, lerDecimal(recebido));
+  const valorDesconto = lerDecimal(desconto) ?? 0;
+  const t = totaisCarrinho(carrinho, descontoTipo === "porcentagem" ? (carrinho.reduce((s, i) => s + subtotalItem(i), 0) * Math.min(100, valorDesconto)) / 100 : valorDesconto, forma, lerDecimal(recebido));
 
   function adicionar(p: ProdutoPdv, unidade: "unidade" | "embalagem") {
     setErro(null);
     setCarrinho((c) => {
       const i = c.find((x) => x.produto.produto_id === p.produto_id && x.unidade_venda === unidade && x.preco_manual === null);
       if (i) return c.map((x) => (x === i ? { ...x, quantidade: x.quantidade + 1 } : x));
-      return [...c, { chave: crypto.randomUUID(), produto: p, unidade_venda: unidade, quantidade: 1, preco_manual: null }];
+      return [...c, { chave: crypto.randomUUID(), produto: p, unidade_venda: unidade, quantidade: 1, preco_manual: null, desconto: 0, desconto_tipo: "valor" }];
     });
   }
   const mudar = (chaveItem: string, c: Partial<ItemCarrinho>) => setCarrinho((xs) => xs.map((x) => (x.chave === chaveItem ? { ...x, ...c } : x)));
@@ -154,12 +157,13 @@ function Vender() {
           produto_id: i.produto.produto_id,
           unidade_venda: i.unidade_venda,
           quantidade: i.quantidade,
-          preco_unitario: i.preco_manual,
+          preco_unitario: precoItem(i),
         })),
       });
       setComprovante(venda);
       setCarrinho([]);
       setDesconto("");
+      setDescontoTipo("valor");
       setDescontoLiberado(false);
       setRecebido("");
       setCliente("");
@@ -320,6 +324,9 @@ function Vender() {
                           </span>
                         )}
                       </button>
+                      <button type="button" className="text-xs font-medium text-marrom underline" onClick={async () => (await pedirSenha("pdv_desconto")) && setEditandoDesconto(i)}>
+                        {(i.desconto ?? 0) > 0 ? "Editar desconto" : "Desconto no item"}
+                      </button>
                       <button
                         type="button"
                         aria-label={`Cancelar ${i.produto.nome} (pede senha)`}
@@ -381,7 +388,10 @@ function Vender() {
                 )}
                 <Campo rotulo="Cliente (opcional)">{(id) => <Input id={id} value={cliente} onChange={(e) => setCliente(e.target.value)} />}</Campo>
                 {descontoLiberado ? (
-                  <Campo rotulo="Desconto (R$)">{(id) => <Input id={id} inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} />}</Campo>
+                  <div className="grid grid-cols-[8rem_1fr] gap-2">
+                    <Campo rotulo="Tipo">{(id) => <Select id={id} value={descontoTipo} onChange={(e) => setDescontoTipo(e.target.value as "valor" | "porcentagem")}><option value="valor">Valor (R$)</option><option value="porcentagem">Porcentagem (%)</option></Select>}</Campo>
+                    <Campo rotulo="Desconto na compra">{(id) => <Input id={id} inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} />}</Campo>
+                  </div>
                 ) : (
                   <button
                     type="button"
@@ -434,6 +444,7 @@ function Vender() {
           }}
         />
       )}
+      {editandoDesconto && <DescontoItem item={editandoDesconto} aoFechar={() => setEditandoDesconto(null)} aoSalvar={(valor, tipo) => { mudar(editandoDesconto.chave, { desconto: valor, desconto_tipo: tipo }); setEditandoDesconto(null); }} />}
       {comprovante && <Comprovante venda={comprovante} aoFechar={() => setComprovante(null)} />}
       {pixGrande && (
         <Dialogo aberto titulo="Pague com PIX" aoFechar={() => setPixGrande(false)}>
@@ -513,6 +524,16 @@ function PrecoManual({ item, aoFechar, aoSalvar }: { item: ItemCarrinho; aoFecha
       </div>
     </Dialogo>
   );
+}
+
+function DescontoItem({ item, aoFechar, aoSalvar }: { item: ItemCarrinho; aoFechar: () => void; aoSalvar: (valor: number, tipo: "valor" | "porcentagem") => void }) {
+  const [valor, setValor] = useState(paraCampo(item.desconto ?? 0, 2));
+  const [tipo, setTipo] = useState<"valor" | "porcentagem">(item.desconto_tipo ?? "valor");
+  const [erro, setErro] = useState<string | null>(null);
+  const base = precoBaseItem(item) ?? 0;
+  return <Dialogo aberto titulo={`Desconto: ${item.produto.nome}`} aoFechar={aoFechar} rodape={<><Button variant="contorno" onClick={() => aoSalvar(0, "valor")}>Remover desconto</Button><Button data-principal onClick={() => { const n = lerDecimal(valor); if (n === null || n < 0 || (tipo === "porcentagem" && n > 100) || (tipo === "valor" && n > base)) return setErro("Desconto inválido para o preço do item."); aoSalvar(n, tipo); }}>Aplicar</Button></>}>
+    <div className="flex flex-col gap-3"><p className="text-sm text-texto">Preço: {moeda(base)}</p><Campo rotulo="Tipo">{(id) => <Select id={id} value={tipo} onChange={(e) => setTipo(e.target.value as "valor" | "porcentagem")}><option value="valor">Valor (R$)</option><option value="porcentagem">Porcentagem (%)</option></Select>}</Campo><Campo rotulo="Desconto">{(id) => <Input id={id} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />}</Campo>{erro && <Aviso tom="erro">{erro}</Aviso>}</div>
+  </Dialogo>;
 }
 
 function textoComprovante(v: Venda): string {
