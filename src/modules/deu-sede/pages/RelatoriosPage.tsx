@@ -13,12 +13,20 @@ import { periodoDoAtalho, type Periodo } from "@/modules/deu-sede/domain/periodo
 import { rota } from "@/modules/deu-sede/config/modules";
 import { useConsulta } from "@/modules/deu-sede/data/cliente";
 import { useAtrasado, useCadastros } from "@/modules/deu-sede/data/hooks";
-import type { Empresa, PedidoResumo } from "@/modules/deu-sede/data/tipos";
+import type { Empresa, PedidoResumo, ResumoVendas, VendaResumo } from "@/modules/deu-sede/data/tipos";
 import { exportarExcel, exportarPdf, type Relatorio } from "@/modules/deu-sede/exportar";
 import { PEDIDO_STATUS, PEDIDO_STATUS_LABEL, type PedidoStatus } from "@/modules/deu-sede/domain/status";
 import { dataBR, mesCurto, moeda, moedaUnitaria, numero, percentual } from "@/modules/deu-sede/domain/formatos";
 
-type Aba = "financeiro" | "fornecedores" | "produtos" | "pedidos";
+const ROTULO_PAGAMENTO: Record<string, string> = {
+  dinheiro: "Dinheiro",
+  pix: "Pix",
+  debito: "Débito",
+  credito: "Crédito",
+  outro: "Outro",
+};
+
+type Aba = "financeiro" | "fornecedores" | "produtos" | "pedidos" | "vendas";
 
 interface Financeiro {
   somente_itens: boolean;
@@ -72,9 +80,11 @@ const FUNCAO = {
   fornecedores: "relatorio_fornecedores",
   produtos: "relatorio_produtos",
   pedidos: "relatorio_pedidos",
+  vendas: "listar_vendas",
 } as const;
 
 const TITULO: Record<Aba, string> = {
+  vendas: "Relatório de vendas do PDV",
   financeiro: "Relatório financeiro de compras",
   fornecedores: "Relatório de fornecedores",
   produtos: "Relatório de produtos",
@@ -105,6 +115,7 @@ export function RelatoriosPage() {
     numero: numeroAtrasado.trim() || undefined,
   };
   const consulta = useConsulta<unknown>(FUNCAO[aba], filtros);
+  const resumoVendas = useConsulta<ResumoVendas>("resumo_vendas", aba === "vendas" ? { de: periodo.de, ate: periodo.ate } : null);
   const dados = consulta.dados;
 
   const descricaoFiltros = [
@@ -121,8 +132,29 @@ export function RelatoriosPage() {
       titulo: TITULO[aba],
       empresa: empresa.dados?.nome || "DEU SEDE!",
       periodo: `${dataBR(periodo.de)} a ${dataBR(periodo.ate)}`,
-      filtros: descricaoFiltros,
+      filtros: aba === "vendas" ? [] : descricaoFiltros,
     };
+    if (aba === "vendas") {
+      const linhas = dados as VendaResumo[];
+      const resumo = resumoVendas.dados;
+      if (!resumo) return null;
+      return {
+        ...base,
+        resumo: [
+          ["Total vendido", moeda(resumo.total)],
+          ["Vendas concluídas", String(resumo.qtd_vendas)],
+          ["Ticket médio", moeda(resumo.ticket_medio)],
+          ["Descontos", moeda(resumo.descontos)],
+          ["Canceladas", String(resumo.canceladas)],
+        ],
+        tabelas: [{
+          titulo: "Vendas do PDV",
+          colunas: [{ titulo: "Número" }, { titulo: "Data", formato: "data" }, { titulo: "Cliente" }, { titulo: "Pagamento" }, { titulo: "Status" }, { titulo: "Itens", formato: "numero" }, { titulo: "Descontos", formato: "moeda" }, { titulo: "Total", formato: "moeda" }],
+          linhas: linhas.map((v) => [v.numero_formatado, v.data, v.cliente || "Consumidor final", ROTULO_PAGAMENTO[v.forma_pagamento] ?? v.forma_pagamento, v.status === "concluida" ? "Concluída" : "Cancelada", v.qtd_itens, v.desconto, v.total]),
+          totais: ["Total", null, null, null, null, linhas.reduce((s, v) => s + Number(v.qtd_itens), 0), resumo.descontos, resumo.total],
+        }],
+      };
+    }
     if (aba === "financeiro") {
       const f = dados as Financeiro;
       return {
@@ -242,10 +274,10 @@ export function RelatoriosPage() {
         description="Compras realizadas (pedidos enviados ao fornecedor)."
         actions={
           <>
-            <Button variant="contorno" onClick={() => exportar("pdf")} disabled={!dados || exportando !== null}>
+            <Button variant="contorno" onClick={() => exportar("pdf")} disabled={!dados || (aba === "vendas" && !resumoVendas.dados) || exportando !== null}>
               <FileText className="size-4" /> {exportando === "pdf" ? "Gerando…" : "PDF"}
             </Button>
-            <Button variant="contorno" onClick={() => exportar("excel")} disabled={!dados || exportando !== null}>
+            <Button variant="contorno" onClick={() => exportar("excel")} disabled={!dados || (aba === "vendas" && !resumoVendas.dados) || exportando !== null}>
               <FileSpreadsheet className="size-4" /> {exportando === "excel" ? "Gerando…" : "Excel"}
             </Button>
           </>
@@ -262,10 +294,11 @@ export function RelatoriosPage() {
             { valor: "fornecedores", rotulo: "Fornecedores" },
             { valor: "produtos", rotulo: "Produtos" },
             { valor: "pedidos", rotulo: "Pedidos" },
+            { valor: "vendas", rotulo: "Vendas do PDV" },
           ]}
         />
         <FiltroPeriodo valor={periodo} aoMudar={setPeriodo} />
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        {aba !== "vendas" && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           <Select value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)} aria-label="Fornecedor">
             <option value="">Todos os fornecedores</option>
             {(cad?.fornecedores ?? []).map((f) => (
@@ -299,16 +332,17 @@ export function RelatoriosPage() {
             ))}
           </Select>
           <Input placeholder="Nº do pedido" aria-label="Número do pedido" value={numeroPedido} onChange={(e) => setNumeroPedido(e.target.value)} />
-        </div>
+        </div>}
       </div>
 
       {erroExportar && <Aviso tom="erro" className="mb-4">{erroExportar}</Aviso>}
-      {consulta.erro && <Aviso tom="erro">{consulta.erro}</Aviso>}
+      {(consulta.erro || (aba === "vendas" && resumoVendas.erro)) && <Aviso tom="erro">{consulta.erro ?? resumoVendas.erro}</Aviso>}
       {!dados && !consulta.erro && <Carregando />}
       {dados !== undefined && aba === "financeiro" && <VerFinanceiro f={dados as Financeiro} />}
       {dados !== undefined && aba === "fornecedores" && <VerFornecedores linhas={dados as LinhaFornecedor[]} />}
       {dados !== undefined && aba === "produtos" && <VerProdutos linhas={dados as LinhaProduto[]} />}
       {dados !== undefined && aba === "pedidos" && <VerPedidos r={dados as RelPedidos} />}
+      {dados !== undefined && aba === "vendas" && resumoVendas.dados && <VerVendas vendas={dados as VendaResumo[]} resumo={resumoVendas.dados} />}
     </>
   );
 }
@@ -318,6 +352,43 @@ function Tile({ rotulo, valor }: { rotulo: string; valor: string }) {
     <div className="rounded-xl border border-linha bg-superficie px-4 py-3">
       <p className="text-xs font-medium tracking-wide text-texto-suave uppercase">{rotulo}</p>
       <p className="mt-1 text-xl font-bold text-verde tabular-nums">{valor}</p>
+    </div>
+  );
+}
+
+function VerVendas({ vendas, resumo }: { vendas: VendaResumo[]; resumo: ResumoVendas }) {
+  if (!Array.isArray(vendas)) return null;
+  return (
+    <div className="grid gap-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Tile rotulo="Total vendido" valor={moeda(resumo.total)} />
+        <Tile rotulo="Vendas concluídas" valor={String(resumo.qtd_vendas)} />
+        <Tile rotulo="Ticket médio" valor={moeda(resumo.ticket_medio)} />
+        <Tile rotulo="Descontos" valor={moeda(resumo.descontos)} />
+        <Tile rotulo="Vendas canceladas" valor={String(resumo.canceladas)} />
+      </div>
+      <Secao titulo="Vendas do PDV no período" semPadding>
+        <Tabela>
+          <thead>
+            <tr><th>Número</th><th>Data</th><th>Cliente</th><th>Pagamento</th><th>Status</th><th className="num">Itens</th><th className="num">Desconto</th><th className="num">Total</th></tr>
+          </thead>
+          <tbody>
+            {vendas.length === 0 && <tr><td colSpan={8} className="text-texto-suave">Nenhuma venda do PDV no período.</td></tr>}
+            {vendas.map((v) => (
+              <tr key={v.id}>
+                <td className="font-medium">{v.numero_formatado}</td>
+                <td>{dataBR(v.data)}</td>
+                <td>{v.cliente || "Consumidor final"}</td>
+                <td>{ROTULO_PAGAMENTO[v.forma_pagamento] ?? v.forma_pagamento}</td>
+                <td>{v.status === "concluida" ? "Concluída" : "Cancelada"}</td>
+                <td className="num">{v.qtd_itens}</td>
+                <td className="num">{moeda(v.desconto)}</td>
+                <td className="num font-semibold">{moeda(v.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Tabela>
+      </Secao>
     </div>
   );
 }

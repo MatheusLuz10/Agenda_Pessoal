@@ -67,6 +67,9 @@ export type FuncaoRPC =
 
 // Funções que vieram em migrações recentes: o erro diz qual arquivo falta rodar.
 const MIGRACAO_DA_FUNCAO: Partial<Record<FuncaoRPC, string>> = {
+  registrar_venda: "0024_corrigir_baixa_vendas_estoque.sql",
+  listar_vendas: "0009_pdv.sql",
+  resumo_vendas: "0009_pdv.sql",
   excluir_produtos: "0013_excluir_produtos.sql",
   contas_pagar: "0016_financeiro.sql",
   obter_conta_pagar: "0016_financeiro.sql",

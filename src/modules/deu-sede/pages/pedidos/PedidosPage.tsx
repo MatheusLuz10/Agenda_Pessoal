@@ -23,10 +23,11 @@ export function PedidosPage() {
   const buscaAtrasada = useAtrasado(busca);
   const { dados, erro, carregando } = useConsulta<PedidoResumo[]>("listar_pedidos", {
     busca: buscaAtrasada.trim() || undefined,
-    status: status && status !== "abertos" ? status : undefined,
+    status: status && status !== "abertos" && status !== "realizados" ? status : undefined,
     abertos: status === "abertos" || undefined,
     fornecedor_id: fornecedor || undefined,
   });
+  const pedidos = (dados ?? []).filter((p) => status !== "realizados" || p.compra_realizada);
 
   return (
     <>
@@ -43,6 +44,7 @@ export function PedidosPage() {
         <CampoBusca valor={busca} aoMudar={setBusca} placeholder="Número do pedido ou fornecedor" />
         <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
           <option value="abertos">Em andamento</option>
+          <option value="realizados">Pedidos realizados</option>
           <option value="">Todos os status</option>
           {PEDIDO_STATUS.map((s) => (
             <option key={s} value={s}>
@@ -61,14 +63,14 @@ export function PedidosPage() {
       </div>
       {erro && <Aviso tom="erro">{erro}</Aviso>}
       {!dados && carregando && <Carregando />}
-      {dados && dados.length === 0 && (
+      {dados && pedidos.length === 0 && (
         <Vazio icone={ShoppingCart} titulo="Nenhum pedido encontrado">
           {status === "abertos" && !busca && !fornecedor ? "Nenhum pedido em andamento. Use “Montar pedido” para começar." : "Mude os filtros."}
         </Vazio>
       )}
-      {dados && dados.length > 0 && (
+      {dados && pedidos.length > 0 && (
         <ul className="flex flex-col gap-2">
-          {dados.map((p) => (
+          {pedidos.map((p) => (
             <li key={p.id}>
               <Link
                 to={rota("pedidos", p.id)}

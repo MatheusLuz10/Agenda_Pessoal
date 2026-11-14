@@ -57,7 +57,7 @@ export function EstoquePage() {
 
 function RegistrarMovimentacao() {
   const { dados, erro } = useConsulta<ItemEstoque[]>("estoque");
-  const { pedirSenha } = useSenha();
+  const { confirmarComSenha } = useSenha();
   const [produtoId, setProdutoId] = useState("");
   const [movendo, setMovendo] = useState<ItemEstoque | null>(null);
   const produto = dados?.find((e) => e.produto_id === produtoId) ?? null;
@@ -69,7 +69,7 @@ function RegistrarMovimentacao() {
     <div className="grid max-w-2xl gap-4 rounded-xl border border-linha bg-superficie p-4 sm:p-6">
       <div>
         <h2 className="text-lg font-bold text-verde">Registrar entrada ou saída</h2>
-        <p className="mt-1 text-sm text-texto-suave">Escolha o produto e informe a quantidade. O movimento ficará no histórico e atualizará o saldo.</p>
+        <p className="mt-1 text-sm text-texto-suave">Escolha o produto e informe a quantidade. Cada entrada, saída ou correção pede a senha de 4 dígitos e fica no histórico.</p>
       </div>
       <Select value={produtoId} onChange={(e) => setProdutoId(e.target.value)} aria-label="Produto">
         <option value="">Selecione um produto</option>
@@ -83,8 +83,8 @@ function RegistrarMovimentacao() {
             <p className="font-semibold text-verde">Saldo atual</p>
             <p className="text-sm text-texto-suave">{descreverQuantidade(produto.saldo_unidades, produto.unidades_por_embalagem, produto.tipo_embalagem)}</p>
           </div>
-          <Button onClick={async () => { if (await pedirSenha("estoque_ajuste")) setMovendo(produto); }}>
-            Entrada / saída
+          <Button onClick={async () => { if (await confirmarComSenha("Autorizar alteração manual do estoque")) setMovendo(produto); }}>
+            Adicionar ou corrigir
           </Button>
         </div>
       )}
@@ -113,7 +113,7 @@ const alternar = (conjunto: Set<string>, id: string) => {
 function Saldo() {
   const { dados, erro } = useConsulta<ItemEstoque[]>("estoque");
   const { dados: cad } = useCadastros();
-  const { pedirSenha } = useSenha();
+  const { confirmarComSenha } = useSenha();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("com_saldo");
@@ -239,10 +239,10 @@ function Saldo() {
                             size="sm"
                             variant="contorno"
                             onClick={async () => {
-                              if (await pedirSenha("estoque_ajuste")) setMovendo(e);
+                              if (await confirmarComSenha("Autorizar alteração manual do estoque")) setMovendo(e);
                             }}
                           >
-                            Entrada / saída
+                            Adicionar ou corrigir
                           </Button>
                           <LinkBotao to={rota("produtos", e.produto_id)} variant="contorno" size="sm">
                             Ver produto
