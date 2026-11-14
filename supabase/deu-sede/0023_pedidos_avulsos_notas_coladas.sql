@@ -34,6 +34,56 @@ left join lateral (
    where ri.pedido_item_id = pi.id
 ) r on true;
 
+-- vw_pedidos (0001) usa p.*: com a coluna nova em pedidos, ela precisa ser
+-- recriada para incluir nota_entrada_id. Sem isso, rodar as migrações de
+-- novo (o modo de teste local faz isso a cada atualização) falha no
+-- "create or replace view" da 0001 ("cannot change name of view column").
+-- Nenhuma view depende dela; a única função presa a ela é pedidos_comprados
+-- (devolve linhas da view), que sai antes e volta igual logo abaixo.
+drop function if exists deusede.pedidos_comprados(jsonb);
+drop view if exists deusede.vw_pedidos;
+create view deusede.vw_pedidos with (security_invoker = true) as
+select
+  p.*,
+  deusede.formatar_numero('PED', p.numero) as numero_formatado,
+  deusede.pedido_conta_como_compra(p.status) as compra_realizada,
+  coalesce(t.qtd_itens, 0) as qtd_itens,
+  coalesce(t.valor_bruto, 0) as valor_bruto,
+  coalesce(t.desconto_itens, 0) + p.desconto_geral as total_descontos,
+  coalesce(t.valor_bruto, 0) - coalesce(t.desconto_itens, 0) - p.desconto_geral + p.frete as valor_total,
+  coalesce(t.valor_recebido, 0) as valor_recebido_itens,
+  coalesce(t.qtd_pendente, 0) as quantidade_pendente
+from deusede.pedidos p
+left join lateral (
+  select count(*) as qtd_itens,
+         sum(round(s.quantidade_embalagens * s.preco_embalagem, 2)) as valor_bruto,
+         sum(s.desconto_valor) as desconto_itens,
+         sum(s.valor_recebido) as valor_recebido,
+         sum(s.quantidade_pendente) as qtd_pendente
+    from deusede.vw_pedido_itens_saldo s
+   where s.pedido_id = p.id
+) t on true;
+-- mesmas permissões da 0001 (o drop apaga as permissões da view)
+grant select, insert, update, delete on deusede.vw_pedidos to authenticated;
+grant all on deusede.vw_pedidos to service_role;
+revoke all on deusede.vw_pedidos from anon;
+
+-- Pedidos (compras realizadas) do período, com os mesmos filtros (igual à 0007).
+create or replace function deusede.pedidos_comprados(p jsonb)
+returns setof deusede.vw_pedidos language sql stable as $$
+  select v.* from deusede.vw_pedidos v
+  where v.compra_realizada
+    and v.data_pedido between deusede.periodo_de(p) and deusede.periodo_ate(p)
+    and (deusede.uid(p, 'fornecedor_id') is null or v.fornecedor_id = deusede.uid(p, 'fornecedor_id'))
+    and (deusede.txt(p, 'status') is null or v.status = deusede.txt(p, 'status'))
+    and (deusede.txt(p, 'numero') is null or v.numero_formatado ilike '%' || deusede.txt(p, 'numero') || '%')
+    and (deusede.uid(p, 'produto_id') is null or exists (
+          select 1 from deusede.pedido_itens i where i.pedido_id = v.id and i.produto_id = deusede.uid(p, 'produto_id')))
+    and (deusede.uid(p, 'categoria_id') is null or exists (
+          select 1 from deusede.pedido_itens i join deusede.produtos pr on pr.id = i.produto_id
+           where i.pedido_id = v.id and pr.categoria_id = deusede.uid(p, 'categoria_id')))
+$$;
+
 create or replace function deusede.tg_pedidos_regras()
 returns trigger language plpgsql security definer set search_path = deusede
 set timezone to 'America/Sao_Paulo' as $$

@@ -48,3 +48,27 @@ returns jsonb language sql stable as $$
         group by i.produto_id, i.produto_nome order by sum(i.subtotal) desc limit 10) x), '[]')
   )
 $$;
+
+-- Datas no horário de Brasília (ver 0012): toda migração que cria ou
+-- recria função termina com este bloco.
+do $$
+declare
+  f record;
+begin
+  for f in
+    select p.oid::regprocedure as assinatura
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'deusede'
+      and p.prokind = 'f'
+      and (
+        p.prolang = (select oid from pg_language where lanname = 'plpgsql')
+        or p.prosrc ~* '(current_date|current_timestamp|localtime|now\(|date_trunc|to_char|::date)'
+      )
+      and not exists (
+        select 1 from unnest(coalesce(p.proconfig, '{}'::text[])) c where c ilike 'timezone=%'
+      )
+  loop
+    execute format('alter function %s set timezone to %L', f.assinatura, 'America/Sao_Paulo');
+  end loop;
+end $$;

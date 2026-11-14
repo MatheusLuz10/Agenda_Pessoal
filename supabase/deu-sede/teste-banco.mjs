@@ -12,7 +12,9 @@ const ler = (lista) => lista.map((f) => readFileSync(new URL(f, dir), "utf8")).j
 // verdade no banco, como estava a nuvem; a 0020 em diante entra na seção 31.
 const SEM_COTACOES = "0020";
 const migration = ler(arquivos.filter((f) => f < SEM_COTACOES));
-const migracaoSemCotacoes = ler(arquivos.filter((f) => f >= SEM_COTACOES));
+// a seção 31 confere só a 0020; as seguintes entram logo depois dela
+const migracaoSemCotacoes = ler(arquivos.filter((f) => f.startsWith(SEM_COTACOES)));
+const migracoesDepoisDaSemCotacoes = ler(arquivos.filter((f) => f > SEM_COTACOES && !f.startsWith(SEM_COTACOES)));
 const todasAsMigracoes = ler(arquivos);
 const db = new PGlite();
 
@@ -872,6 +874,20 @@ depois31.ped === antes31.ped && depois31.ped_cot === 0 && depois31.itens_cot ===
   ? pass("pedidos mantidos, sem ligação com cotação") : bad("pedidos", JSON.stringify(depois31));
 depois31.ev === antes31.ev - antes31.ev_cot && depois31.ev_cot === 0 ? pass("só o histórico (eventos) das cotações saiu") : bad("eventos", JSON.stringify(depois31));
 depois31.fp === antes31.fp && depois31.mov === antes31.mov ? pass("preços dos fornecedores e estoque intactos") : bad("cadastros", JSON.stringify(depois31));
+// migrações seguintes (0021 em diante) sobre o mesmo banco, duas vezes
+try {
+  await db.exec(migracoesDepoisDaSemCotacoes);
+  await db.exec(migracoesDepoisDaSemCotacoes);
+  await db.exec("set search_path = deusede, public");
+  pass("as migrações depois da 0020 rodam (e de novo) sobre este banco");
+} catch (e) { bad("migrações depois da 0020", `-> ${e.message} | ${e.where ?? ""}`); }
+await db.exec("set search_path = deusede, public");
+// 0023: cada nota com lista colada vira um pedido avulso recebido, uma vez só
+const av23 = await one(`select (select count(*) from deusede.notas_entrada where nullif(btrim(lista_colada), '') is not null)::int notas,
+  (select count(*) from deusede.pedidos where nota_entrada_id is not null and status = 'recebido')::int pedidos,
+  (select count(*) from deusede.estoque_movimentos)::int mov`);
+av23.pedidos === av23.notas && av23.mov === depois31.mov
+  ? pass(`0023: ${av23.pedidos} pedido(s) avulso(s) das notas coladas, sem mexer no estoque`) : bad("pedidos avulsos (0023)", JSON.stringify(av23));
 const areas31 = (await one("select areas from deusede.seguranca")).areas;
 !areas31.includes("cotacoes") && !areas31.includes("comparacao") && areas31.includes("relatorios")
   ? pass("senha: áreas de cotação/comparação saem, as outras ficam") : bad("áreas", JSON.stringify(areas31));
