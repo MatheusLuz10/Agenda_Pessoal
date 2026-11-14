@@ -1,4 +1,4 @@
-import { CalendarDays, FileText, ScanBarcode, ScrollText, Settings, ShoppingCart } from "lucide-react";
+import { CalendarDays, FileText, ScanBarcode, Settings, ShoppingCart } from "lucide-react";
 import type { ItemMenu } from "@/components/layout/Shell";
 
 // Menu do app (lateral no computador, barra inferior no celular — ver
@@ -11,6 +11,4 @@ export const NAV_ITEMS: ItemMenu[] = [
   { key: "agenda", to: "/calendarios", label: "Calendário", shortLabel: "Calendário", icon: CalendarDays, end: false, noCelular: true },
   { key: "documentos", to: "/documentos", label: "Documentos", shortLabel: "Documentos", icon: FileText, noCelular: true },
   { key: "configuracoes", to: "/configuracoes", label: "Configurações", shortLabel: "Config.", icon: Settings },
-  // registros (logs) ficam na seção DEU SEDE!; o atalho fica abaixo de Configurações
-  { key: "registros", to: "/deu-sede/registros", label: "Registros (logs)", shortLabel: "Logs", icon: ScrollText },
 ];

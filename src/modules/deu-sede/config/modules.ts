@@ -6,7 +6,6 @@ import {
   Warehouse,
   Settings,
   ShoppingCart,
-  ScrollText,
   Store,
   Wallet,
   type LucideIcon,
@@ -42,5 +41,4 @@ export const MODULES: ModuleInfo[] = [
   { key: "fornecedores", to: rota("fornecedores"), label: "Fornecedores", shortLabel: "Fornec.", icon: Store, noCelular: false },
   { key: "relatorios", to: rota("relatorios"), label: "Relatórios", shortLabel: "Relatórios", icon: ChartColumn, noCelular: false },
   { key: "configuracoes", to: rota("configuracoes"), label: "Configurações", shortLabel: "Config.", icon: Settings, noCelular: false },
-  { key: "registros", to: rota("registros"), label: "Registros (logs)", shortLabel: "Logs", icon: ScrollText, noCelular: false },
 ];

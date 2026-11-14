@@ -176,13 +176,22 @@ create table if not exists public.documents (
   category_id uuid references public.document_categories (id) on delete cascade,
   pet_id uuid references public.pets (id) on delete cascade,
   name text not null,
-  file_url text not null,
-  file_name text not null,
+  file_url text,
+  file_name text,
+  content text not null default '',
   created_at timestamptz not null default now(),
   constraint documents_category_xor_pet check (
     (category_id is not null and pet_id is null) or (category_id is null and pet_id is not null)
-  )
+  ),
+  constraint documents_content_or_file check (length(trim(content)) > 0 or file_url is not null)
 );
+
+alter table public.documents alter column file_url drop not null;
+alter table public.documents alter column file_name drop not null;
+alter table public.documents add column if not exists content text not null default '';
+alter table public.documents drop constraint if exists documents_content_or_file;
+alter table public.documents add constraint documents_content_or_file
+  check (length(trim(content)) > 0 or file_url is not null);
 
 -- Bucket público (mesmo padrão do bucket "avatars"): o anexo precisa ser
 -- lido sem token pra abrir direto num link/nova aba. PDF liberado, além

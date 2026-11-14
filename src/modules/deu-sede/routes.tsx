@@ -22,7 +22,6 @@ const EstoquePage = telaSobDemanda(() => import("@/modules/deu-sede/pages/estoqu
 const EntradaNotaPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/estoque/EntradaNotaPage"), "EntradaNotaPage");
 const RelatoriosPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/RelatoriosPage"), "RelatoriosPage");
 const ContasPagarPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/financeiro/ContasPagarPage"), "ContasPagarPage");
-const RegistrosPage = telaSobDemanda(() => import("@/modules/deu-sede/pages/RegistrosPage"), "RegistrosPage");
 
 // Rotas da seção DEU SEDE!. Entram no App.tsx dentro do
 // <RequireAuth />, então valem as mesmas regras de login do app
@@ -53,7 +52,6 @@ export const deuSedeRoutes = (
     <Route path="contas" element={<ContasPagarPage />} />
     <Route path="relatorios" element={<RelatoriosPage />} />
     <Route path="configuracoes" element={<SettingsPage />} />
-    <Route path="registros" element={<RegistrosPage />} />
     <Route path="*" element={<NotFoundPage />} />
   </Route>
 );

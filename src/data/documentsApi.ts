@@ -14,8 +14,9 @@ interface AppDocumentRow {
   category_id: string | null;
   pet_id: string | null;
   name: string;
-  file_url: string;
-  file_name: string;
+  file_url: string | null;
+  file_name: string | null;
+  content: string | null;
   created_at: string;
 }
 
@@ -27,6 +28,7 @@ function rowToDocument(row: AppDocumentRow): AppDocument {
     name: row.name,
     fileUrl: row.file_url,
     fileName: row.file_name,
+    content: row.content ?? "",
     createdAt: row.created_at,
   };
 }
@@ -49,6 +51,7 @@ export async function createDocument(doc: Omit<AppDocument, "id" | "createdAt">)
       name: doc.name,
       file_url: doc.fileUrl,
       file_name: doc.fileName,
+      content: doc.content,
     })
     .select()
     .single();
@@ -58,10 +61,10 @@ export async function createDocument(doc: Omit<AppDocument, "id" | "createdAt">)
 
 // Apaga o arquivo do Storage antes de apagar a linha — mesmo padrão de
 // removeServiceRequest em serviceRequestsApi.ts.
-export async function removeDocument(id: string, fileUrl: string): Promise<void> {
+export async function removeDocument(id: string, fileUrl: string | null): Promise<void> {
   const marker = `/object/public/${DOCUMENTS_BUCKET}/`;
-  const markerIndex = fileUrl.indexOf(marker);
-  if (markerIndex !== -1) {
+  const markerIndex = fileUrl?.indexOf(marker) ?? -1;
+  if (fileUrl && markerIndex !== -1) {
     const path = fileUrl.slice(markerIndex + marker.length);
     await supabase!.storage.from(DOCUMENTS_BUCKET).remove([path]);
   }

@@ -162,6 +162,7 @@ export function RelatoriosPage() {
             titulo: "Fornecedores",
             colunas: [
               { titulo: "Fornecedor" },
+              { titulo: "Situação" },
               { titulo: "Total comprado", formato: "moeda" },
               { titulo: "Pedidos", formato: "numero" },
               { titulo: "Última compra", formato: "data" },
@@ -169,8 +170,8 @@ export function RelatoriosPage() {
               { titulo: "Melhor preço em", formato: "numero" },
               { titulo: "Variação de preço", formato: "percentual" },
             ],
-            linhas: l.map((x) => [x.fornecedor_nome, x.total_comprado, x.qtd_pedidos, x.ultima_compra, x.produtos_mais_comprados || null, x.produtos_com_melhor_preco, x.variacao_media_pct]),
-            totais: ["Total", l.reduce((s, x) => s + Number(x.total_comprado), 0), l.reduce((s, x) => s + Number(x.qtd_pedidos), 0), null, null, null, null],
+            linhas: l.map((x) => [x.fornecedor_nome, x.ativo ? "Ativo" : "Inativo", x.total_comprado, x.qtd_pedidos, x.ultima_compra, x.produtos_mais_comprados || null, x.produtos_com_melhor_preco, x.variacao_media_pct]),
+            totais: ["Total", null, l.reduce((s, x) => s + Number(x.total_comprado), 0), l.reduce((s, x) => s + Number(x.qtd_pedidos), 0), null, null, null, null],
           },
         ],
       };
@@ -187,15 +188,17 @@ export function RelatoriosPage() {
               { titulo: "Produto" },
               { titulo: "Categoria" },
               { titulo: "Unidades", formato: "numero" },
+              { titulo: "Embalagens", formato: "numero" },
               { titulo: "Total gasto", formato: "moeda" },
               { titulo: "Último preço/un", formato: "moeda4" },
               { titulo: "Menor preço/un", formato: "moeda4" },
               { titulo: "Maior preço/un", formato: "moeda4" },
               { titulo: "Variação", formato: "percentual" },
               { titulo: "Melhor fornecedor" },
+              { titulo: "Melhor preço/un", formato: "moeda4" },
             ],
-            linhas: l.map((x) => [x.produto_nome, x.categoria_nome, x.unidades_compradas, x.total_gasto, x.ultimo_preco_unitario, x.menor_preco_unitario, x.maior_preco_unitario, x.variacao_pct, x.melhor_fornecedor]),
-            totais: ["Total", null, l.reduce((s, x) => s + Number(x.unidades_compradas), 0), l.reduce((s, x) => s + Number(x.total_gasto), 0), null, null, null, null, null],
+            linhas: l.map((x) => [x.produto_nome, x.categoria_nome, x.unidades_compradas, x.embalagens_compradas, x.total_gasto, x.ultimo_preco_unitario, x.menor_preco_unitario, x.maior_preco_unitario, x.variacao_pct, x.melhor_fornecedor, x.melhor_preco_unitario]),
+            totais: ["Total", null, l.reduce((s, x) => s + Number(x.unidades_compradas), 0), l.reduce((s, x) => s + Number(x.embalagens_compradas), 0), l.reduce((s, x) => s + Number(x.total_gasto), 0), null, null, null, null, null, null],
           },
         ],
       };
@@ -210,9 +213,9 @@ export function RelatoriosPage() {
       tabelas: [
         {
           titulo: "Pedidos",
-          colunas: [{ titulo: "Número" }, { titulo: "Data", formato: "data" }, { titulo: "Fornecedor" }, { titulo: "Status" }, { titulo: "Total", formato: "moeda" }, { titulo: "Recebido", formato: "moeda" }],
-          linhas: r.linhas.map((p) => [p.numero_formatado, p.data_pedido, p.fornecedor_nome, PEDIDO_STATUS_LABEL[p.status], p.valor_total, p.valor_recebido_itens]),
-          totais: ["Total", null, null, null, r.linhas.reduce((s, p) => s + Number(p.valor_total), 0), r.linhas.reduce((s, p) => s + Number(p.valor_recebido_itens), 0)],
+          colunas: [{ titulo: "Número" }, { titulo: "Data", formato: "data" }, { titulo: "Fornecedor" }, { titulo: "WhatsApp" }, { titulo: "Status" }, { titulo: "Compra realizada" }, { titulo: "Previsão", formato: "data" }, { titulo: "Condição de pagamento" }, { titulo: "Itens", formato: "numero" }, { titulo: "Valor bruto", formato: "moeda" }, { titulo: "Descontos", formato: "moeda" }, { titulo: "Desconto geral", formato: "moeda" }, { titulo: "Frete", formato: "moeda" }, { titulo: "Total", formato: "moeda" }, { titulo: "Recebido", formato: "moeda" }, { titulo: "Pendente", formato: "numero" }, { titulo: "Observações" }, { titulo: "Enviado em", formato: "data" }, { titulo: "Concluído em", formato: "data" }, { titulo: "Cancelado em", formato: "data" }, { titulo: "Motivo do cancelamento" }, { titulo: "Criado em", formato: "data" }],
+          linhas: r.linhas.map((p) => [p.numero_formatado, p.data_pedido, p.fornecedor_nome, p.fornecedor_whatsapp, PEDIDO_STATUS_LABEL[p.status], p.compra_realizada ? "Sim" : "Não", p.previsao_entrega, p.condicao_pagamento, p.qtd_itens, p.valor_bruto, p.total_descontos, p.desconto_geral, p.frete, p.valor_total, p.valor_recebido_itens, p.quantidade_pendente, p.observacoes, p.enviado_em, p.concluido_em, p.cancelado_em, p.motivo_cancelamento, p.created_at]),
+          totais: ["Total", null, null, null, null, null, null, null, r.linhas.reduce((s, p) => s + Number(p.qtd_itens), 0), r.linhas.reduce((s, p) => s + Number(p.valor_bruto), 0), r.linhas.reduce((s, p) => s + Number(p.total_descontos), 0), r.linhas.reduce((s, p) => s + Number(p.desconto_geral), 0), r.linhas.reduce((s, p) => s + Number(p.frete), 0), r.linhas.reduce((s, p) => s + Number(p.valor_total), 0), r.linhas.reduce((s, p) => s + Number(p.valor_recebido_itens), 0), r.linhas.reduce((s, p) => s + Number(p.quantidade_pendente), 0), null, null, null, null, null, null],
         },
       ],
     };
@@ -401,6 +404,7 @@ function VerFornecedores({ linhas }: { linhas: LinhaFornecedor[] }) {
         <thead>
           <tr>
             <th>Fornecedor</th>
+            <th>Situação</th>
             <th className="num">Total comprado</th>
             <th className="num">Pedidos</th>
             <th>Última compra</th>
@@ -412,7 +416,7 @@ function VerFornecedores({ linhas }: { linhas: LinhaFornecedor[] }) {
         <tbody>
           {linhas.length === 0 && (
             <tr>
-              <td colSpan={7} className="text-texto-suave">Sem movimento no período.</td>
+              <td colSpan={8} className="text-texto-suave">Sem movimento no período.</td>
             </tr>
           )}
           {linhas.map((x) => (
@@ -422,6 +426,7 @@ function VerFornecedores({ linhas }: { linhas: LinhaFornecedor[] }) {
                   {x.fornecedor_nome}
                 </Link>
               </td>
+              <td>{x.ativo ? "Ativo" : "Inativo"}</td>
               <td className="num font-semibold">{moeda(x.total_comprado)}</td>
               <td className="num">{x.qtd_pedidos}</td>
               <td>{dataBR(x.ultima_compra)}</td>
@@ -447,18 +452,20 @@ function VerProdutos({ linhas }: { linhas: LinhaProduto[] }) {
           <tr>
             <th>Produto</th>
             <th className="num">Unidades</th>
+            <th className="num">Embalagens</th>
             <th className="num">Total gasto</th>
             <th className="num">Último/un</th>
             <th className="num">Menor/un</th>
             <th className="num">Maior/un</th>
             <th className="num">Variação</th>
             <th>Melhor fornecedor</th>
+            <th className="num">Melhor preço/un</th>
           </tr>
         </thead>
         <tbody>
           {linhas.length === 0 && (
             <tr>
-              <td colSpan={8} className="text-texto-suave">Sem movimento no período.</td>
+              <td colSpan={10} className="text-texto-suave">Sem movimento no período.</td>
             </tr>
           )}
           {linhas.map((x) => (
@@ -470,15 +477,14 @@ function VerProdutos({ linhas }: { linhas: LinhaProduto[] }) {
                 <span className="block text-xs text-texto-suave">{x.categoria_nome}</span>
               </td>
               <td className="num">{numero(x.unidades_compradas)}</td>
+              <td className="num">{numero(x.embalagens_compradas)}</td>
               <td className="num font-semibold">{moeda(x.total_gasto)}</td>
               <td className="num">{moedaUnitaria(x.ultimo_preco_unitario)}</td>
               <td className="num">{moedaUnitaria(x.menor_preco_unitario)}</td>
               <td className="num">{moedaUnitaria(x.maior_preco_unitario)}</td>
               <td className="num">{percentual(x.variacao_pct)}</td>
-              <td>
-                {x.melhor_fornecedor ?? "—"}
-                {x.melhor_preco_unitario !== null && <span className="block text-xs text-texto-suave">{moedaUnitaria(x.melhor_preco_unitario)}/un</span>}
-              </td>
+              <td>{x.melhor_fornecedor ?? "—"}</td>
+              <td className="num">{moedaUnitaria(x.melhor_preco_unitario)}</td>
             </tr>
           ))}
         </tbody>
@@ -518,7 +524,7 @@ function VerPedidos({ r }: { r: RelPedidos }) {
                 <td colSpan={6} className="text-texto-suave">Nenhum pedido no período.</td>
               </tr>
             )}
-            {r.linhas.map((p) => (
+            {r.linhas.flatMap((p) => [
               <tr key={p.id}>
                 <td>
                   <Link to={rota("pedidos", p.id)} className="font-medium text-verde hover:underline">
@@ -532,8 +538,30 @@ function VerPedidos({ r }: { r: RelPedidos }) {
                 </td>
                 <td className="num">{moeda(p.valor_total)}</td>
                 <td className="num">{moeda(p.valor_recebido_itens)}</td>
+              </tr>,
+              <tr key={`${p.id}-detalhes`}>
+                <td colSpan={6} className="bg-offwhite/40 text-xs text-texto-suave">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    <span>Previsão: {dataBR(p.previsao_entrega)}</span>
+                    <span>Pagamento: {p.condicao_pagamento || "—"}</span>
+                    <span>Itens: {p.qtd_itens}</span>
+                    <span>Bruto: {moeda(p.valor_bruto)}</span>
+                    <span>Descontos: {moeda(p.total_descontos)}</span>
+                    <span>Desconto geral: {moeda(p.desconto_geral)}</span>
+                    <span>Frete: {moeda(p.frete)}</span>
+                    <span>Pendente: {numero(p.quantidade_pendente)}</span>
+                    <span>Compra realizada: {p.compra_realizada ? "Sim" : "Não"}</span>
+                    {p.fornecedor_whatsapp && <span>WhatsApp: {p.fornecedor_whatsapp}</span>}
+                    {p.enviado_em && <span>Enviado: {dataBR(p.enviado_em)}</span>}
+                    {p.concluido_em && <span>Concluído: {dataBR(p.concluido_em)}</span>}
+                    {p.cancelado_em && <span>Cancelado: {dataBR(p.cancelado_em)}</span>}
+                    {p.observacoes && <span>Observações: {p.observacoes}</span>}
+                    {p.motivo_cancelamento && <span>Motivo do cancelamento: {p.motivo_cancelamento}</span>}
+                    <span>Criado: {dataBR(p.created_at)}</span>
+                  </div>
+                </td>
               </tr>
-            ))}
+            ])}
           </tbody>
         </Tabela>
       </Secao>

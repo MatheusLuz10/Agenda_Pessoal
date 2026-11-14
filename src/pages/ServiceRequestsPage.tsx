@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useServiceRequests } from "@/contexts/ServiceRequestsContext";
 import { SERVICE_REQUEST_STATUS_LABELS } from "@/types";
@@ -71,12 +72,13 @@ function formatDateTimeBR(iso: string): string {
 export function ServiceRequestsPage() {
   const { requests, loading, setStatus, setObservations, deleteRequest } = useServiceRequests();
   const [statusFilter, setStatusFilter] = useState<ServiceRequestStatus | "todos">("todos");
+  const [search, setSearch] = useState("");
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   const [isQrDialogOpen, setIsQrDialogOpen] = useState(false);
 
   const filteredRequests = useMemo(
-    () => (statusFilter === "todos" ? requests : requests.filter((r) => r.status === statusFilter)),
-    [requests, statusFilter]
+    () => requests.filter((r) => (statusFilter === "todos" || r.status === statusFilter) && [r.requestNumber, r.clientName, r.serviceType, r.phone, r.address, r.observations].some((v) => String(v ?? "").toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")))),
+    [requests, statusFilter, search]
   );
 
   function toggleOpen(id: string) {
@@ -109,6 +111,7 @@ export function ServiceRequestsPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Pesquisar número, cliente, serviço ou endereço" aria-label="Pesquisar solicitações" className="w-full sm:max-w-md" />
         <span className="text-xs font-medium text-muted-foreground">Filtrar por status:</span>
         <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as ServiceRequestStatus | "todos")}>
           <SelectTrigger className="w-56">

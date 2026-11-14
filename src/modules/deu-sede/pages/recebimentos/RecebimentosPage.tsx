@@ -1,19 +1,25 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PackageCheck } from "lucide-react";
 import { PageHeader } from "@/modules/deu-sede/components/PageHeader";
 import { LinkBotao } from "@/modules/deu-sede/components/ui/button";
 import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
+import { CampoBusca } from "@/modules/deu-sede/components/ui/filtros";
 import { Secao } from "@/modules/deu-sede/components/ui/secao";
 import { StatusPedido } from "@/modules/deu-sede/components/ui/status-badge";
 import { rota } from "@/modules/deu-sede/config/modules";
 import { useConsulta } from "@/modules/deu-sede/data/cliente";
 import type { PedidoResumo, RecebimentoResumo } from "@/modules/deu-sede/data/tipos";
-import { dataBR, moeda, numero } from "@/modules/deu-sede/domain/formatos";
+import { contemBusca, dataBR, moeda, numero } from "@/modules/deu-sede/domain/formatos";
 
 export function RecebimentosPage() {
+  const [buscaPendentes, setBuscaPendentes] = useState("");
+  const [buscaHistorico, setBuscaHistorico] = useState("");
   const aguardando = useConsulta<PedidoResumo[]>("listar_pedidos", { aguardando_recebimento: true });
   const historico = useConsulta<RecebimentoResumo[]>("listar_recebimentos");
+  const pedidosFiltrados = useMemo(() => (aguardando.dados ?? []).filter((p) => contemBusca(buscaPendentes, p.numero_formatado, p.fornecedor_nome, p.data_pedido, p.previsao_entrega)), [aguardando.dados, buscaPendentes]);
+  const recebimentosFiltrados = useMemo(() => (historico.dados ?? []).filter((r) => contemBusca(buscaHistorico, r.numero_formatado, r.pedido_numero, r.fornecedor_nome, r.nota_fiscal, r.data_recebimento)), [historico.dados, buscaHistorico]);
 
   return (
     <>
@@ -25,6 +31,7 @@ export function RecebimentosPage() {
         <Secao titulo="Aguardando entrega" descricao="Pedidos já enviados ao fornecedor." semPadding>
           {aguardando.erro && <Aviso tom="erro" className="mx-5 mb-4">{aguardando.erro}</Aviso>}
           {!aguardando.dados && !aguardando.erro && <Carregando />}
+          {aguardando.dados && aguardando.dados.length > 0 && <div className="px-5 pb-3"><CampoBusca valor={buscaPendentes} aoMudar={setBuscaPendentes} placeholder="Pesquisar pedido ou fornecedor" /></div>}
           {aguardando.dados && aguardando.dados.length === 0 && (
             <div className="px-5 pb-5">
               <Vazio icone={PackageCheck} titulo="Nenhuma entrega pendente">
@@ -32,9 +39,10 @@ export function RecebimentosPage() {
               </Vazio>
             </div>
           )}
-          {aguardando.dados && aguardando.dados.length > 0 && (
+          {aguardando.dados && aguardando.dados.length > 0 && pedidosFiltrados.length === 0 && <p className="px-5 pb-4 text-sm text-texto-suave">Nenhuma entrega corresponde à busca.</p>}
+          {aguardando.dados && pedidosFiltrados.length > 0 && (
             <ul className="divide-y divide-linha">
-              {aguardando.dados.map((p) => (
+              {pedidosFiltrados.map((p) => (
                 <li key={p.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <Link to={rota("pedidos", p.id)} className="min-w-0">
                     <span className="block font-semibold text-verde">
@@ -61,9 +69,11 @@ export function RecebimentosPage() {
         <Secao titulo="Histórico de recebimentos" semPadding>
           {historico.erro && <Aviso tom="erro" className="mx-5 mb-4">{historico.erro}</Aviso>}
           {historico.dados && historico.dados.length === 0 && <p className="px-5 pb-4 text-sm text-texto-suave">Nenhum recebimento registrado ainda.</p>}
-          {historico.dados && historico.dados.length > 0 && (
+          {historico.dados && historico.dados.length > 0 && <div className="px-5 pb-3"><CampoBusca valor={buscaHistorico} aoMudar={setBuscaHistorico} placeholder="Pesquisar pedido, fornecedor ou nota fiscal" /></div>}
+          {historico.dados && historico.dados.length > 0 && recebimentosFiltrados.length === 0 && <p className="px-5 pb-4 text-sm text-texto-suave">Nenhum recebimento corresponde à busca.</p>}
+          {historico.dados && recebimentosFiltrados.length > 0 && (
             <ul className="divide-y divide-linha">
-              {historico.dados.map((r) => (
+              {recebimentosFiltrados.map((r) => (
                 <li key={r.id}>
                   <Link to={rota("pedidos", r.pedido_id)} className="flex flex-col gap-1 px-5 py-3 hover:bg-offwhite/60 sm:flex-row sm:items-center sm:justify-between">
                     <span>

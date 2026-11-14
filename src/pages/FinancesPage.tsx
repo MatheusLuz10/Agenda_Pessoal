@@ -202,6 +202,7 @@ function SummaryCard({
 // despesas e um resumo com os totais do período selecionado.
 function ReportsTab({ transactions }: { transactions: Transaction[] }) {
   const [filter, setFilter] = useState<ReportFilter>("mes");
+  const [listSearch, setListSearch] = useState("");
   const [customStart, setCustomStart] = useState(todayISO());
   const [customEnd, setCustomEnd] = useState(todayISO());
 
@@ -227,6 +228,8 @@ function ReportsTab({ transactions }: { transactions: Transaction[] }) {
 
   const receitas = filtered.filter((t) => t.type === "entrada");
   const despesas = filtered.filter((t) => t.type === "saida");
+  const receitasFiltradas = receitas.filter((t) => `${t.description} ${t.category} ${t.observation ?? ""} ${t.date}`.toLocaleLowerCase("pt-BR").includes(listSearch.trim().toLocaleLowerCase("pt-BR")));
+  const despesasFiltradas = despesas.filter((t) => `${t.description} ${t.category} ${t.observation ?? ""} ${t.date}`.toLocaleLowerCase("pt-BR").includes(listSearch.trim().toLocaleLowerCase("pt-BR")));
   const totalEntradas = sumEntradas(filtered);
   const totalSaidas = sumSaidas(filtered);
 
@@ -288,16 +291,18 @@ function ReportsTab({ transactions }: { transactions: Transaction[] }) {
         </CardContent>
       </Card>
 
+      <Input value={listSearch} onChange={(e) => setListSearch(e.target.value)} placeholder="Pesquisar lançamentos por descrição, categoria ou data" aria-label="Pesquisar lançamentos financeiros" />
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Receitas</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {receitas.length === 0 ? (
+            {receitasFiltradas.length === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma receita no período.</p>
             ) : (
-              receitas.map((t) => <TransactionListItem key={t.id} transaction={t} />)
+              receitasFiltradas.map((t) => <TransactionListItem key={t.id} transaction={t} />)
             )}
           </CardContent>
         </Card>
@@ -307,10 +312,10 @@ function ReportsTab({ transactions }: { transactions: Transaction[] }) {
             <CardTitle>Despesas</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {despesas.length === 0 ? (
+            {despesasFiltradas.length === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma despesa no período.</p>
             ) : (
-              despesas.map((t) => <TransactionListItem key={t.id} transaction={t} />)
+              despesasFiltradas.map((t) => <TransactionListItem key={t.id} transaction={t} />)
             )}
           </CardContent>
         </Card>

@@ -9,7 +9,7 @@ import { todayISO } from "@/lib/date";
 interface DocumentsContextValue {
   documents: AppDocument[];
   loading: boolean;
-  addDocument: (doc: Omit<AppDocument, "id" | "createdAt">) => void;
+  addDocument: (doc: Omit<AppDocument, "id" | "createdAt">) => Promise<void>;
   deleteDocument: (id: string) => void;
 }
 
@@ -40,7 +40,7 @@ export function DocumentsProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const addDocument: DocumentsContextValue["addDocument"] = (doc) => {
+  const addDocument: DocumentsContextValue["addDocument"] = async (doc) => {
     const optimistic: AppDocument = {
       ...doc,
       id: `doc-${Date.now()}`,
@@ -49,11 +49,13 @@ export function DocumentsProvider({ children }: { children: React.ReactNode }) {
     setDocuments((prev) => [optimistic, ...prev]);
 
     if (isSupabaseConfigured) {
-      createDocument(doc)
-        .then((saved) => {
-          setDocuments((prev) => prev.map((d) => (d.id === optimistic.id ? saved : d)));
-        })
-        .catch((error) => console.error("Falha ao criar documento:", error));
+      try {
+        const saved = await createDocument(doc);
+        setDocuments((prev) => prev.map((d) => (d.id === optimistic.id ? saved : d)));
+      } catch (error) {
+        setDocuments((prev) => prev.filter((d) => d.id !== optimistic.id));
+        throw error;
+      }
     }
   };
 

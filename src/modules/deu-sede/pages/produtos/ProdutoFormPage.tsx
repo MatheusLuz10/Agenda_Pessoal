@@ -36,6 +36,8 @@ export function ProdutoFormPage() {
   );
 }
 
+const CRIAR_FORNECEDOR = "__criar_fornecedor__";
+
 function Formulario({
   produto,
   categorias,
@@ -62,6 +64,9 @@ function Formulario({
   const [vendaEmbalagem, setVendaEmbalagem] = useState(paraCampo(produto?.preco_venda_embalagem, 2));
   // produto novo: já liga a um fornecedor (opcional); o preço de custo vira o preço dele
   const [fornecedorId, setFornecedorId] = useState("");
+  const [fornecedorCriado, setFornecedorCriado] = useState<Fornecedor | null>(null);
+  const [novoFornecedorNome, setNovoFornecedorNome] = useState("");
+  const [criarFornecedorAberto, setCriarFornecedorAberto] = useState(false);
   // preço de custo (por embalagem); no banco fica por unidade (custo_referencia)
   const [custo, setCusto] = useState(() =>
     produto?.custo_referencia != null ? paraCampo(arredondar(Number(produto.custo_referencia) * produto.unidades_por_embalagem, 2), 2) : "",
@@ -103,6 +108,7 @@ function Formulario({
   const [novaCategoria, setNovaCategoria] = useState<string | null>(null);
   const { enviando, erro, setErro, enviar } = useEnvio();
   const envioCategoria = useEnvio();
+  const envioFornecedor = useEnvio();
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
@@ -159,6 +165,18 @@ function Formulario({
     if (criada) {
       setCategoriaId(criada.id);
       setNovaCategoria(null);
+    }
+  }
+
+  async function criarFornecedor() {
+    const nomeFornecedor = novoFornecedorNome.trim();
+    if (!nomeFornecedor) return envioFornecedor.setErro("Informe o nome do fornecedor.");
+    const criado = await envioFornecedor.enviar(() => executar<Fornecedor>("salvar_fornecedor", { nome: nomeFornecedor }));
+    if (criado) {
+      setFornecedorCriado(criado);
+      setFornecedorId(criado.id);
+      setCriarFornecedorAberto(false);
+      setNovoFornecedorNome("");
     }
   }
 
@@ -245,19 +263,28 @@ function Formulario({
               {(id) => <Input id={id} inputMode="numeric" value={unidades} onChange={(e) => setUnidades(e.target.value)} />}
             </Campo>
           </div>
-          {!produto && fornecedores.length > 0 && (
+          {!produto && (
             <fieldset className="flex flex-col gap-3 rounded-lg border border-linha p-3 sm:p-4">
               <legend className="px-1 text-sm font-semibold">Fornecedor (opcional)</legend>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Campo rotulo="Fornecedor" ajuda="Quem vende este produto. O preço de custo abaixo vira o preço dele.">
                   {(id) => (
-                    <Select id={id} value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)}>
+                    <Select id={id} value={fornecedorId} onChange={(e) => {
+                      if (e.target.value === CRIAR_FORNECEDOR) {
+                        setNovoFornecedorNome("");
+                        envioFornecedor.setErro(null);
+                        setCriarFornecedorAberto(true);
+                      } else {
+                        setFornecedorId(e.target.value);
+                      }
+                    }}>
                       <option value="">Nenhum</option>
-                      {fornecedores.map((f) => (
+                      {[...fornecedores, ...(fornecedorCriado && !fornecedores.some((f) => f.id === fornecedorCriado.id) ? [fornecedorCriado] : [])].map((f) => (
                         <option key={f.id} value={f.id}>
                           {f.nome}
                         </option>
                       ))}
+                      <option value={CRIAR_FORNECEDOR}>+ Criar fornecedor</option>
                     </Select>
                   )}
                 </Campo>
@@ -332,6 +359,26 @@ function Formulario({
             {(id) => <Input id={id} value={novaCategoria ?? ""} onChange={(e) => setNovaCategoria(e.target.value)} />}
           </Campo>
           {envioCategoria.erro && <Aviso tom="erro">{envioCategoria.erro}</Aviso>}
+        </div>
+      </Dialogo>
+      <Dialogo
+        aberto={criarFornecedorAberto}
+        titulo="Criar fornecedor"
+        aoFechar={() => setCriarFornecedorAberto(false)}
+        rodape={
+          <>
+            <Button variant="contorno" onClick={() => setCriarFornecedorAberto(false)}>Cancelar</Button>
+            <Button data-principal onClick={criarFornecedor} disabled={envioFornecedor.enviando}>
+              {envioFornecedor.enviando ? "Salvando…" : "Criar fornecedor"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Campo rotulo="Nome do fornecedor" obrigatorio>
+            {(id) => <Input id={id} value={novoFornecedorNome} onChange={(e) => setNovoFornecedorNome(e.target.value)} autoFocus />}
+          </Campo>
+          {envioFornecedor.erro && <Aviso tom="erro">{envioFornecedor.erro}</Aviso>}
         </div>
       </Dialogo>
     </>

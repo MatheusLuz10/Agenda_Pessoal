@@ -36,6 +36,7 @@ const EMPTY_PET_FORM = { name: "", species: "Gato" as PetSpecies, breed: "", col
 // do próprio cartão do pet (mesma tabela "documents", petId em vez de
 // categoryId).
 export function DocumentsPage() {
+  const [listSearch, setListSearch] = useState("");
   const { documents, addDocument, deleteDocument } = useDocuments();
   const { pets, addPet, deletePet } = usePets();
   const { categories, addCategory, deleteCategory } = useDocumentCategories();
@@ -47,6 +48,8 @@ export function DocumentsPage() {
   const [dialogCategoryId, setDialogCategoryId] = useState<string | null>(null);
   const [dialogPetId, setDialogPetId] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [content, setContent] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +59,9 @@ export function DocumentsPage() {
     setDialogCategoryId(categoryId);
     setDialogPetId(petId);
     setName("");
+    setContent("");
     setSelectedFile(null);
+    setSaveError(null);
     setIsDialogOpen(true);
   }
 
@@ -90,17 +95,19 @@ export function DocumentsPage() {
   }
 
   async function handleSaveDocument() {
-    if (!selectedFile) return;
+    if (!name.trim()) return setSaveError("Informe um título para a nota.");
+    if (!content.trim() && !selectedFile) return setSaveError("Escreva uma nota ou anexe uma foto/PDF.");
     setIsSaving(true);
+    setSaveError(null);
     try {
-      let fileUrl: string;
-      let fileName: string;
+      let fileUrl: string | null = null;
+      let fileName: string | null = null;
 
-      if (isSupabaseConfigured) {
+      if (selectedFile && isSupabaseConfigured) {
         const uploaded = await uploadDocumentFile(selectedFile);
         fileUrl = uploaded.url;
         fileName = uploaded.name;
-      } else {
+      } else if (selectedFile) {
         // Sem Supabase configurado (modo mock/teste local) não há onde
         // enviar o arquivo — usa uma URL local só pra sessão atual, pra
         // o anexo continuar visível/clicável enquanto testa.
@@ -108,8 +115,10 @@ export function DocumentsPage() {
         fileName = selectedFile.name;
       }
 
-      addDocument({ categoryId: dialogCategoryId, petId: dialogPetId, name: name.trim(), fileUrl, fileName });
+      await addDocument({ categoryId: dialogCategoryId, petId: dialogPetId, name: name.trim(), fileUrl, fileName, content: content.trim() });
       setIsDialogOpen(false);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Não foi possível salvar a nota.");
     } finally {
       setIsSaving(false);
     }
@@ -118,29 +127,35 @@ export function DocumentsPage() {
   function renderDocumentCard(doc: AppDocument) {
     return (
       <Card key={doc.id}>
-        <CardContent className="flex items-center justify-between gap-2 pt-5">
-          <a
-            href={doc.fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-primary underline-offset-2 hover:underline"
-          >
-            <Paperclip className="size-4 shrink-0" />
-            {doc.name}
-          </a>
-          <Button variant="ghost" size="icon" onClick={() => deleteDocument(doc.id)}>
-            <Trash2 className="size-4" />
-          </Button>
+        <CardContent className="flex flex-col gap-3 pt-5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-medium">{doc.name}</p>
+            <Button variant="ghost" size="icon" aria-label={`Apagar ${doc.name}`} onClick={() => deleteDocument(doc.id)}>
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+          {doc.content && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{doc.content}</p>}
+          {doc.fileUrl && doc.fileName && (
+            <div className="flex flex-col gap-2">
+              {/\.(png|jpe?g|gif|webp|bmp|heic)$/i.test(doc.fileName) && <img src={doc.fileUrl} alt={doc.name} className="max-h-80 w-full rounded-lg border object-contain" />}
+              <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary underline-offset-2 hover:underline">
+                <Paperclip className="size-4 shrink-0" />
+                {doc.fileName}
+              </a>
+            </div>
+          )}
         </CardContent>
       </Card>
     );
   }
 
   function renderFlatList(categoryId: string) {
-    const items = documents.filter((doc) => doc.categoryId === categoryId);
+    const query = listSearch.trim().toLocaleLowerCase("pt-BR");
+    const items = documents.filter((doc) => doc.categoryId === categoryId && `${doc.name} ${doc.content ?? ""} ${doc.fileName ?? ""}`.toLocaleLowerCase("pt-BR").includes(query));
 
     return (
       <div className="flex flex-col gap-3">
+        <Input value={listSearch} onChange={(e) => setListSearch(e.target.value)} placeholder="Filtrar documentos por nome, texto ou arquivo" aria-label="Filtrar documentos" />
         <Button className="w-fit gap-1.5" size="sm" onClick={() => openNewDocumentDialog(categoryId, null)}>
           <Plus className="size-4" />
           Novo documento
@@ -186,8 +201,11 @@ export function DocumentsPage() {
   }
 
   function renderPetsSection() {
+    const query = listSearch.trim().toLocaleLowerCase("pt-BR");
+    const petsFiltrados = pets.filter((pet) => `${pet.name} ${pet.species} ${pet.breed} ${pet.color} ${pet.notes}`.toLocaleLowerCase("pt-BR").includes(query) || documents.some((doc) => doc.petId === pet.id && `${doc.name} ${doc.content ?? ""} ${doc.fileName ?? ""}`.toLocaleLowerCase("pt-BR").includes(query)));
     return (
       <div className="flex flex-col gap-3">
+        <Input value={listSearch} onChange={(e) => setListSearch(e.target.value)} placeholder="Filtrar pets e documentos por nome ou texto" aria-label="Filtrar pets e documentos" />
         <Button className="w-fit gap-1.5" size="sm" onClick={openNewPetDialog}>
           <Plus className="size-4" />
           Novo pet
@@ -195,10 +213,12 @@ export function DocumentsPage() {
 
         {pets.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhum pet cadastrado ainda.</p>
+        ) : petsFiltrados.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum pet corresponde ao filtro.</p>
         ) : (
           <div className="flex flex-col gap-4">
-            {pets.map((pet) => {
-              const petDocuments = documents.filter((doc) => doc.petId === pet.id);
+            {petsFiltrados.map((pet) => {
+              const petDocuments = documents.filter((doc) => doc.petId === pet.id && `${doc.name} ${doc.content ?? ""} ${doc.fileName ?? ""}`.toLocaleLowerCase("pt-BR").includes(query));
               return (
                 <Card key={pet.id}>
                   <CardContent className="flex flex-col gap-3 pt-5">
@@ -244,7 +264,7 @@ export function DocumentsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">DOCUMENTOS</h1>
-        <p className="text-sm text-muted-foreground">Guarde documentos com foto ou PDF anexado.</p>
+        <p className="text-sm text-muted-foreground">Guarde notas em texto, fotos e PDFs organizados por categoria.</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -257,14 +277,9 @@ export function DocumentsPage() {
             ))}
             <TabsTrigger value={PET_TAB}>PETS</TabsTrigger>
           </TabsList>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Nova categoria"
-            onClick={openNewCategoryDialog}
-          >
+          <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={openNewCategoryDialog}>
             <Plus className="size-4" />
+            Criar categoria
           </Button>
         </div>
 
@@ -295,9 +310,13 @@ export function DocumentsPage() {
               <Label htmlFor="doc-name">Nome do documento</Label>
               <Input id="doc-name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="doc-content">Nota / texto</Label>
+              <Textarea id="doc-content" value={content} onChange={(e) => setContent(e.target.value)} placeholder="Escreva os detalhes desta nota..." rows={5} />
+            </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>Arquivo</Label>
+              <Label>Foto ou PDF (opcional)</Label>
               <input
                 ref={photoInputRef}
                 type="file"
@@ -341,13 +360,14 @@ export function DocumentsPage() {
                   {selectedFile.name}
                 </p>
               )}
+              {saveError && <p className="text-sm text-destructive">{saveError}</p>}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveDocument} disabled={!name.trim() || !selectedFile || isSaving}>
+            <Button onClick={handleSaveDocument} disabled={!name.trim() || (!content.trim() && !selectedFile) || isSaving}>
               {isSaving ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

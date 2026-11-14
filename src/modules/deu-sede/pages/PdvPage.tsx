@@ -531,8 +531,13 @@ function DescontoItem({ item, aoFechar, aoSalvar }: { item: ItemCarrinho; aoFech
   const [tipo, setTipo] = useState<"valor" | "porcentagem">(item.desconto_tipo ?? "valor");
   const [erro, setErro] = useState<string | null>(null);
   const base = precoBaseItem(item) ?? 0;
-  return <Dialogo aberto titulo={`Desconto: ${item.produto.nome}`} aoFechar={aoFechar} rodape={<><Button variant="contorno" onClick={() => aoSalvar(0, "valor")}>Remover desconto</Button><Button data-principal onClick={() => { const n = lerDecimal(valor); if (n === null || n < 0 || (tipo === "porcentagem" && n > 100) || (tipo === "valor" && n > base)) return setErro("Desconto inválido para o preço do item."); aoSalvar(n, tipo); }}>Aplicar</Button></>}>
-    <div className="flex flex-col gap-3"><p className="text-sm text-texto">Preço: {moeda(base)}</p><Campo rotulo="Tipo">{(id) => <Select id={id} value={tipo} onChange={(e) => setTipo(e.target.value as "valor" | "porcentagem")}><option value="valor">Valor (R$)</option><option value="porcentagem">Porcentagem (%)</option></Select>}</Campo><Campo rotulo="Desconto">{(id) => <Input id={id} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />}</Campo>{erro && <Aviso tom="erro">{erro}</Aviso>}</div>
+  function confirmar() {
+    const n = lerDecimal(valor);
+    if (n === null || n < 0 || (tipo === "porcentagem" && n > 100) || (tipo === "valor" && n > base)) return setErro("Desconto inválido para o preço do item.");
+    aoSalvar(n, tipo);
+  }
+  return <Dialogo aberto titulo={`Desconto: ${item.produto.nome}`} aoFechar={aoFechar} rodape={<><Button variant="contorno" onClick={() => aoSalvar(0, "valor")}>Remover desconto</Button><Button data-principal onClick={confirmar}>Aplicar</Button></>}>
+    <div className="flex flex-col gap-3"><p className="text-sm text-texto">Preço: {moeda(base)}</p><Campo rotulo="Tipo">{(id) => <Select id={id} value={tipo} onChange={(e) => setTipo(e.target.value as "valor" | "porcentagem")}><option value="valor">Valor (R$)</option><option value="porcentagem">Porcentagem (%)</option></Select>}</Campo><Campo rotulo="Desconto">{(id) => <Input id={id} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmar(); } }} />}</Campo>{erro && <Aviso tom="erro">{erro}</Aviso>}</div>
   </Dialogo>;
 }
 
@@ -545,6 +550,7 @@ function textoComprovante(v: Venda): string {
   for (const i of v.itens) {
     l.push(i.produto_nome);
     l.push(`  ${numero(i.quantidade)} ${i.unidade_venda === "unidade" ? "un" : `x${i.unidades_por_item}`} x ${moeda(i.preco_unitario)} = ${moeda(i.subtotal)}`);
+    if (Number(i.desconto_item) > 0) l.push(`  Desconto no item: - ${moeda(i.desconto_item)}`);
   }
   l.push("--------------------------------");
   l.push(`Subtotal: ${moeda(v.subtotal)}`);
@@ -593,13 +599,27 @@ function Comprovante({ venda, aoFechar }: { venda: Venda; aoFechar: () => void }
 
 function Vendas() {
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoDoAtalho("hoje"));
+  const [busca, setBusca] = useState("");
+  const [statusVenda, setStatusVenda] = useState<"todas" | "concluida" | "cancelada">("todas");
+  const [formaVenda, setFormaVenda] = useState("");
   const filtro = { de: periodo.de, ate: periodo.ate };
   const resumo = useConsulta<ResumoVendas>("resumo_vendas", filtro);
   const lista = useConsulta<VendaResumo[]>("listar_vendas", filtro);
   const { pedirSenha } = useSenha();
   const [cancelar, setCancelar] = useState<VendaResumo | null>(null);
   const [ver, setVer] = useState<Venda | null>(null);
-  const r = resumo.dados;
+  const r = resumo.dados
+    ? {
+        ...resumo.dados,
+        por_forma: resumo.dados.por_forma ?? {},
+        mais_vendidos: Array.isArray(resumo.dados.mais_vendidos) ? resumo.dados.mais_vendidos : [],
+      }
+    : undefined;
+  const vendas = Array.isArray(lista.dados) ? lista.dados : [];
+  const vendasFiltradas = useMemo(
+    () => vendas.filter((v) => contemBusca(busca, v.numero_formatado, v.cliente, ROTULO_FORMA[v.forma_pagamento], v.motivo_cancelamento) && (statusVenda === "todas" || v.status === statusVenda) && (!formaVenda || v.forma_pagamento === formaVenda)),
+    [vendas, busca, statusVenda, formaVenda],
+  );
 
   return (
     <div className="grid gap-4">
@@ -607,10 +627,12 @@ function Vendas() {
       {(resumo.erro || lista.erro) && <Aviso tom="erro">{resumo.erro ?? lista.erro}</Aviso>}
       {r && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
             <Tile rotulo="Total vendido" valor={moeda(r.total)} destaque />
+            <Tile rotulo="Descontos concedidos" valor={moeda(r.descontos)} />
             <Tile rotulo="Vendas" valor={String(r.qtd_vendas)} />
             <Tile rotulo="Ticket médio" valor={moeda(r.ticket_medio)} />
+            <Tile rotulo="Custo total" valor={moeda(r.custo_total)} />
             <Tile rotulo="Margem estimada" valor={moeda(r.margem)} />
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -646,10 +668,25 @@ function Vendas() {
       )}
       <Secao titulo="Vendas do período" semPadding>
         {!lista.dados && !lista.erro && <Carregando />}
-        {lista.dados && lista.dados.length === 0 && <p className="px-5 pb-4 text-sm text-texto-suave">Nenhuma venda no período.</p>}
-        {lista.dados && lista.dados.length > 0 && (
+        {lista.dados && vendas.length === 0 && <p className="px-5 pb-4 text-sm text-texto-suave">Nenhuma venda no período.</p>}
+        {vendas.length > 0 && (
+          <div className="grid gap-2 border-b border-linha px-4 py-3 sm:grid-cols-[minmax(0,1fr)_12rem_12rem] sm:px-5">
+            <CampoBusca valor={busca} aoMudar={setBusca} placeholder="Pesquisar número, cliente ou motivo" />
+            <Select value={statusVenda} onChange={(e) => setStatusVenda(e.target.value as typeof statusVenda)} aria-label="Filtrar vendas por status">
+              <option value="todas">Todos os status</option>
+              <option value="concluida">Concluídas</option>
+              <option value="cancelada">Canceladas</option>
+            </Select>
+            <Select value={formaVenda} onChange={(e) => setFormaVenda(e.target.value)} aria-label="Filtrar vendas por pagamento">
+              <option value="">Todas as formas</option>
+              {FORMAS_PAGAMENTO.map((f) => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
+            </Select>
+          </div>
+        )}
+        {vendas.length > 0 && vendasFiltradas.length === 0 && <p className="px-5 pb-4 text-sm text-texto-suave">Nenhuma venda corresponde aos filtros.</p>}
+        {vendasFiltradas.length > 0 && (
           <ul className="divide-y divide-linha">
-            {lista.dados.map((v) => (
+            {vendasFiltradas.map((v) => (
               <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
                 <button type="button" className="min-w-0 text-left" onClick={async () => setVer(await chamar<Venda>("obter_venda", { id: v.id }))}>
                   <span className="block font-medium text-verde">
@@ -658,6 +695,9 @@ function Vendas() {
                   <span className="text-sm text-texto-suave">
                     {dataHoraBR(v.created_at)} · {v.qtd_itens} {v.qtd_itens === 1 ? "item" : "itens"}
                     {v.cliente && ` · ${v.cliente}`}
+                    {Number(v.desconto) > 0 && ` · Descontos: ${moeda(v.desconto)}`}
+                    {v.troco !== null && ` · Troco: ${moeda(v.troco)}`}
+                    {v.motivo_cancelamento && ` · Motivo: ${v.motivo_cancelamento}`}
                   </span>
                 </button>
                 <span className="flex items-center gap-2">

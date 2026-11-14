@@ -237,7 +237,8 @@ export interface AppDocument {
   categoryId: string | null;
   petId: string | null;
   name: string;
-  fileUrl: string;
-  fileName: string;
+  fileUrl: string | null;
+  fileName: string | null;
+  content: string;
   createdAt: string;
 }

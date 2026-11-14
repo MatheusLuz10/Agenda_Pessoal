@@ -370,6 +370,7 @@ export interface VendaItem {
   quantidade_unidades: number;
   preco_tabela: number | null;
   preco_unitario: number;
+  desconto_item: number;
   subtotal: number;
 }
 

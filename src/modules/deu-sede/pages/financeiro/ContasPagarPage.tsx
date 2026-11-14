@@ -7,7 +7,7 @@ import { Badge } from "@/modules/deu-sede/components/ui/badge";
 import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso";
 import { Campo, Input, Select, Textarea } from "@/modules/deu-sede/components/ui/input";
 import { Confirmar, Dialogo } from "@/modules/deu-sede/components/ui/dialogo";
-import { Segmentado } from "@/modules/deu-sede/components/ui/filtros";
+import { CampoBusca, Segmentado } from "@/modules/deu-sede/components/ui/filtros";
 import { Secao } from "@/modules/deu-sede/components/ui/secao";
 import { FiltroPeriodo } from "@/modules/deu-sede/components/FiltroPeriodo";
 import { EscolhaPagamentoCampos } from "@/modules/deu-sede/components/EscolhaPagamento";
@@ -26,6 +26,7 @@ type Aba = "pagar" | "pagas" | "todas" | "caixa";
 // parcelado sai a cada parcela paga. Vendas do PDV entram no caixa.
 export function ContasPagarPage() {
   const [aba, setAba] = useState<Aba>("pagar");
+  const [buscaContas, setBuscaContas] = useState("");
   const status = aba === "pagar" ? "abertas" : aba === "pagas" ? "pagas" : "todas";
   const { dados, erro } = useConsulta<ContasPagarResumo>("contas_pagar", { status });
   const [nova, setNova] = useState(false);
@@ -35,6 +36,7 @@ export function ContasPagarPage() {
   const [cancelando, setCancelando] = useState<ContaPagar | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const saldo = dados?.saldo_caixa ?? null;
+  const contasFiltradas = (dados?.contas ?? []).filter((c) => [c.descricao, c.fornecedor_nome, c.pedido_numero, c.observacoes, c.motivo_cancelamento].some((v) => String(v ?? "").toLocaleLowerCase("pt-BR").includes(buscaContas.trim().toLocaleLowerCase("pt-BR"))));
 
   return (
     <>
@@ -90,8 +92,10 @@ export function ContasPagarPage() {
               Toque em “Nova conta” para lançar uma despesa. Os pedidos de compra entram aqui ao serem realizados.
             </Vazio>
           ) : (
-            <ul className="grid gap-3" aria-label="Contas">
-              {dados.contas.map((c) => (
+            <>
+            <CampoBusca valor={buscaContas} aoMudar={setBuscaContas} placeholder="Pesquisar descrição, fornecedor ou pedido" />
+            {contasFiltradas.length === 0 ? <p className="py-3 text-sm text-texto-suave">Nenhuma conta corresponde à busca.</p> : <ul className="grid gap-3" aria-label="Contas">
+              {contasFiltradas.map((c) => (
                 <CartaoConta
                   key={c.id}
                   conta={c}
@@ -100,7 +104,8 @@ export function ContasPagarPage() {
                   aoCancelar={() => setCancelando(c)}
                 />
               ))}
-            </ul>
+            </ul>}
+            </>
           )}
         </div>
       )}

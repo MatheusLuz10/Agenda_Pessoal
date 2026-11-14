@@ -7,7 +7,7 @@ import { Aviso, Carregando, Vazio } from "@/modules/deu-sede/components/ui/aviso
 import { CampoBusca, Segmentado } from "@/modules/deu-sede/components/ui/filtros";
 import { Select } from "@/modules/deu-sede/components/ui/input";
 import { Planilha } from "@/modules/deu-sede/components/ui/planilha";
-import { Tabela } from "@/modules/deu-sede/components/ui/secao";
+import { Secao, Tabela } from "@/modules/deu-sede/components/ui/secao";
 import { MovimentoEstoqueDialog } from "@/modules/deu-sede/components/MovimentoEstoqueDialog";
 import { NotaEntradaDialogo } from "@/modules/deu-sede/components/NotaEntradaDialogo";
 import { rota } from "@/modules/deu-sede/config/modules";
@@ -18,7 +18,7 @@ import { contemBusca, dataBR, dataHoraBR, descreverEmbalagem, descreverQuantidad
 import { useSenha } from "@/modules/deu-sede/senha";
 import { cn } from "@/lib/utils";
 
-type Aba = "saldo" | "movimentos" | "entradas";
+type Aba = "saldo" | "movimentos" | "entradas" | "registrar";
 type Filtro = "com_saldo" | "abaixo" | "todos";
 
 export function EstoquePage() {
@@ -42,15 +42,65 @@ export function EstoquePage() {
           opcoes={[
             { valor: "saldo", rotulo: "Saldo" },
             { valor: "movimentos", rotulo: "Movimentações" },
+            { valor: "registrar", rotulo: "Entrada / saída" },
             { valor: "entradas", rotulo: "Entradas por nota" },
           ]}
         />
       </div>
       {aba === "saldo" && <Saldo />}
       {aba === "movimentos" && <Movimentos />}
+      {aba === "registrar" && <RegistrarMovimentacao />}
       {aba === "entradas" && <Entradas />}
     </>
   );
+}
+
+function RegistrarMovimentacao() {
+  const { dados, erro } = useConsulta<ItemEstoque[]>("estoque");
+  const { pedirSenha } = useSenha();
+  const [produtoId, setProdutoId] = useState("");
+  const [movendo, setMovendo] = useState<ItemEstoque | null>(null);
+  const produto = dados?.find((e) => e.produto_id === produtoId) ?? null;
+
+  if (erro) return <Aviso tom="erro">{erro}</Aviso>;
+  if (!dados) return <Carregando />;
+
+  return (
+    <div className="grid max-w-2xl gap-4 rounded-xl border border-linha bg-superficie p-4 sm:p-6">
+      <div>
+        <h2 className="text-lg font-bold text-verde">Registrar entrada ou saída</h2>
+        <p className="mt-1 text-sm text-texto-suave">Escolha o produto e informe a quantidade. O movimento ficará no histórico e atualizará o saldo.</p>
+      </div>
+      <Select value={produtoId} onChange={(e) => setProdutoId(e.target.value)} aria-label="Produto">
+        <option value="">Selecione um produto</option>
+        {dados.filter((e) => e.ativo).sort((a, b) => a.produto_nome.localeCompare(b.produto_nome, "pt-BR")).map((e) => (
+          <option key={e.produto_id} value={e.produto_id}>{e.produto_nome}</option>
+        ))}
+      </Select>
+      {produto && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-offwhite/60 p-3">
+          <div>
+            <p className="font-semibold text-verde">Saldo atual</p>
+            <p className="text-sm text-texto-suave">{descreverQuantidade(produto.saldo_unidades, produto.unidades_por_embalagem, produto.tipo_embalagem)}</p>
+          </div>
+          <Button onClick={async () => { if (await pedirSenha("estoque_ajuste")) setMovendo(produto); }}>
+            Entrada / saída
+          </Button>
+        </div>
+      )}
+      <Secao titulo="Movimentos recentes" semPadding>
+        <MovimentosDoProduto produtoId={produtoId} />
+      </Secao>
+      {movendo && <MovimentoEstoqueDialog item={movendo} aoFechar={() => setMovendo(null)} />}
+    </div>
+  );
+}
+
+function MovimentosDoProduto({ produtoId }: { produtoId: string }) {
+  const { dados, erro } = useConsulta<MovimentoEstoque[]>("movimentos_estoque", { limite: 200 });
+  if (erro) return <Aviso tom="erro">{erro}</Aviso>;
+  if (!dados) return <Carregando />;
+  return <ListaMovimentos movimentos={dados.filter((m) => !produtoId || m.produto_id === produtoId).slice(0, 20)} />;
 }
 
 const alternar = (conjunto: Set<string>, id: string) => {
